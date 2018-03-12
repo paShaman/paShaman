@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
-class ExampleController extends Controller
+use App\Page;
+
+class PageController extends Controller
 {
     /**
      * Create a new controller instance.
@@ -14,5 +16,8 @@ class ExampleController extends Controller
         //
     }
 
-    //
+    public function page($page = Page::PAGE_DEFAULT)
+    {
+        $page = Page::where('name', $page)->firstOrFail();
+    }
 }
