@@ -1,0 +1,61 @@
+.transition(@param: all, @time: 0.3s, @type:ease){
+  transition: @param @time @type;
+}
+
+.item{
+  &__hidden{
+    .img-ho {
+      filter: blur(10px);
+    }
+  }
+  &__date{
+    font-weight: bold; position: absolute; top:22px; right: 0;
+  }
+  &__tags{
+    white-space: nowrap; text-overflow: ellipsis; width: 100%; overflow-x: hidden; display: inline-block;
+  }
+  &__info{
+    width: 100%; position: relative;
+  }
+
+  .img-ho{
+    height: 320px; background: transparent no-repeat center; background-size: cover; display: inline-block;
+  }
+  h5{
+    white-space: nowrap; text-overflow: ellipsis; width: 100%; overflow-x: hidden; display: inline-block; padding-right: 70px;
+  }
+}
+.pager{
+  display: none;
+  &.current{
+    +.pager{
+      display: inline-block;
+    }
+  }
+}
+.filterby{
+  .badge{
+    cursor: pointer; vertical-align: bottom;
+    .transition();
+  }
+  a{
+    &.active{
+      font-weight: bold;
+    }
+  }
+}
+.toggle-filter{
+  float: right; padding-left: 20px;
+}
+
+@media only screen and (max-width: 760px) {
+  .toggle-filter{
+    float: none; padding-left: 0; margin-bottom: 30px;
+    .btn{
+      width: 100%;
+    }
+  }
+  .text-animate{
+    height: 108px;
+  }
+}

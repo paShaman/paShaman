@@ -11,6 +11,6 @@
 |
 */
 
-$router->get('/[{page}]', [
-    'as' => 'page', 'uses' => 'PageController@page'
-]);
+$router->get('/projects/{project}', 'ProjectController@project');
+
+$router->get('/[{page}]', 'PageController@page');
