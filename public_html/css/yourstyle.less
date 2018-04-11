@@ -3,11 +3,6 @@
 }
 
 .item{
-  &__hidden{
-    .img-ho {
-      filter: blur(10px);
-    }
-  }
   &__date{
     font-weight: bold; position: absolute; top:22px; right: 0;
   }
@@ -19,7 +14,16 @@
   }
 
   .img-ho{
-    height: 320px; background: transparent no-repeat center; background-size: cover; display: inline-block;
+    height: 320px; display: inline-block;
+    span{
+      display: inline-block; width: 100%; height: 100%; background: transparent no-repeat center; background-size: cover;
+      .transition();
+    }
+    &:hover{
+      span{
+        transform: scale(1.1);
+      }
+    }
   }
   h5{
     white-space: nowrap; text-overflow: ellipsis; width: 100%; overflow-x: hidden; display: inline-block; padding-right: 70px;
@@ -34,8 +38,8 @@
   }
 }
 .filterby{
-  .badge{
-    cursor: pointer; vertical-align: bottom;
+  .label{
+    cursor: pointer; white-space: nowrap; display: inline-block; padding: 8px 15px; margin-bottom: 3px;
     .transition();
   }
   a{
@@ -46,6 +50,11 @@
 }
 .toggle-filter{
   float: right; padding-left: 20px;
+}
+.page{
+  &__404{
+    padding-top: 200px;
+  }
 }
 
 @media only screen and (max-width: 760px) {

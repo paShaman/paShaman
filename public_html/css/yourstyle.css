@@ -1,6 +1,3 @@
-.item__hidden .img-ho {
-  filter: blur(10px);
-}
 .item__date {
   font-weight: bold;
   position: absolute;
@@ -20,9 +17,18 @@
 }
 .item .img-ho {
   height: 320px;
+  display: inline-block;
+}
+.item .img-ho span {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
   background: transparent no-repeat center;
   background-size: cover;
-  display: inline-block;
+  transition: all 0.3s ease;
+}
+.item .img-ho:hover span {
+  transform: scale(1.1);
 }
 .item h5 {
   white-space: nowrap;
@@ -38,9 +44,12 @@
 .pager.current + .pager {
   display: inline-block;
 }
-.filterby .badge {
+.filterby .label {
   cursor: pointer;
-  vertical-align: bottom;
+  white-space: nowrap;
+  display: inline-block;
+  padding: 8px 15px;
+  margin-bottom: 3px;
   transition: all 0.3s ease;
 }
 .filterby a.active {
@@ -49,6 +58,9 @@
 .toggle-filter {
   float: right;
   padding-left: 20px;
+}
+.page__404 {
+  padding-top: 200px;
 }
 @media only screen and (max-width: 760px) {
   .toggle-filter {

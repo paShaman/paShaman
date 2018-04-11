@@ -22,13 +22,64 @@
 <!-- ============================================================== -->
 <!-- End Static Slider 1  -->
 <!-- ============================================================== -->
+<div class="bg-info spacer">
+    <div class="container">
+        <!-- Row -->
+        <div class="row client-box">
+            <!-- column  -->
+            <div class="col-lg-3 col-6">
+                <div class="d-flex no-block">
+                    <div class="display-5 text-white op-7"><i class="icon-Project"></i></div>
+                    <div class="m-l-20">
+                        <h1 class="font-light text-white counter m-b-0">{{ count($projects) }}</h1>
+                        <h6 class="text-white font-13 text-uppercase op-7">works done</h6>
+                    </div>
+                </div>
+            </div>
+            <!-- column  -->
+            <!-- column  -->
+            <div class="col-lg-3 col-6">
+                <div class="d-flex no-block">
+                    <div class="display-5 text-white op-7"><i class="icon-Timer"></i></div>
+                    <div class="m-l-20">
+                        <h1 class="font-light text-white counter m-b-0">{{ $experience }}</h1>
+                        <h6 class="text-white font-13 text-uppercase op-7">years of experience</h6>
+                    </div>
+                </div>
+            </div>
+            <!-- column  -->
+            <!-- column  -->
+            <div class="col-lg-3 col-6">
+                <div class="d-flex no-block">
+                    <div class="display-5 text-white op-7"><i class="icon-Coffee"></i></div>
+                    <div class="m-l-20">
+                        <h1 class="font-light text-white counter m-b-0">{{ $cups }}</h1>
+                        <h6 class="text-white font-13 text-uppercase op-7">CUPS OF COFFE</h6>
+                    </div>
+                </div>
+            </div>
+            <!-- column  -->
+            <!-- column  -->
+            <div class="col-lg-3 col-6">
+                <div class="d-flex no-block">
+                    <div class="display-5 text-white op-7"><i class="icon-Globe-2"></i></div>
+                    <div class="m-l-20">
+                        <h1 class="font-light text-white counter m-b-0">{{ $countries }}</h1>
+                        <h6 class="text-white font-13 text-uppercase op-7">countries visited</h6>
+                    </div>
+                </div>
+            </div>
+            <!-- column  -->
+        </div>
+    </div>
+</div>
 <!-- ============================================================== -->
 <!-- Portfolio  -->
 <!-- ============================================================== -->
-<div class="portfolio1 up m-b-40">
+<div class="portfolio1 up m-b-40 m-t-40 p-t-30">
     <div class="container">
         <div class="toggle-filter">
-            <span class="btn btn-info" onclick="toggleFilter($(this))">Toggle filter</span>
+            <span class="btn btn-danger" onclick="toggleFilter($(this))">Toggle filter</span>
         </div>
         <!-- Tittle and filter  -->
         <div class="filter-row">
@@ -44,16 +95,16 @@
             </div>
         </div>
         <div class="filter-row" style="display: none">
-            <div class="d-flex align-items-center filter-row">
+            <div class="d-flex align-items-center">
                 <h3 class="filterby">
-                    <span class="badge badge-primary badge-danger" data-filter="*">All - <b>{{ count($projects) }}</b></span>
+                    <span class="label label-danger" data-filter="*">All - <b>{{ count($projects) }}</b></span>
                     @foreach ($tags as $tag => $cnt)
                         @if ($cnt > 50)
-                            <span class="badge badge-success" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
+                            <span class="label label-success" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
                         @elseif ($cnt > 10)
-                            <span class="badge badge-warning" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
+                            <span class="label label-warning" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
                         @else
-                            <span class="badge badge-light" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
+                            <span class="label label-light-info" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
                         @endif
                     @endforeach
                 </h3>
@@ -63,46 +114,25 @@
         <!-- Card Columns -->
         <div class="row portfolio-box">
             @foreach ($projects as $project)
-                @if ($project->active == 1)
-                    <!-- Columns -->
-                        <div class="item col-lg-4 col-md-6 filter {{ $project->tags }}">
-                            <div class="overlay-box">
-                                <a href="#" class="img-ho" style="background-image: url({{ $project->image }})"></a>
-                                <a href="/projects/{{ $project->link }}/" class="d-flex port-text align-items-center">
-                                    <div class="item__info">
-                                        <span class="item__date">
-                                            {{ $project->date }}
-                                        </span>
-                                        <h5>{{ $project->name }}</h5>
-                                        <span class="item__tags">{{ $project->tags }}</span>
-                                    </div>
-                                </a>
-                            </div>
+                <!-- Columns -->
+                    <div class="item col-lg-4 col-md-6 filter {{ $project->tags }}">
+                        <div class="overlay-box">
+                            <a href="{{ $project->link }}" class="img-ho"><span style="background-image: url({{ $project->image }})"></span></a>
+                            <a href="{{ $project->link }}" class="d-flex port-text align-items-center">
+                                <div class="item__info">
+                                    <span class="item__date">
+                                        {{ $project->date }}
+                                    </span>
+                                    <h5>{{ $project->name }}</h5>
+                                    <span class="item__tags">{{ $project->tags }}</span>
+                                </div>
+                            </a>
                         </div>
-                    <!-- Columns -->
-                @else
-                    <!-- Columns -->
-                        <div class="item item__hidden col-lg-4 col-md-6 filter {{ $project->tags }}">
-                            <div class="overlay-box">
-                                <a href="#" class="img-ho" style="background-image: url({{ $project->image }})"></a>
-                                <a href="#" class="d-flex port-text align-items-center">
-                                    <div class="item__info">
-                                        <span class="item__date">
-                                            {{ $project->date }}
-                                        </span>
-                                        <h5>Hidden</h5>
-                                        <span class="item__tags">{{ $project->tags }}</span>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
-                    <!-- Columns -->
-                @endif
+                    </div>
+                <!-- Columns -->
             @endforeach
         </div>
         <!-- End Card Columns -->
-        <!-- portfolio start -->
-
     </div>
 </div>
 <!-- ============================================================== -->

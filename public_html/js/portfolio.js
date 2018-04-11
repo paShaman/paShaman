@@ -116,14 +116,18 @@ $(function() {
 
     //Adicionando Event de Click para as categorias
     $('.filterby span, .filterby a').click(function(){
-        var filter = $(this).attr(filterAtribute);
+        var t = $(this);
+        var filter = t.attr(filterAtribute);
         currentFilter = filter;
 
-        var t = $(this);
+        if (t.hasClass('label')) {
+            t.data('class', t.attr('class'));
 
-        if (t.hasClass('badge')) {
-            $('.filterby .badge-danger').removeClass('badge-danger');
-            t.addClass('badge-danger');
+            var inverse = $('.filterby .label-inverse');
+            var classAttr = inverse.data('class');
+
+            inverse.removeAttr('class').attr('class', classAttr);
+            t.attr('class', 'label label-inverse');
         } else {
             $('.filterby .active').removeClass('active');
             t.addClass('active');
@@ -143,5 +147,5 @@ $(function() {
 
 function toggleFilter(btn) {
     btn.toggleClass('active');
-    $('.filter-row').toggle();
+    $('.filter-row').slideToggle();
 }

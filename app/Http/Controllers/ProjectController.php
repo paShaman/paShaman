@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Page;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ProjectController extends Controller
 {
@@ -18,6 +19,7 @@ class ProjectController extends Controller
 
     public function project()
     {
+        throw new NotFoundHttpException();
         return $this->render();
     }
 }

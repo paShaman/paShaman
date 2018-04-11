@@ -4,7 +4,7 @@
             <!-- coluumn -->
             <div class="col-lg-8 align-self-center font-14">
                 <div class="p-10">
-                    Copyright {{ $year }}.
+                    Copyright {{ $year }}. paShaman
                 </div>
             </div>
             <!-- coluumn -->

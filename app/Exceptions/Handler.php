@@ -50,7 +50,12 @@ class Handler extends ExceptionHandler
             $e instanceof NotFoundHttpException ||
             $e instanceof ModelNotFoundException
         ){
-            return response(view("errors.404"), 404);
+            $data = [
+                'footer'    => false,
+                'title'     => "404 - Not found"
+            ];
+
+            return response(view("errors.404", $data), 404);
         }
         return parent::render($request, $e);
     }

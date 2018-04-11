@@ -34,23 +34,26 @@ class Project extends Model {
 
         foreach ($projects as &$project) {
             $project->image = '/images/projects/' . $project->link .'/preview.jpg';
+            $project->link = '/projects/'. $project->link .'/';
 
-            /*if ($project->active == 1) {
-                $im = imagecreatefrompng('dave.png');
+            if ($project->active == 2) {
+                //create blurred image
 
-                if($im && imagefilter($im, IMG_FILTER_GRAYSCALE))
-                {
-                    echo 'Изображение преобразовано к градациям серого.';
+                $link = md5($project->link);
 
-                    imagepng($im, 'dave.png');
+                $path =  $_SERVER['DOCUMENT_ROOT'];
+                $folder = DIRECTORY_SEPARATOR . 'images' . DIRECTORY_SEPARATOR . 'blur' . DIRECTORY_SEPARATOR;
+
+                if (!file_exists($path . $folder . $link . '.jpg')) {
+
+                    Image::blur($path . $project->image, $path . $folder . $link . '.jpg');
+
                 }
-                else
-                {
-                    echo 'Преобразование не удалось.';
-                }
 
-                imagedestroy($im);
-            }*/
+                $project->image =  $folder . $link . '.jpg';
+                $project->link = '#';
+                $project->name = 'Hidden';
+            }
         }
 
         return $projects;

@@ -68,7 +68,9 @@
         <!-- ============================================================== -->
         <!-- footer -->
         <!-- ============================================================== -->
-        @include('layouts.footer')
+        @if (!isset($footer) || $footer != false)
+            @include('layouts.footer')
+        @endif
         <!-- ============================================================== -->
         <!-- End footer -->
         <!-- ============================================================== -->
@@ -102,11 +104,19 @@
 <script src="/assets/node_modules/perfect-scrollbar/dist/js/perfect-scrollbar.jquery.min.js"></script>
 <script src="/js/isotope.pkgd.min.js"></script>
 <script src="/js/portfolio.js"></script>
-<script>
-    $('.tgl-cl').on('click', function () {
-        $('body .h17-main-nav').toggleClass("show");
+<!-- ============================================================== -->
+<!-- This page plugins -->
+<!-- ============================================================== -->
+<script src="/js/jquery.waypoints.min.js"></script>
+<script src="/js/jquery.counterup.min.js"></script>
+<script type="text/javascript">
+    // This is for counter
+    $('.counter').counterUp({
+        delay: 10
     });
+
 </script>
+
 </body>
 
 </html>
