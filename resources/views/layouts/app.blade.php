@@ -9,10 +9,10 @@
     <meta name="description" content="">
     <meta name="author" content="">
     <!-- Favicon icon -->
-    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon.png">
     <title>@yield('title')</title>
     <!-- Bootstrap Core CSS -->
-    <link href="/assets/node_modules/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/assets/node_modules/bootstrap/css/bootstrap.min.css" rel="stylesheet">
     <!-- This is for the animation CSS -->
     <link href="/assets/node_modules/aos/dist/aos.css" rel="stylesheet">
     <link href="/assets/node_modules/perfect-scrollbar/dist/css/perfect-scrollbar.min.css" rel="stylesheet">
@@ -92,7 +92,7 @@
 <script src="/assets/node_modules/jquery/dist/jquery.min.js"></script>
 <!-- Bootstrap popper Core JavaScript -->
 <script src="/assets/node_modules/popper/dist/popper.min.js"></script>
-<script src="/assets/node_modules/bootstrap/dist/js/bootstrap.min.js"></script>
+<script src="/assets/node_modules/bootstrap/js/bootstrap.min.js"></script>
 <!-- This is for the animation -->
 <script src="/assets/node_modules/aos/dist/aos.js"></script>
 <!--Custom JavaScript -->

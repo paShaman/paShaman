@@ -29,9 +29,9 @@ File: scss
 /*Extra Variable*/
 /*Gradiant*/
 @import url(../css/animate.css);
-@import url(../../assets/icons/font-awesome/css/font-awesome.min.css);
-@import url(../../assets/icons/iconmind/iconmind.css);
-@import url(../../assets/icons/themify-icons/themify-icons.css);
+@import url(../assets/icons/font-awesome/css/font-awesome.min.css);
+@import url(../assets/icons/iconmind/iconmind.css);
+@import url(../assets/icons/themify-icons/themify-icons.css);
 /*
 Template Name: Wrakit UI Kit
 Author: wrappixel
