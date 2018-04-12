@@ -27,7 +27,7 @@ class PageController extends Controller
         $this->page = $page;
         $this->template['experience'] = date('Y') - 2006;
         $this->template['cups'] = (int)(((date('Y') - 2006) * 365 * 200 + date('z') * rand(100, 300)) / 100);
-        $this->template['countries'] = 17;
+        $this->template['countries'] = 18;
 
         switch ($page) {
             case Page::PAGE_DEFAULT:
