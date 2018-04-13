@@ -17,7 +17,6 @@ class Controller extends BaseController
                 'email'     => 'nikitin696@gmail.com',
                 'linkFB'    => 'https://www.facebook.com/paShamanZ',
                 'linkVK'    => 'https://vk.com/pashaman',
-                'year'      => date('Y'),
                 'title'     => implode(" - ", $this->title)
             ],
             $this->template

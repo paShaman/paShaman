@@ -68,6 +68,18 @@
   }
 }
 
+.topbar{
+  &.inner{
+    &:not(.fixed-header){
+      .text-success-gradiant{
+        color: white!important; background: none;
+        text-fill-color: white;
+        -webkit-text-fill-color: white;
+      }
+    }
+  }
+}
+
 @media only screen and (max-width: 760px) {
   .toggle-filter{
     float: none; padding-left: 0; margin-bottom: 30px;
