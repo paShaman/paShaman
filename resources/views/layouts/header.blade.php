@@ -9,6 +9,7 @@
                 <div class="">
                     <a class="navbar-brand" href="/"><img src="/images/logo.png" alt="paShaman" /></a>
                 </div>
+                @yield('nav')
             </nav>
             <!-- End Header 13 navabar -->
         </div>

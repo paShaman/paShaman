@@ -19,6 +19,7 @@
     <!-- This css we made it from our predefine component
     we just copy that css and paste here you can also do that -->
     <link href="/css/demo.css" rel="stylesheet">
+    <link href="/css/testimonial1-10.css" rel="stylesheet">
 
     <!-- Common style CSS -->
     <link href="/css/style.css" rel="stylesheet">

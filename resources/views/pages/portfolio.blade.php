@@ -115,16 +115,16 @@
         <div class="row portfolio-box">
             @foreach ($projects as $project)
                 <!-- Columns -->
-                    <div class="item col-lg-4 col-md-6 filter {{ $project->tags }}">
+                    <div class="item col-lg-4 col-md-6 filter {{ $project['tags'] }}">
                         <div class="overlay-box">
-                            <a href="{{ $project->link }}" class="img-ho"><span style="background-image: url({{ $project->image }})"></span></a>
-                            <a href="{{ $project->link }}" class="d-flex port-text align-items-center">
+                            <a href="{{ $project['link'] }}" class="img-ho"><span style="background-image: url({{ $project['image'] }})"></span></a>
+                            <a href="{{ $project['link'] }}" class="d-flex port-text align-items-center">
                                 <div class="item__info">
                                     <span class="item__date">
-                                        {{ $project->date }}
+                                        {{ $project['date'] }}
                                     </span>
-                                    <h5>{{ $project->name }}</h5>
-                                    <span class="item__tags">{{ $project->tags }}</span>
+                                    <h5>{{ $project['name'] }}</h5>
+                                    <span class="item__tags">{{ $project['tags'] }}</span>
                                 </div>
                             </a>
                         </div>

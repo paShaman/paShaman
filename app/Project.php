@@ -17,9 +17,9 @@ class Project extends Model {
 
     // Relationships
 
-    public function users()
+    public function authors()
     {
-        return $this->hasMany('App\User');
+        return $this->belongsToMany('App\User', 'users_to_projects')->withPivot('role');
     }
 
     /**
@@ -34,7 +34,7 @@ class Project extends Model {
 
         foreach ($projects as &$project) {
             $project->image = '/images/projects/' . $project->link .'/preview.jpg';
-            $project->link = '/projects/'. $project->link .'/';
+            $project->link = '/projects/'. $project->link;
 
             if ($project->active == 2) {
                 //create blurred image
@@ -56,7 +56,7 @@ class Project extends Model {
             }
         }
 
-        return $projects;
+        return $projects->toArray();
     }
 
     /**
@@ -69,7 +69,6 @@ class Project extends Model {
             ->where('active', '!=', 0)
             ->get()
         ;
-
 
         $result = [];
 
@@ -88,5 +87,108 @@ class Project extends Model {
         arsort($result);
 
         return $result;
+    }
+
+    /**
+     * полусаем детальную инфу по проекту
+     *
+     * @param $project
+     * @return object|bool
+     */
+    public function getProjectDetail($project)
+    {
+        if (empty($project)) {
+            return false;
+        }
+
+        $project = self::where('link', $project)
+            ->first()
+        ;
+
+        $project->image = '/images/projects/' . $project->link .'/main.jpg';
+
+        foreach ($project->authors as &$author) {
+            $author->image = '/images/authors/' . $author->id .'.jpg';
+        }
+
+        //prev next
+        $projects = self::where('active', '!=', 0)
+            ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
+            ->get()
+            ->toArray()
+        ;
+
+        //проекты есть, так что отбрасываем проверку на существование
+        $prev = $projects[count($projects)-1]['link'];
+        $next = $projects[0]['link'];
+
+        for ($i = 0; $i < count($projects); $i++) {
+            if ($projects[$i]['link'] == $project->link) {
+                if ($i > 0) {
+                    $prev = $projects[$i - 1]['link'];
+                }
+                if ($i < count($projects) - 1) {
+                    $next = $projects[$i + 1]['link'];
+                }
+                break;
+            }
+        }
+
+        $project->prev = '/projects/' . $prev;
+        $project->next = '/projects/' . $next;
+        $works = [];
+
+        //check work
+        if (mb_strpos($project->tags, 'работа') !== false) {
+            foreach ($projects as $item) {
+                if (mb_strpos($item['tags'], 'работа') !== false) {
+                    $tags = explode(" ", $item['tags']);
+                    $years = [];
+
+                    foreach ($tags as $tag) {
+                        if (intval($tag) != 0) {
+                            $years[] = $tag;
+                        }
+                    }
+
+                    rsort($years);
+
+                    $works[] = [
+                        'years' => $years,
+                        'name'  => $item['name'],
+                        'link'  => '/projects/' . $item['link'],
+                    ];
+                }
+            }
+        }
+
+        $project->works = $works;
+
+        //check versions
+        $version = explode("_ver", $project->link);
+        $version = reset($version);
+
+        $versionsData = self::where('active', '!=', 0)
+            ->where('link', 'like', $version . '_ver%')
+            ->orWhere('link', $version)
+            ->get()
+        ;
+
+        $versions = [];
+
+        foreach ($versionsData as $version) {
+            $number = preg_replace("/(.*)_ver(\d+)/","$2", $version->link);
+
+            $versions[] = [
+                'version' => (is_numeric($number) ? $number : 1) . '.0',
+                'current' => $version->link == $project->link,
+                'link'    => '/projects/' . $version->link
+            ];
+        }
+
+        $project->versions = $versions;
+        $project->link = '/projects/' . $project->link;
+
+        return $project->toArray();
     }
 }
