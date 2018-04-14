@@ -19,6 +19,12 @@ class PageController extends Controller
 
     public function page($page = Page::PAGE_DEFAULT)
     {
+        if ($page == 'full') {
+            setcookie('full', true, time() + 60*10); //куку на 10 минут
+            $_COOKIE['full'] = true;
+            $page = Page::PAGE_DEFAULT;
+        }
+
         Page::where('name', $page)
             ->where('active', 1)
             ->firstOrFail();

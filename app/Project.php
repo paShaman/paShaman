@@ -29,6 +29,7 @@ class Project extends Model {
     {
         $projects = self::where('active', '!=', 0)
             ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
+            ->orderBy('id', 'desc')
             ->get()
         ;
 
@@ -36,7 +37,7 @@ class Project extends Model {
             $project->image = '/images/projects/' . $project->link .'/preview.jpg';
             $project->link = '/projects/'. $project->link;
 
-            if ($project->active == 2) {
+            if ($project->active == 2 && empty($_COOKIE['full'])) {
                 //create blurred image
 
                 $link = md5($project->link);
@@ -102,8 +103,13 @@ class Project extends Model {
         }
 
         $project = self::where('link', $project)
+            ->whereIn('active', (empty($_COOKIE['full']) ? [1] : [1,2]))
             ->first()
         ;
+
+        if (empty($project)) {
+            return false;
+        }
 
         $project->image = '/images/projects/' . $project->link .'/main.jpg';
 
@@ -112,7 +118,7 @@ class Project extends Model {
         }
 
         //prev next
-        $projects = self::where('active', '!=', 0)
+        $projects = self::whereIn('active', (empty($_COOKIE['full']) ? [1] : [1,2]))
             ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
             ->get()
             ->toArray()
