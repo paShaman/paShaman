@@ -125,6 +125,7 @@ class Project extends Model {
         //prev next
         $projects = self::whereIn('active', (empty($_COOKIE['full']) ? [1] : [1,2]))
             ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
+            ->orderBy('id', 'desc')
             ->get()
             ->toArray()
         ;
