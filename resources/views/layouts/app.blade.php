@@ -22,6 +22,7 @@
     <link href="/css/testimonial1-10.css" rel="stylesheet">
 
     <!-- Common style CSS -->
+    <link href="/js/fancy/jquery.fancybox.min.css" rel="stylesheet">
     <link href="/css/style.css" rel="stylesheet">
     <link href="/css/yourstyle.css" rel="stylesheet">
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
@@ -105,6 +106,7 @@
 <script src="/assets/node_modules/perfect-scrollbar/dist/js/perfect-scrollbar.jquery.min.js"></script>
 <script src="/js/isotope.pkgd.min.js"></script>
 <script src="/js/portfolio.js"></script>
+<script src="/js/fancy/jquery.fancybox.min.js"></script>
 <!-- ============================================================== -->
 <!-- This page plugins -->
 <!-- ============================================================== -->

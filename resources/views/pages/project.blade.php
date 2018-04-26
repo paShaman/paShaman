@@ -52,7 +52,7 @@
             <div class="row">
                 <div class="col-lg-8">
                     <div class="project-detail__image">
-                        <img src="{{ $project['image'] }}">
+                        <a href="{{ $project['image_full'] }}" data-fancybox><img src="{{ $project['image'] }}"></a>
                     </div>
                 </div>
                 <div class="col-lg-4">

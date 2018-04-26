@@ -112,6 +112,11 @@ class Project extends Model {
         }
 
         $project->image = '/images/projects/' . $project->link .'/main.jpg';
+        $project->image_full = '/images/projects/' . $project->link .'/main.jpg';
+
+        if (file_exists($_SERVER['DOCUMENT_ROOT'] . '/images/projects/' . $project->link .'/full.jpg')) {
+            $project->image_full = '/images/projects/' . $project->link .'/full.jpg';
+        }
 
         foreach ($project->authors as &$author) {
             $author->image = '/images/authors/' . $author->id .'.jpg';
