@@ -40,7 +40,7 @@ class PageController extends Controller
                 $startYear = 2006;
                 $this->template['experience']   = date('Y') - $startYear;
                 $this->template['cups']         = (int)(((date('Y') - $startYear) * 365 * 150 + date('z') * rand(100, 300)) / 100);
-                $this->template['countries']    = 18;
+                $this->template['countries']    = 19;
                 break;
         }
 
