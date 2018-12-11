@@ -12,7 +12,7 @@
         <div class="row ">
             <!-- Column -->
             <div class="col-lg-9 align-self-center" data-aos="fade-right" data-aos-duration="1200">
-                <h2 class="title font-light text-animate">I'm Pavel Nikitin, an <span class="font-bold">Backend</span> & <span class="font-bold">Frontend Developer</span>, Making  <span class="text-info-gradiant font-bold typewrite" data-period="2000" data-type='[ "Web Applications", "Web Development", "Layouts", "Landing Pages", "Websites" ]'></span></h2>
+                <h2 class="title font-light text-animate">I'm Pavel Nikitin, a <span class="font-bold">Backend</span> & <span class="font-bold">Frontend Developer</span>, Making  <span class="text-info-gradiant font-bold typewrite" data-period="2000" data-type='[ "Web Applications", "Web Development", "Layouts", "Landing Pages", "Websites" ]'></span></h2>
             </div>
             <!-- Column -->
 
