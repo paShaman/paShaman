@@ -99,12 +99,16 @@
                 <h3 class="filterby">
                     <span class="label label-danger" data-filter="*">All - <b>{{ count($projects) }}</b></span>
                     @foreach ($tags as $tag => $cnt)
-                        @if ($cnt > 50)
+                        @if ($cnt >= 100)
+                            <span class="label label-primary" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
+                        @elseif ($cnt >= 50)
                             <span class="label label-success" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
-                        @elseif ($cnt > 10)
+                        @elseif ($cnt >= 10)
                             <span class="label label-warning" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
-                        @else
+                        @elseif ($cnt >= 5)
                             <span class="label label-light-info" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
+                        @else
+                            <span class="label label-light-inverse" data-filter="{{ $tag }}">{{ $tag }} - <b>{{ $cnt }}</b></span>
                         @endif
                     @endforeach
                 </h3>
