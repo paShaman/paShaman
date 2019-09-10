@@ -34,9 +34,9 @@
                                 <p class="op-8 m-t-20">
                                     @foreach ($project['versions'] as $version)
                                         @if ($version['current'])
-                                            <a class="btn btn-xs btn-rounded btn-outline-light m-r-10 m-l-10 active" href="{{ $version['link'] }}">version {{ $version['version'] }}</a>
+                                            <a class="btn btn-xs btn-rounded btn-outline-light m-r-10 m-l-10 mb-2 active" href="{{ $version['link'] }}">version {{ $version['version'] }}</a>
                                         @else
-                                            <a class="btn btn-xs btn-rounded btn-outline-light m-r-10 m-l-10" href="{{ $version['link'] }}">version {{ $version['version'] }}</a>
+                                            <a class="btn btn-xs btn-rounded btn-outline-light m-r-10 m-l-10 mb-2" href="{{ $version['link'] }}">version {{ $version['version'] }}</a>
                                         @endif
                                     @endforeach
                                 </p>

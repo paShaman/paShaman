@@ -183,6 +183,7 @@ class Project extends Model {
         $versionsData = self::where('active', '!=', 0)
             ->where('link', 'like', $version . '_ver%')
             ->orWhere('link', $version)
+            ->orderBy('link')
             ->get()
         ;
 
