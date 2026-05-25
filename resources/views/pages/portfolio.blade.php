@@ -32,7 +32,7 @@
                     <div class="display-5 text-white op-7"><i class="icon-Project"></i></div>
                     <div class="m-l-20">
                         <h1 class="font-light text-white counter m-b-0">{{ count($projects) }}</h1>
-                        <h6 class="text-white font-13 text-uppercase op-7">works done</h6>
+                        <h6 class="text-white font-13 text-uppercase op-7">jobs done</h6>
                     </div>
                 </div>
             </div>
@@ -54,7 +54,7 @@
                     <div class="display-5 text-white op-7"><i class="icon-Coffee"></i></div>
                     <div class="m-l-20">
                         <h1 class="font-light text-white counter m-b-0">{{ $cups }}</h1>
-                        <h6 class="text-white font-13 text-uppercase op-7">CUPS OF COFFE</h6>
+                        <h6 class="text-white font-13 text-uppercase op-7">CUPS OF COFFEЕ</h6>
                     </div>
                 </div>
             </div>

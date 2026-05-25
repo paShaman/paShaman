@@ -56,4 +56,37 @@ class Image
         imagejpeg($image, $destination);
         imagedestroy($image);
     }
+
+    /**
+    * image - the location of the image to pixelate
+    * pixelate_x - the size of "pixelate" effect on X axis (default 10)
+    * pixelate_y - the size of "pixelate" effect on Y axis (default 10)
+    * output - the name of the output file (extension will be added)
+    */
+    public static function pixelate($file, $destination, $pixelate_x = 20, $pixelate_y = 20)
+    {
+        $image = imagecreatefromjpeg($file);
+
+        /* Get original image size */
+        list($width, $height) = getimagesize($file);
+
+        // start from the top-left pixel and keep looping until we have the desired effect
+        for($y = 0;$y < $height;$y += $pixelate_y+1)
+        {
+
+            for($x = 0;$x < $width;$x += $pixelate_x+1)
+            {
+                // get the color for current pixel
+                $rgb = imagecolorsforindex($image, imagecolorat($image, $x, $y));
+
+                // get the closest color from palette
+                $color = imagecolorclosest($image, $rgb['red'], $rgb['green'], $rgb['blue']);
+                imagefilledrectangle($image, $x, $y, $x+$pixelate_x, $y+$pixelate_y, $color);
+
+            }
+        }
+
+        imagejpeg($image, $destination);
+        imagedestroy($image);
+    }
 }

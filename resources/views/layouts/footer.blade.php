@@ -13,7 +13,7 @@
                 <div class="p-10 font-14">
                     <a href="mailto:{{ $email }}" class="white-link dl m-t-10 m-b-10 m-r-10">Email: {{ $email }}</a>
                     <div class="round-social dl">
-                        <a href="{{ $linkFB }}" target="_blank"><i class="fa fa-facebook"></i></a>
+{{--                        <a href="{{ $linkFB }}" target="_blank"><i class="fa fa-facebook"></i></a>--}}
                         <a href="{{ $linkVK }}" target="_blank"><i class="fa fa-vk"></i></a>
                     </div>
                 </div>

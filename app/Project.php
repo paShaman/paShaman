@@ -8,6 +8,9 @@ class Project extends Model {
     protected $fillable = [
         'name', 'site', 'info', 'link', 'active', 'tags', 'date'
     ];
+    protected $visible = [
+        'name', 'site', 'info', 'link', 'active', 'tags', 'date', 'id', 'image'
+    ];
 
     protected $dates = [];
 
@@ -47,13 +50,20 @@ class Project extends Model {
 
                 if (!file_exists($path . $folder . $link . '.jpg')) {
 
-                    Image::blur($path . $project->image, $path . $folder . $link . '.jpg');
+                    $file = $path . $project->image;
+                    list($width, $height) = getimagesize($file);
+
+                    $pixelSize = intval($width / 15);
+
+                    //Image::blur($file, $path . $folder . $link . '.jpg', 30);
+                    Image::pixelate($file, $path . $folder . $link . '.jpg', $pixelSize, $pixelSize);
 
                 }
 
                 $project->image =  $folder . $link . '.jpg';
                 $project->link = '#';
                 $project->name = 'Hidden';
+                $project->site = '#';
             }
         }
 
@@ -66,17 +76,21 @@ class Project extends Model {
     public function getTags()
     {
         $tagsData = DB::table(self::getTable())
-            ->select('tags', 'date')
+            ->select('tags', 'date', 'id')
             ->where('active', '!=', 0)
             ->get()
         ;
 
         $result = [];
+        $exclude = ['svn', 'angular', 'protobuf', 'zend', 'flash', 'wrappixel', 'extjs', 'nodejs', 'maws', 'cognice', 'memcached', 'gulp', 'google_maps', 'umbrellajs', 'smarty', ''];
 
         foreach ($tagsData as $tags) {
-            $tags = explode(' ', $tags->tags);
+            $items = explode(' ', $tags->tags);
 
-            foreach($tags as $tag)	{
+            foreach($items as $tag)	{
+                if (in_array($tag, $exclude)) {
+                    continue;
+                }
                 if(!isset($result[$tag])){
                     $result[$tag] = 1;
                 }else{
@@ -94,7 +108,6 @@ class Project extends Model {
      * полусаем детальную инфу по проекту
      *
      * @param $project
-     * @return object|bool
      */
     public function getProjectDetail($project)
     {
@@ -200,8 +213,38 @@ class Project extends Model {
         }
 
         $project->versions = $versions;
+
+        //check years
+        $parts = explode('-', $project->link);
+        $partLast = array_pop($parts);
+
+        $years = [];
+
+        if (strpos($partLast, '20') === 0) {
+            $alias = implode('_', $parts);
+
+            $yearsData = self::where('active', '!=', 0)
+                ->where('link', 'like', $alias . '-20%')
+                ->orderBy('link')
+                ->get()
+            ;
+
+            foreach ($yearsData as $year) {
+                $parts = explode('-', $year->link);
+                $partLast = array_pop($parts);
+
+                $years[] = [
+                    'year'    => $partLast,
+                    'current' => $year->link == $project->link,
+                    'link'    => '/projects/' . $year->link
+                ];
+            }
+        }
+
+        $project->years = $years;
+
         $project->link = '/projects/' . $project->link;
 
-        return $project->toArray();
+        return $project;
     }
 }
