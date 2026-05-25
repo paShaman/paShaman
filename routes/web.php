@@ -13,4 +13,8 @@
 
 $router->get('/projects/{project}', 'ProjectController@project');
 
+$router->get('/api/load-projects/{project}', 'ApiController@getProject');
+$router->get('/api/load-projects', 'ApiController@getProjects');
+$router->get('/api/load-counters', 'ApiController@getCounters');
+
 $router->get('/[{page}]', 'PageController@page');
