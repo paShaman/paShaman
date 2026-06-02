@@ -11,17 +11,17 @@ define('BUSINESS_CONN_ID', getenv('BUSINESS_CONN_ID')); // Твой рабочи
 define('OWNER_TELEGRAM_ID', getenv('OWNER_TELEGRAM_ID'));
 
 // Список разрешенных Telegram ID (белый список)
-define('ALLOWED_TELEGRAM_IDS', [
+const ALLOWED_TELEGRAM_IDS = [
     OWNER_TELEGRAM_ID,  // Твой ID подставляется автоматически
     223434009,  // Ильдар (sila-uma)
     224028930,  // Алёнка
     1780404823, // alpus
-]);
+];
 
 // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ (Все выключены по твоей просьбе) ---
-define('LOG_TG_DEBUG', false);     // Все входящие запросы от Telegram (tg_debug.log)
-define('LOG_DEEPSEEK', false);     // Запросы и ответы от DeepSeek (deepseek_debug.log)
-define('LOG_TG_ERRORS', false);    // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+const LOG_TG_DEBUG = false;     // Все входящие запросы от Telegram (tg_debug.log)
+const LOG_DEEPSEEK = false;     // Запросы и ответы от DeepSeek (deepseek_debug.log)
+const LOG_TG_ERRORS = false;    // Ошибки при отправке методов в Telegram (tg_api_errors.log)
 
 // Получаем входящий JSON от Telegram
 $input = file_get_contents('php://input');
