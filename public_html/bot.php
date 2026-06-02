@@ -1,147 +1,179 @@
 <?php
 
-loadEnv(__DIR__ . '/.env');
+loadEnv(__DIR__ . '/../.env');
+
+// --- ВАЛИДАЦИЯ ОБЯЗАТЕЛЬНЫХ ENV-ПЕРЕМЕННЫХ ---
+$requiredEnv = ['TG_TOKEN', 'DEEPSEEK_KEY', 'OWNER_TELEGRAM_ID'];
+foreach ($requiredEnv as $var) {
+    if (!getenv($var)) {
+        http_response_code(500);
+        exit("Missing required env variable: $var");
+    }
+}
 
 // --- КОНФИГУРАЦИЯ ---
 define('TG_TOKEN', getenv('TG_TOKEN'));
-define('DEEPSEEK_KEY', getenv('TG_TOKEN'));
-define('BUSINESS_CONN_ID', getenv('BUSINESS_CONN_ID')); // Твой рабочий ID соединения
+define('DEEPSEEK_KEY', getenv('DEEPSEEK_KEY'));
+define('BUSINESS_CONN_ID', getenv('BUSINESS_CONN_ID') ?: '');
+define('OWNER_TELEGRAM_ID', (int)getenv('OWNER_TELEGRAM_ID'));
+define('DEEPSEEK_MODEL', 'deepseek-v4-flash');
 
-// Твой персональный Telegram ID
-define('OWNER_TELEGRAM_ID', getenv('OWNER_TELEGRAM_ID'));
-
-// Список разрешенных Telegram ID (белый список)
+// Список дополнительных разрешенных Telegram ID (белый список)
+// OWNER_TELEGRAM_ID проверяется отдельно — всегда имеет доступ
 const ALLOWED_TELEGRAM_IDS = [
-    OWNER_TELEGRAM_ID,  // Твой ID подставляется автоматически
     223434009,  // Ильдар (sila-uma)
     224028930,  // Алёнка
     1780404823, // alpus
 ];
 
-// --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ (Все выключены по твоей просьбе) ---
-const LOG_TG_DEBUG = false;     // Все входящие запросы от Telegram (tg_debug.log)
-const LOG_DEEPSEEK = false;     // Запросы и ответы от DeepSeek (deepseek_debug.log)
-const LOG_TG_ERRORS = false;    // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+// --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
+const LOG_TG_DEBUG = true;      // Все входящие запросы от Telegram (tg_debug.log)
+const LOG_DEEPSEEK = true;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
+const LOG_TG_ERRORS = true;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+const LOG_USER_REQUESTS = true;  // Логирование запросов пользователей (user_requests.log)
+
+// Устанавливаем Content-Type для ответа Telegram
+header('Content-Type: application/json');
 
 // Получаем входящий JSON от Telegram
 $input = file_get_contents('php://input');
 
-// Отладочный лог Telegram — запишет входящий JSON, если флаг включен
+// Отладочный лог Telegram — записывает входящий JSON, если флаг включен
 if (LOG_TG_DEBUG) {
     file_put_contents('tg_debug.log', $input . PHP_EOL, FILE_APPEND);
 }
 
 $update = json_decode($input, true);
 
-if (!$update) exit('No data');
+if (!$update) {
+    exit(json_encode(['status' => 'no_data']));
+}
 
-$chat_id = null;
+$chatId = null;
 $text = null;
-$user_id = null;
+$userId = null;
 $username = 'unknown';
-$reply_to_text = null;
-$is_business = false;
+$replyToText = null;
+$isBusiness = false;
 
 // Универсальный перехват данных (из бизнес-чатов или прямых сообщений боту)
 if (isset($update['business_message'])) {
-    $chat_id = $update['business_message']['chat']['id'];
+    $chatId = $update['business_message']['chat']['id'];
     $text = $update['business_message']['text'] ?? '';
-    $user_id = $update['business_message']['from']['id'] ?? null;
+    $userId = $update['business_message']['from']['id'] ?? null;
     $username = $update['business_message']['from']['username'] ?? 'no_username';
 
-    $reply_to_text = $update['business_message']['reply_to_message']['text']
+    $replyToText = $update['business_message']['reply_to_message']['text']
         ?? $update['business_message']['reply_to_message']['caption']
         ?? null;
 
-    $is_business = true;
+    $isBusiness = true;
 } elseif (isset($update['message'])) {
-    $chat_id = $update['message']['chat']['id'];
+    $chatId = $update['message']['chat']['id'];
     $text = $update['message']['text'] ?? '';
-    $user_id = $update['message']['from']['id'] ?? null;
+    $userId = $update['message']['from']['id'] ?? null;
     $username = $update['message']['from']['username'] ?? 'no_username';
 
-    $reply_to_text = $update['message']['reply_to_message']['text']
+    $replyToText = $update['message']['reply_to_message']['text']
         ?? $update['message']['reply_to_message']['caption']
         ?? null;
 }
 
 // Тестовая проверка на команду старта
 if (strpos($text, '/start') === 0) {
-    sendTelegramMessage($chat_id, "Бизнес-бот успешно настроен и готов к работе!", $is_business ? BUSINESS_CONN_ID : '');
-    exit;
+    sendTelegramMessage($chatId, "Бизнес\\-бот успешно настроен и готов к работе\!", $isBusiness ? BUSINESS_CONN_ID : '');
+    exit(json_encode(['status' => 'ok']));
 }
 
 // КОМАНДА /info — выдает укороченное описание бота
 if (strpos($text, '/info') === 0) {
-    $info_text = "📋 *Бизнес-помощник на базе DeepSeek V4*\n\n"
-        . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек-листы прямо в диалоге.\n\n"
+    $infoText = "📋 *Бизнес\\-помощник на базе DeepSeek V4*\n\n"
+        . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы прямо в диалоге\\.\n\n"
         . "⚡️ *Как это работает:*\n"
-        . "1. Подключи бота к бизнес-аккаунту Telegram.\n"
-        . "2. Ответь (reply) на любое сообщение словом «список».\n"
-        . "3. Бот мгновенно пришлет интерактивный чек-лист.\n\n"
-        . "👥 *Фичи:* совместное добавление/выполнение задач, замер времени генерации.\n"
-        . "🔒 Доступ только по белому списку.";
+        . "1\\. Подключи бота к бизнес\\-аккаунту Telegram\\.\n"
+        . "2\\. Ответь \\(reply\\) на любое сообщение словом «список»\\.\n"
+        . "3\\. Бот мгновенно пришлет интерактивный чек\\-лист\\.\n\n"
+        . "👥 *Фичи:* совместное добавление/выполнение задач, замер времени генерации\\.\n"
+        . "🔒 Доступ только по белому списку\\.";
 
-    sendTelegramMessage($chat_id, $info_text, $is_business ? BUSINESS_CONN_ID : '');
-    exit;
+    sendTelegramMessage($chatId, $infoText, $isBusiness ? BUSINESS_CONN_ID : '');
+    exit(json_encode(['status' => 'ok']));
 }
 
 // Безопасность: реагируем ТОЛЬКО на разрешенных пользователей
-if (!in_array($user_id, ALLOWED_TELEGRAM_IDS) || empty($text)) {
-    exit;
+// OWNER_TELEGRAM_ID всегда имеет доступ, плюс дополнительные ID из белого списка
+$isAllowed = ($userId === OWNER_TELEGRAM_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS, true);
+if (!$isAllowed || empty($text)) {
+    exit(json_encode(['status' => 'forbidden']));
 }
 
 // Проверяем, является ли запрос триггером на создание списка
-$is_list_request = (!empty($reply_to_text) && trim(mb_strtolower($text)) === 'список');
+$isListRequest = (!empty($replyToText) && trim(mb_strtolower($text)) === 'список');
 
 // Если это не реплай со словом "список" — мягко выходим
-if ($is_list_request) {
-    $text = $reply_to_text;
+if ($isListRequest) {
+    $text = $replyToText;
 } else {
-    exit;
+    exit(json_encode(['status' => 'ignored']));
 }
 
 // 1. Отправляем текст в DeepSeek V4 и замеряем время генерации
-$result_data = askDeepSeek($text, $user_id, $username);
-$ai_raw_output = $result_data['text']; // Извлекаем текст
-$generation_time = $result_data['time']; // Извлекаем время
+$resultData = askDeepSeek($text, $userId, $username);
+$aiRawOutput = $resultData['text'];
+$generationTime = $resultData['time'];
 
 // 2. Парсим ответ в массив для Checklist
-$lines = explode("\n", trim($ai_raw_output));
-$checklist_entries = [];
-$task_id = 1;
+$lines = explode("\n", trim($aiRawOutput));
+$checklistEntries = [];
+$taskId = 1;
 
 foreach ($lines as $line) {
-    $cleaned_line = trim($line);
-    if (!empty($cleaned_line)) {
-        $cleaned_line = ltrim($cleaned_line, "-*•·/ \t");
-        $checklist_entries[] = [
-            'id' => $task_id++,
-            'text' => $cleaned_line
+    $cleanedLine = trim($line);
+    if (!empty($cleanedLine)) {
+        $cleanedLine = ltrim($cleanedLine, "-*•·/ \t");
+        $checklistEntries[] = [
+            'id' => $taskId++,
+            'text' => $cleanedLine
         ];
     }
 }
 
-// 3. Отправляем результат обратно в зависимости от типа чата
-if ($is_business && defined('BUSINESS_CONN_ID') && BUSINESS_CONN_ID !== '') {
-    sendTelegramChecklist($chat_id, $checklist_entries, $generation_time);
-} else {
-    $text_output = "📋 *Список задач* (~{$generation_time}с)\n\n";
-    foreach ($checklist_entries as $entry) {
-        $text_output .= "⬜️ " . $entry['text'] . "\n";
-    }
-    sendTelegramMessage($chat_id, $text_output);
+// Проверка: если список пуст — сообщаем об ошибке
+if (empty($checklistEntries)) {
+    sendTelegramMessage(
+        $chatId,
+        "⚠️ Не удалось извлечь задачи из сообщения\\. Попробуйте переформулировать текст\\.",
+        $isBusiness ? BUSINESS_CONN_ID : ''
+    );
+    exit(json_encode(['status' => 'empty_checklist']));
 }
+
+// 3. Отправляем результат обратно в зависимости от типа чата
+if ($isBusiness && BUSINESS_CONN_ID !== '') {
+    sendTelegramChecklist($chatId, $checklistEntries, $generationTime);
+} else {
+    $textOutput = "📋 *Список задач* \\(~" . escapeMarkdownV2((string)$generationTime) . "с\\)\n\n";
+    foreach ($checklistEntries as $entry) {
+        $textOutput .= "⬜️ " . escapeMarkdownV2($entry['text']) . "\n";
+    }
+    sendTelegramMessage($chatId, $textOutput);
+}
+
+exit(json_encode(['status' => 'ok']));
+
+// ============================================================
+// ФУНКЦИИ
+// ============================================================
 
 /**
  * Запрос к API DeepSeek с логированием
  */
-function askDeepSeek(string $message, int $user_id, string $username): array {
-    $start_api = microtime(true); // Замер начала запроса
+function askDeepSeek(string $message, int $userId, string $username): array {
+    $startApi = microtime(true);
 
     $url = 'https://api.deepseek.com/chat/completions';
     $payload = [
-        'model' => 'deepseek-chat',
+        'model' => DEEPSEEK_MODEL,
         'messages' => [
             [
                 'role' => 'system',
@@ -156,115 +188,172 @@ function askDeepSeek(string $message, int $user_id, string $username): array {
         'stream' => false
     ];
 
-    $json_payload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
 
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $json_payload);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'Authorization: Bearer ' . DEEPSEEK_KEY]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . DEEPSEEK_KEY
+    ]);
     $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    // --- ЛОГИРОВАНИЕ DEEPSEEK ---
     if (LOG_DEEPSEEK) {
-        $ds_log = "=== " . date('Y-m-d H:i:s') . " ===" . PHP_EOL;
-        $ds_log .= ">>> TO DEEPSEEK: " . $json_payload . PHP_EOL;
-        $ds_log .= "<<< FROM DEEPSEEK: " . ($response ?: 'Ошибка связи / Пустой ответ cURL') . PHP_EOL . PHP_EOL;
-        file_put_contents('deepseek_debug.log', $ds_log, FILE_APPEND);
+        $dsLog = "=== " . date('Y-m-d H:i:s') . " ===" . PHP_EOL;
+        $dsLog .= ">>> TO DEEPSEEK [" . DEEPSEEK_MODEL . "]: " . $jsonPayload . PHP_EOL;
+        $dsLog .= "<<< FROM DEEPSEEK [HTTP $httpCode]: " . ($response ?: 'Ошибка cURL: ' . $curlError) . PHP_EOL . PHP_EOL;
+        file_put_contents('deepseek_debug.log', $dsLog, FILE_APPEND);
     }
 
-    if (!$response) return "Ошибка связи с DeepSeek API.";
+    if (!$response || $curlError) {
+        return [
+            'text' => "Ошибка связи с DeepSeek API.",
+            'time' => round(microtime(true) - $startApi, 2)
+        ];
+    }
 
     $res = json_decode($response, true);
-    $generation_time = round(microtime(true) - $start_api, 2); // Реальное время ответа API
+    $generationTime = round(microtime(true) - $startApi, 2);
 
     // Получаем данные из API
     $total = $res['usage']['total_tokens'] ?? 0;
     $cache = $res['usage']['prompt_cache_hit_tokens'] ?? 0;
+    $paidTokens = $total - $cache;
 
-    // Платные токены = Общие - Кэшированные
-    $paid_tokens = $total - $cache;
-
-    // Логирование доверенных пользователей (кроме владельца)
-    //if ($user_id !== OWNER_TELEGRAM_ID) {
+    // Логирование запросов пользователей
+    if (LOG_USER_REQUESTS) {
         $log = sprintf("[%s] ID: %d | User: @%s | Paid: %d | Cache: %d | Time: %.2fs\n",
-            date('Y-m-d H:i:s'), $user_id, $username, $paid_tokens, $cache, $generation_time);
+            date('Y-m-d H:i:s'), $userId, $username, $paidTokens, $cache, $generationTime);
         file_put_contents('user_requests.log', $log, FILE_APPEND);
-    //}
+    }
 
-    return ['text' => $res['choices'][0]['message']['content'] ?? "Ошибка.", 'time' => $generation_time];
+    return [
+        'text' => $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.",
+        'time' => $generationTime
+    ];
 }
 
 /**
  * Отправка нативного чек-листа через sendChecklist (Telegram Business)
  */
-function sendTelegramChecklist(int $chat_id, array $entries, float $generation_time): void {
+function sendTelegramChecklist(int $chatId, array $entries, float $generationTime): bool {
     $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/sendChecklist';
 
     $payload = [
         'business_connection_id' => BUSINESS_CONN_ID,
-        'chat_id' => $chat_id,
+        'chat_id' => $chatId,
         'checklist' => [
-            'title' => "📋 Список задач (~{$generation_time}с)",
+            'title' => "📋 Список задач (~{$generationTime}с)",
             'tasks' => $entries,
             'others_can_add_tasks' => true,
             'others_can_mark_tasks_as_done' => true
         ]
     ];
 
-    sendCurl($url, $payload);
+    return sendCurl($url, $payload);
 }
 
 /**
  * Отправка обычного сообщения (с поддержкой бизнес-коннекта)
  */
-function sendTelegramMessage(int $chat_id, string $text, string $business_conn_id = ''): void {
+function sendTelegramMessage(int $chatId, string $text, string $businessConnId = ''): bool {
     $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/sendMessage';
     $payload = [
-        'chat_id' => $chat_id,
+        'chat_id' => $chatId,
         'text' => $text,
-        'parse_mode' => 'Markdown'
+        'parse_mode' => 'MarkdownV2'
     ];
 
-    if ($business_conn_id !== '') {
-        $payload['business_connection_id'] = $business_conn_id;
+    if ($businessConnId !== '') {
+        $payload['business_connection_id'] = $businessConnId;
     }
 
-    sendCurl($url, $payload);
+    return sendCurl($url, $payload);
 }
 
 /**
  * Хелпер для POST запросов с логированием ошибок от API Телеграма
+ * Возвращает true при успехе, false при ошибке
  */
-function sendCurl(string $url, array $payload): void {
+function sendCurl(string $url, array $payload): bool {
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 
     $response = curl_exec($ch);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
-    if ($response) {
-        $res_arr = json_decode($response, true);
-        if (isset($res_arr['ok']) && $res_arr['ok'] === false) {
-            if (LOG_TG_ERRORS) {
-                $log_msg = date('Y-m-d H:i:s') . " | URL: $url | Response: " . $response . PHP_EOL;
-                file_put_contents('tg_api_errors.log', $log_msg, FILE_APPEND);
-            }
+    if ($curlError) {
+        if (LOG_TG_ERRORS) {
+            $logMsg = date('Y-m-d H:i:s') . " | URL: $url | cURL Error: $curlError" . PHP_EOL;
+            file_put_contents('tg_api_errors.log', $logMsg, FILE_APPEND);
         }
+        return false;
     }
+
+    if ($response) {
+        $resArr = json_decode($response, true);
+        if (isset($resArr['ok']) && $resArr['ok'] === false) {
+            if (LOG_TG_ERRORS) {
+                $logMsg = date('Y-m-d H:i:s') . " | URL: $url | Response: " . $response . PHP_EOL;
+                file_put_contents('tg_api_errors.log', $logMsg, FILE_APPEND);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    return false;
 }
 
-function loadEnv($path) {
+/**
+ * Экранирование спецсимволов для MarkdownV2
+ * https://core.telegram.org/bots/api#markdownv2-style
+ */
+function escapeMarkdownV2(string $text): string {
+    $specialChars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+    $escaped = array_map(function ($c) {
+        return '\\' . $c;
+    }, $specialChars);
+    return str_replace($specialChars, $escaped, $text);
+}
+
+/**
+ * Загрузка переменных окружения из .env файла
+ */
+function loadEnv($path): void {
+    if (!file_exists($path)) {
+        return;
+    }
+
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
     foreach ($lines as $line) {
+        // Пропускаем строки-комментарии (начинающиеся с #)
+        $trimmedLine = trim($line);
+        if ($trimmedLine === '' || $trimmedLine[0] === '#') {
+            continue;
+        }
+
         if (strpos($line, '=') !== false) {
             list($key, $value) = explode('=', $line, 2);
             $key = trim($key);
+            $value = trim($value);
+
+            // Убираем комментарии в конце строки (всё после #, если # не внутри кавычек)
+            $value = preg_replace('/\s*#.*$/', '', $value);
             $value = trim($value);
 
             // Убираем кавычки если есть
