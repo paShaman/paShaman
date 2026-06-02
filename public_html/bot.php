@@ -187,7 +187,7 @@ function askDeepSeek(string $message, int $user_id, string $username): array {
     $paid_tokens = $total - $cache;
 
     // Логирование доверенных пользователей (кроме владельца)
-    //if (in_array($user_id, ALLOWED_TELEGRAM_IDS) && $user_id !== OWNER_TELEGRAM_ID) {
+    //if ($user_id !== OWNER_TELEGRAM_ID) {
         $log = sprintf("[%s] ID: %d | User: @%s | Paid: %d | Cache: %d | Time: %.2fs\n",
             date('Y-m-d H:i:s'), $user_id, $username, $paid_tokens, $cache, $generation_time);
         file_put_contents('user_requests.log', $log, FILE_APPEND);
