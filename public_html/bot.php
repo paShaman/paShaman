@@ -29,7 +29,7 @@ const ALLOWED_TELEGRAM_IDS = [
 // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
 const LOG_TG_DEBUG = false;      // Все входящие запросы от Telegram (tg_debug.log)
 const LOG_DEEPSEEK = false;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
-const LOG_TG_ERRORS = false;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+const LOG_TG_ERRORS = true;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
 const LOG_USER_REQUESTS = true;  // Логирование запросов пользователей (user_requests.log)
 
 // Устанавливаем Content-Type для ответа Telegram
@@ -152,7 +152,7 @@ if (empty($checklistEntries)) {
 if ($isBusiness && BUSINESS_CONN_ID !== '') {
     sendTelegramChecklist($chatId, $checklistEntries, $generationTime);
 } else {
-    $textOutput = "📋 *Список задач* \\(~" . escapeMarkdownV2((string)$generationTime) . "с\\)\n\n";
+    $textOutput = "📋 *Список задач* \\(\\~" . escapeMarkdownV2((string)$generationTime) . "с\\)\n\n";
     foreach ($checklistEntries as $entry) {
         $textOutput .= "⬜️ " . escapeMarkdownV2($entry['text']) . "\n";
     }
@@ -229,8 +229,8 @@ function askDeepSeek(string $message, int $userId, string $username): array {
 
     // Логирование запросов пользователей
     if (LOG_USER_REQUESTS) {
-        $log = sprintf("[%s] ID: %d | User: @%s | Paid: %d | Cache: %d | Time: %.2fs\n",
-            date('Y-m-d H:i:s'), $userId, $username, $paidTokens, $cache, $generationTime);
+        $log = sprintf("[%s] User: @%s | Paid: %d | Cache: %d | Time: %.2fs\n",
+            date('Y-m-d H:i:s'), $username, $paidTokens, $cache, $generationTime);
         file_put_contents('user_requests.log', $log, FILE_APPEND);
     }
 
