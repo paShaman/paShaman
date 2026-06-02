@@ -86,13 +86,13 @@ if (strpos($text, '/info') === 0) {
     exit;
 }
 
-// Проверяем, является ли запрос триггером на создание списка
-$is_list_request = (!empty($reply_to_text) && trim(mb_strtolower($text)) === 'список');
-
 // Безопасность: реагируем ТОЛЬКО на разрешенных пользователей
 if (!in_array($user_id, ALLOWED_TELEGRAM_IDS) || empty($text)) {
     exit;
 }
+
+// Проверяем, является ли запрос триггером на создание списка
+$is_list_request = (!empty($reply_to_text) && trim(mb_strtolower($text)) === 'список');
 
 // Если это не реплай со словом "список" — мягко выходим
 if ($is_list_request) {
