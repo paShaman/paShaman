@@ -27,9 +27,9 @@ const ALLOWED_TELEGRAM_IDS = [
 ];
 
 // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
-const LOG_TG_DEBUG = true;      // Все входящие запросы от Telegram (tg_debug.log)
-const LOG_DEEPSEEK = true;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
-const LOG_TG_ERRORS = true;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+const LOG_TG_DEBUG = false;      // Все входящие запросы от Telegram (tg_debug.log)
+const LOG_DEEPSEEK = false;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
+const LOG_TG_ERRORS = false;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
 const LOG_USER_REQUESTS = true;  // Логирование запросов пользователей (user_requests.log)
 
 // Устанавливаем Content-Type для ответа Telegram
