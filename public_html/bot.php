@@ -30,6 +30,7 @@ const ALLOWED_TELEGRAM_IDS = [
 const LOG_TG_DEBUG = false;      // Все входящие запросы от Telegram (tg_debug.log)
 const LOG_DEEPSEEK = false;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
 const LOG_TG_ERRORS = true;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+const LOG_TG_MESSAGES = true;
 const LOG_USER_REQUESTS = true;  // Логирование запросов пользователей (user_requests.log)
 
 // Устанавливаем Content-Type для ответа Telegram
@@ -129,8 +130,16 @@ $taskId = 1;
 
 foreach ($lines as $line) {
     $cleanedLine = trim($line);
+
+    if ($taskId > 30) {
+        break;
+    }
+
     if (!empty($cleanedLine)) {
         $cleanedLine = ltrim($cleanedLine, "-*•·/ \t");
+        if (mb_strlen($cleanedLine) > 97) {
+            $cleanedLine = mb_substr($cleanedLine, 0, 97) . '…';
+        }
         $checklistEntries[] = [
             'id' => $taskId++,
             'text' => $cleanedLine
@@ -150,9 +159,14 @@ if (empty($checklistEntries)) {
 
 // 3. Отправляем результат обратно в зависимости от типа чата
 if ($isBusiness && BUSINESS_CONN_ID !== '') {
-    sendTelegramChecklist($chatId, $checklistEntries, $generationTime);
+    sendTelegramChecklist($chatId, $checklistEntries, $generationTime, count($lines));
 } else {
     $textOutput = "📋 *Список задач* \\(\\~" . escapeMarkdownV2((string)$generationTime) . "с\\)\n\n";
+
+    if (count($lines) > 30) {
+        $textOutput .= "⚠️️ Максимум 30 задач\n";
+    }
+
     foreach ($checklistEntries as $entry) {
         $textOutput .= "⬜️ " . escapeMarkdownV2($entry['text']) . "\n";
     }
@@ -243,14 +257,20 @@ function askDeepSeek(string $message, int $userId, string $username): array {
 /**
  * Отправка нативного чек-листа через sendChecklist (Telegram Business)
  */
-function sendTelegramChecklist(int $chatId, array $entries, float $generationTime): bool {
+function sendTelegramChecklist(int $chatId, array $entries, float $generationTime, int $linesCount): bool {
     $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/sendChecklist';
+
+    $title = "📋 Список задач (~{$generationTime}с)";
+
+    if ($linesCount > 30) {
+        $title .= ". ⚠️️ Максимум 30 задач\n";
+    }
 
     $payload = [
         'business_connection_id' => BUSINESS_CONN_ID,
         'chat_id' => $chatId,
         'checklist' => [
-            'title' => "📋 Список задач (~{$generationTime}с)",
+            'title' => $title,
             'tasks' => $entries,
             'others_can_add_tasks' => true,
             'others_can_mark_tasks_as_done' => true
@@ -298,6 +318,11 @@ function sendCurl(string $url, array $payload): bool {
     if ($curlError) {
         if (LOG_TG_ERRORS) {
             $logMsg = date('Y-m-d H:i:s') . " | URL: $url | cURL Error: $curlError" . PHP_EOL;
+
+            if (LOG_TG_MESSAGES) {
+                $logMsg .= print_r($payload, true) . PHP_EOL;
+            }
+
             file_put_contents('tg_api_errors.log', $logMsg, FILE_APPEND);
         }
         return false;
@@ -308,6 +333,11 @@ function sendCurl(string $url, array $payload): bool {
         if (isset($resArr['ok']) && $resArr['ok'] === false) {
             if (LOG_TG_ERRORS) {
                 $logMsg = date('Y-m-d H:i:s') . " | URL: $url | Response: " . $response . PHP_EOL;
+
+                if (LOG_TG_MESSAGES) {
+                    $logMsg .= print_r($payload, true) . PHP_EOL;
+                }
+
                 file_put_contents('tg_api_errors.log', $logMsg, FILE_APPEND);
             }
             return false;
