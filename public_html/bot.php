@@ -14,7 +14,6 @@ foreach ($requiredEnv as $var) {
 // --- КОНФИГУРАЦИЯ ---
 define('TG_TOKEN', getenv('TG_TOKEN'));
 define('DEEPSEEK_KEY', getenv('DEEPSEEK_KEY'));
-define('BUSINESS_CONN_ID', getenv('BUSINESS_CONN_ID') ?: '');
 define('OWNER_TELEGRAM_ID', (int)getenv('OWNER_TELEGRAM_ID'));
 define('DEEPSEEK_MODEL', 'deepseek-v4-flash');
 
@@ -56,6 +55,7 @@ $userId = null;
 $username = 'unknown';
 $replyToText = null;
 $isBusiness = false;
+$businessConnectionId = ''; // Динамический ID подключения из входящего сообщения
 
 // Универсальный перехват данных (из бизнес-чатов или прямых сообщений боту)
 if (isset($update['business_message'])) {
@@ -67,6 +67,10 @@ if (isset($update['business_message'])) {
     $replyToText = $update['business_message']['reply_to_message']['text']
         ?? $update['business_message']['reply_to_message']['caption']
         ?? null;
+
+    // Извлекаем business_connection_id из входящего сообщения
+    // Telegram присылает его в каждом бизнес-сообщении; у каждого бизнес-аккаунта он свой
+    $businessConnectionId = $update['business_message']['business_connection_id'] ?? '';
 
     $isBusiness = true;
 } elseif (isset($update['message'])) {
@@ -82,7 +86,7 @@ if (isset($update['business_message'])) {
 
 // Тестовая проверка на команду старта
 if (strpos($text, '/start') === 0) {
-    sendTelegramMessage($chatId, "Бизнес\\-бот успешно настроен и готов к работе\!", $isBusiness ? BUSINESS_CONN_ID : '');
+    sendTelegramMessage($chatId, "Бизнес\\-бот успешно настроен и готов к работе\!", $businessConnectionId);
     exit(json_encode(['status' => 'ok']));
 }
 
@@ -97,7 +101,7 @@ if (strpos($text, '/info') === 0) {
         . "👥 *Фичи:* совместное добавление/выполнение задач, замер времени генерации\\.\n"
         . "🔒 Доступ только по белому списку\\.";
 
-    sendTelegramMessage($chatId, $infoText, $isBusiness ? BUSINESS_CONN_ID : '');
+    sendTelegramMessage($chatId, $infoText, $businessConnectionId);
     exit(json_encode(['status' => 'ok']));
 }
 
@@ -152,14 +156,14 @@ if (empty($checklistEntries)) {
     sendTelegramMessage(
         $chatId,
         "⚠️ Не удалось извлечь задачи из сообщения\\. Попробуйте переформулировать текст\\.",
-        $isBusiness ? BUSINESS_CONN_ID : ''
+        $businessConnectionId
     );
     exit(json_encode(['status' => 'empty_checklist']));
 }
 
 // 3. Отправляем результат обратно в зависимости от типа чата
-if ($isBusiness && BUSINESS_CONN_ID !== '') {
-    sendTelegramChecklist($chatId, $checklistEntries, $generationTime, count($lines));
+if ($isBusiness && $businessConnectionId !== '') {
+    $result = sendTelegramChecklist($chatId, $checklistEntries, $generationTime, count($lines), $businessConnectionId);
 } else {
     $textOutput = "📋 *Список задач* \\(\\~" . escapeMarkdownV2((string)$generationTime) . "с\\)\n\n";
 
@@ -170,7 +174,16 @@ if ($isBusiness && BUSINESS_CONN_ID !== '') {
     foreach ($checklistEntries as $entry) {
         $textOutput .= "⬜️ " . escapeMarkdownV2($entry['text']) . "\n";
     }
-    sendTelegramMessage($chatId, $textOutput);
+    $result = sendTelegramMessage($chatId, $textOutput);
+}
+
+if (empty($result)) {
+    sendTelegramMessage(
+        $chatId,
+        "⚠️ Ошибка генерации списка\\.",
+        $businessConnectionId
+    );
+    exit(json_encode(['status' => 'error']));
 }
 
 exit(json_encode(['status' => 'ok']));
@@ -257,7 +270,7 @@ function askDeepSeek(string $message, int $userId, string $username): array {
 /**
  * Отправка нативного чек-листа через sendChecklist (Telegram Business)
  */
-function sendTelegramChecklist(int $chatId, array $entries, float $generationTime, int $linesCount): bool {
+function sendTelegramChecklist(int $chatId, array $entries, float $generationTime, int $linesCount, string $businessConnectionId): bool {
     $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/sendChecklist';
 
     $title = "📋 Список задач (~{$generationTime}с)";
@@ -267,7 +280,7 @@ function sendTelegramChecklist(int $chatId, array $entries, float $generationTim
     }
 
     $payload = [
-        'business_connection_id' => BUSINESS_CONN_ID,
+        'business_connection_id' => $businessConnectionId,
         'chat_id' => $chatId,
         'checklist' => [
             'title' => $title,
