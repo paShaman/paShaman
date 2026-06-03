@@ -105,6 +105,11 @@ if (strpos($text, '/info') === 0) {
     exit(json_encode(['status' => 'ok']));
 }
 
+if (strpos($text, '/tgid') === 0) {
+    sendTelegramMessage($chatId, "🆔 {$userId}; 👤 @{$username}", $businessConnectionId);
+    exit(json_encode(['status' => 'ok']));
+}
+
 // Безопасность: реагируем ТОЛЬКО на разрешенных пользователей
 // OWNER_TELEGRAM_ID всегда имеет доступ, плюс дополнительные ID из белого списка
 $isAllowed = ($userId === OWNER_TELEGRAM_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS, true);
