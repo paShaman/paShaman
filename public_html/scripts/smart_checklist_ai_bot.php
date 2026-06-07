@@ -1,24 +1,20 @@
 <?php
 
-loadEnv(__DIR__ . '/../.env');
+include __DIR__ . '/_env.php';
 
-// --- ВАЛИДАЦИЯ ОБЯЗАТЕЛЬНЫХ ENV-ПЕРЕМЕННЫХ ---
-$requiredEnv = ['TG_TOKEN', 'DEEPSEEK_KEY', 'OWNER_TELEGRAM_ID'];
-foreach ($requiredEnv as $var) {
-    if (!getenv($var)) {
-        http_response_code(500);
-        exit("Missing required env variable: $var");
-    }
-}
+/*
+ * @setWebhook https://api.telegram.org/ TG_TOKEN /setWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php
+ * @deleteWebhook https://api.telegram.org/ TG_TOKEN /deleteWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php
+ */
 
 // --- КОНФИГУРАЦИЯ ---
 define('TG_TOKEN', getenv('TG_TOKEN'));
+define('TG_CHAT_ID', (int)getenv('TG_CHAT_ID'));
 define('DEEPSEEK_KEY', getenv('DEEPSEEK_KEY'));
-define('OWNER_TELEGRAM_ID', (int)getenv('OWNER_TELEGRAM_ID'));
-define('DEEPSEEK_MODEL', 'deepseek-v4-flash');
+define('DEEPSEEK_MODEL', getenv('DEEPSEEK_MODEL'));
 
 // Список дополнительных разрешенных Telegram ID (белый список)
-// OWNER_TELEGRAM_ID проверяется отдельно — всегда имеет доступ
+// TG_CHAT_ID проверяется отдельно — всегда имеет доступ
 const ALLOWED_TELEGRAM_IDS = [
     223434009,  // Ильдар (sila-uma)
     224028930,  // Алёнка
@@ -26,11 +22,11 @@ const ALLOWED_TELEGRAM_IDS = [
 ];
 
 // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
-const LOG_TG_DEBUG = false;      // Все входящие запросы от Telegram (tg_debug.log)
-const LOG_DEEPSEEK = false;      // Запросы и ответы от DeepSeek (deepseek_debug.log)
-const LOG_TG_ERRORS = true;     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
-const LOG_TG_MESSAGES = true;
-const LOG_USER_REQUESTS = true;  // Логирование запросов пользователей (user_requests.log)
+define('LOG_TG_DEBUG', getenv('LOG_TG_DEBUG') === 'true');      // Все входящие запросы от Telegram (tg_debug.log)
+define('LOG_DEEPSEEK', getenv('LOG_DEEPSEEK') === 'true');      // Запросы и ответы от DeepSeek (deepseek_debug.log)
+define('LOG_TG_ERRORS', getenv('LOG_TG_ERRORS') === 'true');     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
+define('LOG_TG_MESSAGES', getenv('LOG_TG_MESSAGES') === 'true');
+define('LOG_USER_REQUESTS', getenv('LOG_USER_REQUESTS') === 'true');  // Логирование запросов пользователей (user_requests.log)
 
 // Устанавливаем Content-Type для ответа Telegram
 header('Content-Type: application/json');
@@ -111,8 +107,8 @@ if (strpos($text, '/tgid') === 0) {
 }
 
 // Безопасность: реагируем ТОЛЬКО на разрешенных пользователей
-// OWNER_TELEGRAM_ID всегда имеет доступ, плюс дополнительные ID из белого списка
-$isAllowed = ($userId === OWNER_TELEGRAM_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS, true);
+// TG_CHAT_ID всегда имеет доступ, плюс дополнительные ID из белого списка
+$isAllowed = ($userId === TG_CHAT_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS, true);
 if (!$isAllowed || empty($text)) {
     exit(json_encode(['status' => 'forbidden']));
 }
@@ -376,40 +372,4 @@ function escapeMarkdownV2(string $text): string {
         return '\\' . $c;
     }, $specialChars);
     return str_replace($specialChars, $escaped, $text);
-}
-
-/**
- * Загрузка переменных окружения из .env файла
- */
-function loadEnv($path): void {
-    if (!file_exists($path)) {
-        return;
-    }
-
-    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-    foreach ($lines as $line) {
-        // Пропускаем строки-комментарии (начинающиеся с #)
-        $trimmedLine = trim($line);
-        if ($trimmedLine === '' || $trimmedLine[0] === '#') {
-            continue;
-        }
-
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-
-            // Убираем комментарии в конце строки (всё после #, если # не внутри кавычек)
-            $value = preg_replace('/\s*#.*$/', '', $value);
-            $value = trim($value);
-
-            // Убираем кавычки если есть
-            $value = trim($value, '"\'');
-
-            // Устанавливаем переменную окружения
-            putenv("$key=$value");
-            $_ENV[$key] = $value;
-        }
-    }
 }
