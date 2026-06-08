@@ -6,14 +6,14 @@ include __DIR__.'/_env.php';
 date_default_timezone_set('Europe/Moscow');
 
 // --- НАСТРОЙКИ ---
-$router_ip = getenv('KEENETIC_IP');
+$routerIp  = getenv('KEENETIC_IP');
 $user      = getenv('KEENETIC_USER');
 $password  = getenv('KEENETIC_PASSWORD');
 $botToken  = getenv('TG_TOKEN_STAT');
 $chatId    = getenv('TG_CHAT_ID');
 
-$cache_file = __DIR__ . '/wg_stats_cache.json';
-$month_file = __DIR__ . '/wg_monthly_cache.json';
+$cacheFile = __DIR__ . '/wg_stats_cache.json';
+$monthFile = __DIR__ . '/wg_monthly_cache.json';
 
 // --- 1. АВТОРИЗАЦИЯ ---
 $ch = curl_init();
@@ -22,7 +22,7 @@ curl_setopt($ch, CURLOPT_HEADER, true);
 curl_setopt($ch, CURLOPT_COOKIEFILE, "");
 curl_setopt($ch, CURLOPT_TIMEOUT, 10);
 
-curl_setopt($ch, CURLOPT_URL, "http://{$router_ip}/auth");
+curl_setopt($ch, CURLOPT_URL, "http://{$routerIp}/auth");
 $resp = curl_exec($ch);
 preg_match('/x-ndm-challenge: (.*)/i', $resp, $m);
 preg_match('/x-ndm-realm: (.*)/i', $resp, $r);
@@ -35,34 +35,34 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 curl_exec($ch);
 
 // --- 2. ПОЛУЧЕНИЕ ДАННЫХ ---
-curl_setopt($ch, CURLOPT_URL, "http://{$router_ip}/rci/show/interface");
+curl_setopt($ch, CURLOPT_URL, "http://{$routerIp}/rci/show/interface");
 curl_setopt($ch, CURLOPT_POST, false);
-$data_res = curl_exec($ch);
+$dataRes = curl_exec($ch);
 curl_close($ch);
 
-$data = json_decode($data_res, true);
+$data = json_decode($dataRes, true);
 if (!$data) die("Ошибка данных.");
 
 // --- 3. РАБОТА С КЕШАМИ ---
 $currentMonth = date('Y-m'); // Используем Год-Месяц для надежности
-$old_stats = file_exists($cache_file) ? json_decode(file_get_contents($cache_file), true) : [];
-$month_stats = file_exists($month_file) ? json_decode(file_get_contents($month_file), true) : ['month' => $currentMonth, 'data' => []];
+$oldStats = file_exists($cacheFile) ? json_decode(file_get_contents($cacheFile), true) : [];
+$monthStats = file_exists($monthFile) ? json_decode(file_get_contents($monthFile), true) : ['month' => $currentMonth, 'data' => []];
 
 // Если наступил новый месяц — сбрасываем данные
-if (!isset($month_stats['month']) || $month_stats['month'] !== $currentMonth) {
-    $month_stats = ['month' => $currentMonth, 'data' => []];
+if (!isset($monthStats['month']) || $monthStats['month'] !== $currentMonth) {
+    $monthStats = ['month' => $currentMonth, 'data' => []];
 }
 
-$new_stats = [];
+$newStats = [];
 $currentDate = date('d.m.Y H:i');
 $currentMonthName = date('F');
 $report = "📊 *Отчет Wireguard (Keenetic) за {$currentMonthName}*\n";
 $report .= "{$currentDate}\n\n";
-$has_updates = false;
+$hasUpdates = false;
 
 foreach ($data as $iface) {
     $ifId = $iface['id'] ?? '';
-    if ($ifId !== 'Wireguard1') continue;
+    if ($ifId !== 'Wireguard1') continue; // сейчас такой id у домешнего впн
 
     if (isset($iface['wireguard']['peer']) && is_array($iface['wireguard']['peer'])) {
         foreach ($iface['wireguard']['peer'] as $peer) {
@@ -70,36 +70,36 @@ foreach ($data as $iface) {
             $name = !empty($peer['description']) ? $peer['description'] : substr($id, 0, 8);
 
             $current = (float)($peer['rxbytes'] ?? 0) + (float)($peer['txbytes'] ?? 0);
-            $new_stats[$id] = $current;
+            $newStats[$id] = $current;
 
-            if (isset($old_stats[$id])) {
-                $diff = $current - $old_stats[$id];
+            if (isset($oldStats[$id])) {
+                $diff = $current - $oldStats[$id];
                 // Если роутер перезагрузился, считаем весь текущий трафик как новый кусок
                 if ($diff < 0) $diff = $current;
 
-                $delta_mb = round($diff / 1024 / 1024, 2);
-                if ($delta_mb > 0) {
-                    $month_stats['data'][$id] = ($month_stats['data'][$id] ?? 0) + $delta_mb;
+                $deltaMb = round($diff / 1024 / 1024, 2);
+                //if ($deltaMb > 0) {
+                    $monthStats['data'][$id] = ($monthStats['data'][$id] ?? 0) + $deltaMb;
 
-                    if ($delta_mb > 0.1) { // Порог для уведомления
-                        $has_updates = true;
-                        $total_month_gb = round($month_stats['data'][$id] / 1024, 2);
-                        $report .= "👤 *{$name}*\n📈 +{$delta_mb} MB | 📅 Месяц: *{$total_month_gb} GB*\n\n";
-                    }
-                }
+                    //if ($deltaMb > 0.1) { // Порог для уведомления
+                        $hasUpdates = true;
+                        $totalMonthGb = round($monthStats['data'][$id] / 1024, 2);
+                        $report .= "👤 *{$name}*\n📈 ". ($deltaMb ? '+' . $deltaMb . ' MB' : '-') ." | 📅 Месяц: *{$totalMonthGb} GB*\n\n";
+                    //}
+                //}
             }
         }
     }
 }
 
-file_put_contents($cache_file, json_encode($new_stats));
-file_put_contents($month_file, json_encode($month_stats));
+file_put_contents($cacheFile, json_encode($newStats));
+file_put_contents($monthFile, json_encode($monthStats));
 
 // --- 4. ОТПРАВКА ---
-if ($has_updates) {
-    $tg_url = "https://api.telegram.org/bot{$botToken}/sendMessage";
+if ($hasUpdates) {
+    $tgUrl = "https://api.telegram.org/bot{$botToken}/sendMessage";
     $p = ['chat_id' => $chatId, 'text' => $report, 'parse_mode' => 'Markdown'];
-    $tx = curl_init($tg_url);
+    $tx = curl_init($tgUrl);
     curl_setopt($tx, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($tx, CURLOPT_POSTFIELDS, $p);
     curl_exec($tx);
