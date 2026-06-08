@@ -51,9 +51,11 @@ $userId = null;
 $username = 'unknown';
 $replyToText = null;
 $isBusiness = false;
+$isGroup = false;
+$messageId = null; // ID сообщения для reply в группах
 $businessConnectionId = ''; // Динамический ID подключения из входящего сообщения
 
-// Универсальный перехват данных (из бизнес-чатов или прямых сообщений боту)
+// Универсальный перехват данных (из бизнес-чатов, групповых чатов или прямых сообщений боту)
 if (isset($update['business_message'])) {
     $chatId = $update['business_message']['chat']['id'];
     $text = $update['business_message']['text'] ?? '';
@@ -70,14 +72,20 @@ if (isset($update['business_message'])) {
 
     $isBusiness = true;
 } elseif (isset($update['message'])) {
-    $chatId = $update['message']['chat']['id'];
-    $text = $update['message']['text'] ?? '';
-    $userId = $update['message']['from']['id'] ?? null;
-    $username = $update['message']['from']['username'] ?? 'no_username';
+    $message = $update['message'];
+    $chatId = $message['chat']['id'];
+    $chatType = $message['chat']['type'] ?? 'private';
+    $text = $message['text'] ?? ($message['caption'] ?? '');
+    $userId = $message['from']['id'] ?? null;
+    $username = $message['from']['username'] ?? 'no_username';
+    $messageId = $message['message_id'] ?? null;
 
-    $replyToText = $update['message']['reply_to_message']['text']
-        ?? $update['message']['reply_to_message']['caption']
+    $replyToText = $message['reply_to_message']['text']
+        ?? $message['reply_to_message']['caption']
         ?? null;
+
+    // Определяем, является ли чат группой
+    $isGroup = in_array($chatType, ['group', 'supergroup'], true);
 }
 
 // Тестовая проверка на команду старта
@@ -89,13 +97,14 @@ if (strpos($text, '/start') === 0) {
 // КОМАНДА /info — выдает укороченное описание бота
 if (strpos($text, '/info') === 0) {
     $infoText = "📋 *Бизнес\\-помощник на базе DeepSeek V4*\n\n"
-        . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы прямо в диалоге\\.\n\n"
+        . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
         . "⚡️ *Как это работает:*\n"
-        . "1\\. Подключи бота к бизнес\\-аккаунту Telegram\\.\n"
+        . "1\\. Добавь бота в личный чат\\, группу или подключи к бизнес\\-аккаунту\\.\n"
         . "2\\. Ответь \\(reply\\) на любое сообщение словом «список»\\.\n"
-        . "3\\. Бот мгновенно пришлет интерактивный чек\\-лист\\.\n\n"
-        . "👥 *Фичи:* совместное добавление/выполнение задач, замер времени генерации\\.\n"
-        . "🔒 Доступ только по белому списку\\.";
+        . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n\n"
+        . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы\\. Группы и личные чаты — текстовый список с reply\\.\n"
+        . "🔒 Доступ только по белому списку\\.\n"
+        . "⚙️ *Поддерживаемые типы чатов:* личные\\, группы\\, супергруппы и бизнес\\-чаты\\.";
 
     sendTelegramMessage($chatId, $infoText, $businessConnectionId);
     exit(json_encode(['status' => 'ok']));
@@ -175,7 +184,10 @@ if ($isBusiness && $businessConnectionId !== '') {
     foreach ($checklistEntries as $entry) {
         $textOutput .= "⬜️ " . escapeMarkdownV2($entry['text']) . "\n";
     }
-    $result = sendTelegramMessage($chatId, $textOutput);
+
+    // В группах отвечаем reply'ем на исходное сообщение
+    $replyToMsgId = $isGroup ? $messageId : null;
+    $result = sendTelegramMessage($chatId, $textOutput, '', $replyToMsgId);
 }
 
 if (empty($result)) {
@@ -295,9 +307,9 @@ function sendTelegramChecklist(int $chatId, array $entries, float $generationTim
 }
 
 /**
- * Отправка обычного сообщения (с поддержкой бизнес-коннекта)
+ * Отправка обычного сообщения (с поддержкой бизнес-коннекта и reply)
  */
-function sendTelegramMessage(int $chatId, string $text, string $businessConnId = ''): bool {
+function sendTelegramMessage(int $chatId, string $text, string $businessConnId = '', ?int $replyToMsgId = null): bool {
     $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/sendMessage';
     $payload = [
         'chat_id' => $chatId,
@@ -307,6 +319,10 @@ function sendTelegramMessage(int $chatId, string $text, string $businessConnId =
 
     if ($businessConnId !== '') {
         $payload['business_connection_id'] = $businessConnId;
+    }
+
+    if ($replyToMsgId !== null) {
+        $payload['reply_to_message_id'] = $replyToMsgId;
     }
 
     return sendCurl($url, $payload);
