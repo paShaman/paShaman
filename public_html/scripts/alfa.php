@@ -117,51 +117,68 @@ if (!$accessToken) {
 // =========================================================================
 echo "Делаю запрос за выпиской по счету...\n";
 
-$dateCheck = date('Y-m-d', time() - 60*60*24);
+// Текущий месяц: с 1 числа по сегодня
+$monthStart = date('Y-m-01');
+$monthEnd   = date('Y-m-d', strtotime('-1 day'));
 
-$queryParams = [
-    'dateFrom' => $dateCheck,
-    'dateTo' => $dateCheck,
-    'operationDirection' => 'EXPENSE',
-];
+// Вчерашний день
+$yesterday = date('Y-m-d', strtotime('-1 day'));
 
-$queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
+/**
+ * Выполняет запрос к API Альфа-Банка за операциями за указанный период
+ */
+$fetchOperations = function ($dateFrom, $dateTo) use ($apiUrl, $accessToken, $certPath, $keyPath, $passphrase, $caChainPath) {
+    $queryParams = [
+        'dateFrom'           => $dateFrom,
+        'dateTo'             => $dateTo,
+        'operationDirection' => 'EXPENSE',
+        'limit' => 100,
+        'offset' => 0,
+    ];
 
-$ch = curl_init();
-curl_setopt_array($ch, [
-    CURLOPT_URL            => $queryApiUrl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER     => [
-        'Authorization: Bearer ' . $accessToken,
-        'Accept: application/json',
-    ],
-    CURLOPT_SSLCERT        => $certPath,
-    CURLOPT_SSLKEY         => $keyPath,
-    CURLOPT_SSLKEYPASSWD   => $passphrase,
-    CURLOPT_CAINFO         => $caChainPath,
-    CURLOPT_SSL_VERIFYPEER => false, // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
-    CURLOPT_SSL_VERIFYHOST => 0,     // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
-]);
-$apiResponse = curl_exec($ch);
+    $queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
 
-if (curl_errno($ch)) {
-    $errorMsg = "❌ Ошибка cURL при запросе к Alfa API: " . curl_error($ch);
-    sendToTelegram($errorMsg);
-    die($errorMsg . "\n");
-}
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $queryApiUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER     => [
+            'Authorization: Bearer ' . $accessToken,
+            'Accept: application/json',
+        ],
+        CURLOPT_SSLCERT        => $certPath,
+        CURLOPT_SSLKEY         => $keyPath,
+        CURLOPT_SSLKEYPASSWD   => $passphrase,
+        CURLOPT_CAINFO         => $caChainPath,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+    ]);
+    $apiResponse = curl_exec($ch);
 
-curl_close($ch);
+    if (curl_errno($ch)) {
+        $errorMsg = "❌ Ошибка cURL при запросе к Alfa API: " . curl_error($ch);
+        sendToTelegram($errorMsg);
+        die($errorMsg . "\n");
+    }
+    curl_close($ch);
 
-// Логируем сырой ответ выписки, если включен флаг
-if (ALFA_DEBUG) {
-    $logTimestamp = date('Y-m-d H:i:s');
-    $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ===\n";
-    $logContent .= "URL: {$queryApiUrl}\n";
-    $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
-    $logContent .= "─────────────────────────────────────────────────────────\n\n";
-    file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
-    echo "Сырой ответ выписки записан в лог (alfa_debug.log).\n";
-}
+    // Логируем сырой ответ выписки, если включен флаг
+    if (ALFA_DEBUG) {
+        $logTimestamp = date('Y-m-d H:i:s');
+        $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ({$dateFrom} – {$dateTo}) ===\n";
+        $logContent .= "URL: {$queryApiUrl}\n";
+        $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
+        $logContent .= "─────────────────────────────────────────────────────────\n\n";
+        file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
+        echo "Сырой ответ выписки ({$dateFrom} – {$dateTo}) записан в лог.\n";
+    }
+
+    return json_decode($apiResponse, true);
+};
+
+// Запрашиваем данные за текущий месяц и за вчерашний день
+$monthData     = $fetchOperations($monthStart, $monthEnd);
+$yesterdayData = $fetchOperations($yesterday, $yesterday);
 
 /*
     "operations": [
@@ -215,62 +232,93 @@ if (ALFA_DEBUG) {
 // =========================================================================
 echo "Группирую операции по категориям и генерирую аналитику...\n";
 
-$decodedResponse = json_decode($apiResponse, true);
-
-// Собираем стартовую шапку сообщения
-$tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
-$tgMessage .= "отчет за " . $dateCheck . "\n\n";
-
-if (isset($decodedResponse['operations']) && is_array($decodedResponse['operations']) && count($decodedResponse['operations']) > 0) {
-
-    $opCount = count($decodedResponse['operations']);
-
-    // Массивы для агрегации сумм по категориям
-    $categoryExpenses = [];
-    $totalExpenses    = 0;
-    $totalIncome      = 0;
-    $currencySign     = '₽'; // По умолчанию рубль
-
-    // -----------------------------------------------------------------
-    // ЭТАП 1: Агрегируем суммы по категориям
-    // -----------------------------------------------------------------
-    foreach ($decodedResponse['operations'] as $op) {
+/**
+ * Агрегирует операции из ответа API в массив [категория => сумма]
+ */
+$aggregateCategories = function ($data) {
+    $categories = [];
+    if (!isset($data['operations']) || !is_array($data['operations'])) {
+        return $categories;
+    }
+    foreach ($data['operations'] as $op) {
         $categoryName = $op['category']['name'] ?? 'Разное';
         $direction    = $op['direction'] ?? 'EXPENSE';
-
-        // Считаем сумму с учетом копеек
+        if ($direction !== 'EXPENSE') {
+            continue;
+        }
+        if ($categoryName === 'Между своими счетами') {
+            continue;
+        }
         $rawValue    = $op['amount']['value'] ?? 0;
         $minorUnits  = $op['amount']['minorUnits'] ?? 100;
         $amountValue = $rawValue / $minorUnits;
-
-        // Определяем знак валюты по ходу дела
-        if (isset($op['amount']['currency']) && $op['amount']['currency'] !== 'RUR') {
-            $currencySign = $op['amount']['currency'];
-        }
-
-        if ($direction === 'EXPENSE') {
-            $categoryExpenses[$categoryName] = ($categoryExpenses[$categoryName] ?? 0) + $amountValue;
-            $totalExpenses += $amountValue;
-        }
+        $categories[$categoryName] = ($categories[$categoryName] ?? 0) + $amountValue;
     }
+    return $categories;
+};
 
-    // -----------------------------------------------------------------
-    // ЭТАП 2: Формируем блок сводки по категориям
-    // -----------------------------------------------------------------
-    if (!empty($categoryExpenses)) {
-        $tgMessage .= "🔻 *Расходы по категориям:*\n";
-        arsort($categoryExpenses); // Сортируем: от самых больших трат к меньшим
-        foreach ($categoryExpenses as $cat => $sum) {
-            $tgMessage .= "• {$cat}: *" . number_format($sum, 2, '.', ' ') . " {$currencySign}*\n";
-        }
-        $tgMessage .= "🛑 Всего расходов: *" . number_format($totalExpenses, 2, '.', ' ') . " {$currencySign}*\n\n";
+$monthCategories  = $aggregateCategories($monthData);
+$yesterdayCategories = $aggregateCategories($yesterdayData);
+
+// Собираем все категории из обоих наборов
+$allCategories = array_unique(array_merge(array_keys($monthCategories), array_keys($yesterdayCategories)));
+
+// Вычисляем общие суммы
+$monthTotal     = array_sum($monthCategories);
+$yesterdayTotal = array_sum($yesterdayCategories);
+
+$currencySign = '₽';
+
+// Определяем валюту из первой попавшейся операции
+if (isset($monthData['operations'][0]['amount']['currency'])
+    && $monthData['operations'][0]['amount']['currency'] !== 'RUR') {
+    $currencySign = $monthData['operations'][0]['amount']['currency'];
+}
+
+// Русские названия месяцев
+$monthsRu = [
+    'January' => 'Январь', 'February' => 'Февраль', 'March' => 'Март',
+    'April' => 'Апрель', 'May' => 'Май', 'June' => 'Июнь',
+    'July' => 'Июль', 'August' => 'Август', 'September' => 'Сентябрь',
+    'October' => 'Октябрь', 'November' => 'Ноябрь', 'December' => 'Декабрь',
+];
+$monthNameEn     = date('F Y');
+$monthNameRu     = $monthsRu[$monthNameEn] ?? $monthNameEn;
+
+$tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
+$tgMessage .= "📅 {$monthNameRu} (с 1 по " . date('d', strtotime('-1 day')) . " число)\n\n";
+
+if (empty($allCategories)) {
+    $tgMessage .= "📭 Операций по картам не обнаружено.\n";
+    if (isset($monthData['error_description'])) {
+        $tgMessage .= "⚠️ Контекст ошибки: `{$monthData['error_description']}`\n";
     }
-
 } else {
-    $tgMessage .= "📭 Новых операций по картам не обнаружено.\n";
-    if (isset($decodedResponse['error_description'])) {
-        $tgMessage .= "⚠️ Контекст ошибки: `{$decodedResponse['error_description']}`\n";
+    // Сортируем категории по сумме за месяц (по убыванию)
+    $sortedCategories = $allCategories;
+    usort($sortedCategories, function ($a, $b) use ($monthCategories) {
+        return ($monthCategories[$b] ?? 0) <=> ($monthCategories[$a] ?? 0);
+    });
+
+    $tgMessage .= "🔻 *Расходы по категориям:*\n";
+    foreach ($sortedCategories as $cat) {
+        $monthSum     = $monthCategories[$cat] ?? 0;
+        $yesterdaySum = $yesterdayCategories[$cat] ?? 0;
+
+        $diffSign = $yesterdaySum >= 0 ? '+' : '';
+        $tgMessage .= "• {$cat}: *" . number_format($monthSum, 0, '.', ' ') . " {$currencySign}*";
+        if ($yesterdaySum > 0) {
+            $tgMessage .= " ({$diffSign}" . number_format($yesterdaySum, 0, '.', ' ') . " {$currencySign} вчера)";
+        }
+        $tgMessage .= "\n";
     }
+
+    // Общий итог
+    $tgMessage .= "\n🛑 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
+    if ($yesterdayTotal > 0) {
+        $tgMessage .= " (+" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign} вчера)";
+    }
+    $tgMessage .= "\n";
 }
 
 // Отправляем готовую аналитику
