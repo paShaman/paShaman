@@ -117,7 +117,7 @@ if (!$accessToken) {
 // =========================================================================
 echo "Делаю запрос за выпиской по счету...\n";
 
-// Текущий месяц: с 1 числа по сегодня
+// Текущий месяц: с 1 числа по вчера
 $monthStart = date('Y-m-01');
 $monthEnd   = date('Y-m-d', strtotime('-1 day'));
 
@@ -228,18 +228,8 @@ if (isset($monthData['operations'][0]['amount']['currency'])
     $currencySign = $monthData['operations'][0]['amount']['currency'];
 }
 
-// Русские названия месяцев
-$monthsRu = [
-    'January' => 'Январь', 'February' => 'Февраль', 'March' => 'Март',
-    'April' => 'Апрель', 'May' => 'Май', 'June' => 'Июнь',
-    'July' => 'Июль', 'August' => 'Август', 'September' => 'Сентябрь',
-    'October' => 'Октябрь', 'November' => 'Ноябрь', 'December' => 'Декабрь',
-];
-$monthNameEn     = date('F Y');
-$monthNameRu     = $monthsRu[$monthNameEn] ?? $monthNameEn;
-
 $tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
-$tgMessage .= "📅 {$monthNameRu} (с 1 по " . date('d', strtotime('-1 day')) . " число)\n\n";
+$tgMessage .= "📅 " . date('F Y') . " (с 1 по " . date('d', strtotime('-1 day')) . " число)\n\n";
 
 if (empty($allCategories)) {
     $tgMessage .= "📭 Операций по картам не обнаружено.\n";
@@ -255,21 +245,35 @@ if (empty($allCategories)) {
 
     // --- Формируем Markdown-файл с таблицей ---
     $todayForFile = date('Y-m-d');
-    $mdReport  = "# Аналитика расходов — {$monthNameRu}\n\n";
+    $mdReport  = "# Аналитика расходов — " . date('F Y') . "\n\n";
     $mdReport .= "**Период:** с 1 по " . date('d', strtotime('-1 day')) . " число\n\n";
-    $mdReport .= "| Категория | За месяц ({$currencySign}) | Вчера ({$currencySign}) | Δ ({$currencySign}) |\n";
-    $mdReport .= "|---|---:|---:|---:|\n";
+    $mdReport .= "| Категория | За месяц ({$currencySign}) | Вчера ({$currencySign}) |\n";
+    $mdReport .= "|---|---:|---:|\n";
 
     foreach ($sortedCategories as $cat) {
         $monthSum     = $monthCategories[$cat] ?? 0;
         $yesterdaySum = $yesterdayCategories[$cat] ?? 0;
-        $delta        = $yesterdaySum;
+
+        // Определяем эмодзи-пометку для категории
+        $marker = '';
+        if ($yesterdaySum == $monthSum) {
+            // Категория появилась только вчера — её не было в месяце до этого
+            $marker = ' 🆕';
+        } elseif ($monthSum > 0 && $yesterdaySum > 0) {
+            $pct = ($yesterdaySum / $monthSum) * 100;
+            if ($pct > 50) {
+                $marker = ' 🔴'; // траты за вчера > 50% от месячных
+            } elseif ($pct > 20) {
+                $marker = ' 🟡'; // траты за вчера > 20% от месячных
+            }elseif ($pct > 10) {
+                $marker = ' 🟢'; // траты за вчера > 10% от месячных
+            }
+        }
 
         $monthFormatted     = number_format($monthSum, 0, '.', ' ');
         $yesterdayFormatted = $yesterdaySum > 0 ? number_format($yesterdaySum, 0, '.', ' ') : '—';
-        $deltaFormatted     = $delta > 0 ? '+' . number_format($delta, 0, '.', ' ') : ($delta < 0 ? number_format($delta, 0, '.', ' ') : '—');
 
-        $mdReport .= "| **{$cat}** | {$monthFormatted} | {$yesterdayFormatted} | {$deltaFormatted} |\n";
+        $mdReport .= "| **{$cat}**{$marker} | {$monthFormatted} | {$yesterdayFormatted} |\n";
     }
 
     // Сохраняем md-файл
