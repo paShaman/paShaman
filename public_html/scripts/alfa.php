@@ -250,19 +250,22 @@ if (empty($allCategories)) {
     $mdReport .= "| Категория | За месяц ({$currencySign}) | Вчера ({$currencySign}) |\n";
     $mdReport .= "|---|---:|---:|\n";
 
+    $redCategories = []; // категории с 🔴 (>50%) для вывода в caption
+
     foreach ($sortedCategories as $cat) {
         $monthSum     = $monthCategories[$cat] ?? 0;
         $yesterdaySum = $yesterdayCategories[$cat] ?? 0;
 
         // Определяем эмодзи-пометку для категории
         $marker = '';
-        if ($yesterdaySum == $monthSum) {
-            // Категория появилась только вчера — её не было в месяце до этого
+        if ($monthSum > 0 && $monthSum == $yesterdaySum) {
+            // Категория появилась только вчера — все траты за месяц пришлись на вчера
             $marker = ' 🆕';
         } elseif ($monthSum > 0 && $yesterdaySum > 0) {
             $pct = ($yesterdaySum / $monthSum) * 100;
             if ($pct > 50) {
                 $marker = ' 🔴'; // траты за вчера > 50% от месячных
+                $redCategories[] = $cat;
             } elseif ($pct > 20) {
                 $marker = ' 🟡'; // траты за вчера > 20% от месячных
             }elseif ($pct > 10) {
@@ -281,7 +284,15 @@ if (empty($allCategories)) {
     file_put_contents($mdFilePath, $mdReport);
 
     // --- Краткая подпись (caption) к документу ---
-    $tgMessage .= "🛑 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
+    if (!empty($redCategories)) {
+        $tgMessage .= "⚠️ *>50% месячных трат:*\n";
+        foreach ($redCategories as $rcat) {
+            $tgMessage .= "🔴 {$rcat}: " . number_format($yesterdayCategories[$rcat], 0, '.', ' ') . " {$currencySign}\n";
+        }
+        $tgMessage .= "\n";
+    }
+
+    $tgMessage .= "💸 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
     if ($yesterdayTotal > 0) {
         $tgMessage .= "\n📆 Вчера: +" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign}";
     }
