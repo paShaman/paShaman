@@ -180,53 +180,6 @@ $fetchOperations = function ($dateFrom, $dateTo) use ($apiUrl, $accessToken, $ce
 $monthData     = $fetchOperations($monthStart, $monthEnd);
 $yesterdayData = $fetchOperations($yesterday, $yesterday);
 
-/*
-    "operations": [
-        {
-            "id": "0866BCIMSJ00100340817",
-            "dateTime": "2024-10-09T08:50:34.285Z",
-            "title": "Пятёрочка",
-            "amount": {
-                "value": 2199,
-                "currency": "RUR",
-                "minorUnits": 100
-            },
-            "direction": "EXPENSE",
-            "fee": 0,
-            "isAnotherClient": false,
-            "cashout": false,
-            "comment": null,
-            "mcc": "5411",
-            "category": {
-                "id": "00041",
-                "name": "Продукты"
-            },
-            "loyalty": {
-                "title": "Кэшбэк",
-                "percent": null,
-                "amount": null
-            },
-            "status": "HOLD",
-            "type": null,
-            "terminal": {
-                "number": "6119",
-                "name": "PYATEROCHKA 1000",
-                "city": "SANKT PETERBURG",
-                "countryCode": "RU"
-            },
-            "sender": {
-                "name": null,
-                "accountNumber": "40817810804230026597",
-                "bankBik": null,
-                "bankName": null,
-                "phoneNumber": null,
-                "maskedCardNumber": "000000++++++000"
-            },
-            "recipient": null,
-            "reference": "HOLD"
-        },
- */
-
 // =========================================================================
 // ШАГ 4: Группировка по категориям, форматирование и отправка в Телеграм
 // =========================================================================
@@ -246,7 +199,7 @@ $aggregateCategories = function ($data) {
         if ($direction !== 'EXPENSE') {
             continue;
         }
-        if ($categoryName === 'Между своими счетами') {
+        if ($categoryName === 'Между своими счетами' || $categoryName === 'Переводы') {
             continue;
         }
         $rawValue    = $op['amount']['value'] ?? 0;
@@ -300,29 +253,46 @@ if (empty($allCategories)) {
         return ($monthCategories[$b] ?? 0) <=> ($monthCategories[$a] ?? 0);
     });
 
-    $tgMessage .= "🔻 *Расходы по категориям:*\n";
+    // --- Формируем Markdown-файл с таблицей ---
+    $todayForFile = date('Y-m-d');
+    $mdReport  = "# Аналитика расходов — {$monthNameRu}\n\n";
+    $mdReport .= "**Период:** с 1 по " . date('d', strtotime('-1 day')) . " число\n\n";
+    $mdReport .= "| Категория | За месяц ({$currencySign}) | Вчера ({$currencySign}) | Δ ({$currencySign}) |\n";
+    $mdReport .= "|---|---:|---:|---:|\n";
+
     foreach ($sortedCategories as $cat) {
         $monthSum     = $monthCategories[$cat] ?? 0;
         $yesterdaySum = $yesterdayCategories[$cat] ?? 0;
+        $delta        = $yesterdaySum;
 
-        $diffSign = $yesterdaySum >= 0 ? '+' : '';
-        $tgMessage .= "• {$cat}: *" . number_format($monthSum, 0, '.', ' ') . " {$currencySign}*";
-        if ($yesterdaySum > 0) {
-            $tgMessage .= " ({$diffSign}" . number_format($yesterdaySum, 0, '.', ' ') . " {$currencySign} вчера)";
-        }
-        $tgMessage .= "\n";
+        $monthFormatted     = number_format($monthSum, 0, '.', ' ');
+        $yesterdayFormatted = $yesterdaySum > 0 ? number_format($yesterdaySum, 0, '.', ' ') : '—';
+        $deltaFormatted     = $delta > 0 ? '+' . number_format($delta, 0, '.', ' ') : ($delta < 0 ? number_format($delta, 0, '.', ' ') : '—');
+
+        $mdReport .= "| **{$cat}** | {$monthFormatted} | {$yesterdayFormatted} | {$deltaFormatted} |\n";
     }
 
-    // Общий итог
-    $tgMessage .= "\n🛑 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
+    // Сохраняем md-файл
+    $mdFilePath = __DIR__ . '/alfa_report_' . $todayForFile . '.md';
+    file_put_contents($mdFilePath, $mdReport);
+
+    // --- Краткая подпись (caption) к документу ---
+    $tgMessage .= "🛑 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
     if ($yesterdayTotal > 0) {
-        $tgMessage .= " (+" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign} вчера)";
+        $tgMessage .= "\n📆 Вчера: +" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign}";
     }
-    $tgMessage .= "\n";
 }
 
-// Отправляем готовую аналитику
-if (sendToTelegram($tgMessage)) {
+// Отправляем документ с кратким итогом в подписи (всё одним сообщением)
+if (!empty($mdFilePath) && file_exists($mdFilePath)) {
+    $sent = sendDocumentToTelegram($mdFilePath, basename($mdFilePath), $tgMessage);
+    unlink($mdFilePath); // удаляем временный файл
+} else {
+    // Если файла нет (нет данных) — отправляем просто текст
+    $sent = sendToTelegram($tgMessage);
+}
+
+if ($sent) {
     echo "✅ Готово! Аналитический отчет успешно доставлен в Telegram.\n";
 } else {
     echo "❌ Ошибка: Не удалось доставить сообщение.\n";
@@ -395,6 +365,53 @@ function requestTokens($postFields) {
 
     sendToTelegram("❌ Ошибка работы с токенами. Ответ сервера Альфы: " . $response);
     return null;
+}
+
+/**
+ * Отправляет документ (файл) в Telegram через sendDocument API.
+ *
+ * @param string $filePath Полный путь к файлу
+ * @param string $fileName Имя файла для отображения в Telegram
+ * @param string $caption  Подпись к документу
+ * @return bool
+ */
+function sendDocumentToTelegram($filePath, $fileName, $caption = '') {
+    $url = "https://api.telegram.org/bot" . TG_BOT_TOKEN . "/sendDocument";
+
+    $postFields = [
+        'chat_id'  => TG_CHAT_ID,
+        'document' => new CURLFile($filePath, 'text/markdown', $fileName),
+        'caption'  => $caption,
+        'parse_mode' => 'Markdown',
+    ];
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => $url,
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POSTFIELDS     => $postFields,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $response = curl_exec($ch);
+
+    if (curl_errno($ch)) {
+        echo "❌ Системная ошибка cURL при отправке документа в Telegram: " . curl_error($ch) . "\n";
+        curl_close($ch);
+        return false;
+    }
+
+    curl_close($ch);
+
+    $result = json_decode($response, true);
+
+    if (isset($result['ok']) && $result['ok'] === true) {
+        return true;
+    }
+
+    echo "❌ Telegram API вернул ошибку при отправке документа: [" . ($result['error_code'] ?? '???') . "] " . ($result['description'] ?? 'Неизвестная ошибка') . "\n";
+    return false;
 }
 
 function sendToTelegram($text, $parseMode = 'Markdown') {
