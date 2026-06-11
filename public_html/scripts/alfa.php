@@ -128,52 +128,70 @@ $yesterday = date('Y-m-d', strtotime('-1 day'));
  * Выполняет запрос к API Альфа-Банка за операциями за указанный период
  */
 $fetchOperations = function ($dateFrom, $dateTo) use ($apiUrl, $accessToken, $certPath, $keyPath, $passphrase, $caChainPath) {
-    $queryParams = [
-        'dateFrom'           => $dateFrom,
-        'dateTo'             => $dateTo,
-        'operationDirection' => 'EXPENSE',
-        'limit' => 100,
-        'offset' => 0,
-    ];
+    $allOperations = [];
+    $offset = 0;
+    $limit = 100;
 
-    $queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
+    do {
+        $queryParams = [
+            'dateFrom'           => $dateFrom,
+            'dateTo'             => $dateTo,
+            'operationDirection' => 'EXPENSE',
+            'limit'              => $limit,
+            'offset'             => $offset,
+        ];
 
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $queryApiUrl,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => [
-            'Authorization: Bearer ' . $accessToken,
-            'Accept: application/json',
-        ],
-        CURLOPT_SSLCERT        => $certPath,
-        CURLOPT_SSLKEY         => $keyPath,
-        CURLOPT_SSLKEYPASSWD   => $passphrase,
-        CURLOPT_CAINFO         => $caChainPath,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => 0,
-    ]);
-    $apiResponse = curl_exec($ch);
+        $queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
 
-    if (curl_errno($ch)) {
-        $errorMsg = "❌ Ошибка cURL при запросе к Alfa API: " . curl_error($ch);
-        sendToTelegram($errorMsg);
-        die($errorMsg . "\n");
-    }
-    curl_close($ch);
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $queryApiUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                'Authorization: Bearer ' . $accessToken,
+                'Accept: application/json',
+            ],
+            CURLOPT_SSLCERT        => $certPath,
+            CURLOPT_SSLKEY         => $keyPath,
+            CURLOPT_SSLKEYPASSWD   => $passphrase,
+            CURLOPT_CAINFO         => $caChainPath,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+        ]);
+        $apiResponse = curl_exec($ch);
 
-    // Логируем сырой ответ выписки, если включен флаг
-    if (ALFA_DEBUG) {
-        $logTimestamp = date('Y-m-d H:i:s');
-        $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ({$dateFrom} – {$dateTo}) ===\n";
-        $logContent .= "URL: {$queryApiUrl}\n";
-        $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
-        $logContent .= "─────────────────────────────────────────────────────────\n\n";
-        file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
-        echo "Сырой ответ выписки ({$dateFrom} – {$dateTo}) записан в лог.\n";
-    }
+        if (curl_errno($ch)) {
+            $errorMsg = "❌ Ошибка cURL при запросе к Alfa API (offset {$offset}): " . curl_error($ch);
+            sendToTelegram($errorMsg);
+            die($errorMsg . "\n");
+        }
+        curl_close($ch);
 
-    return json_decode($apiResponse, true);
+        // Логируем сырой ответ выписки, если включен флаг
+        if (ALFA_DEBUG) {
+            $logTimestamp = date('Y-m-d H:i:s');
+            $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ({$dateFrom} – {$dateTo}, offset={$offset}) ===\n";
+            $logContent .= "URL: {$queryApiUrl}\n";
+            $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
+            $logContent .= "─────────────────────────────────────────────────────────\n\n";
+            file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
+            echo "Сырой ответ выписки ({$dateFrom} – {$dateTo}, offset={$offset}) записан в лог.\n";
+        }
+
+        $pageData = json_decode($apiResponse, true);
+
+        // Если ключа operations нет — вероятно, это ошибка. Возвращаем весь ответ для обработки error_description.
+        if (!isset($pageData['operations'])) {
+            return $pageData;
+        }
+
+        $pageOperations = $pageData['operations'];
+        $allOperations = array_merge($allOperations, $pageOperations);
+        $offset += $limit;
+
+    } while (count($pageOperations) >= $limit);
+
+    return ['operations' => $allOperations];
 };
 
 // Запрашиваем данные за текущий месяц и за вчерашний день
@@ -186,7 +204,7 @@ $yesterdayData = $fetchOperations($yesterday, $yesterday);
 echo "Группирую операции по категориям и генерирую аналитику...\n";
 
 /**
- * Агрегирует операции из ответа API в массив [категория => сумма]
+ * Агрегирует операции из ответа API в массив [категория => ['sum' => сумма, 'count' => количество]]
  */
 $aggregateCategories = function ($data) {
     $categories = [];
@@ -205,7 +223,11 @@ $aggregateCategories = function ($data) {
         $rawValue    = $op['amount']['value'] ?? 0;
         $minorUnits  = $op['amount']['minorUnits'] ?? 100;
         $amountValue = $rawValue / $minorUnits;
-        $categories[$categoryName] = ($categories[$categoryName] ?? 0) + $amountValue;
+        if (!isset($categories[$categoryName])) {
+            $categories[$categoryName] = ['sum' => 0, 'count' => 0];
+        }
+        $categories[$categoryName]['sum'] += $amountValue;
+        $categories[$categoryName]['count']++;
     }
     return $categories;
 };
@@ -216,9 +238,11 @@ $yesterdayCategories = $aggregateCategories($yesterdayData);
 // Собираем все категории из обоих наборов
 $allCategories = array_unique(array_merge(array_keys($monthCategories), array_keys($yesterdayCategories)));
 
-// Вычисляем общие суммы
-$monthTotal     = array_sum($monthCategories);
-$yesterdayTotal = array_sum($yesterdayCategories);
+// Вычисляем общие суммы и количество
+$monthTotal       = array_sum(array_column($monthCategories, 'sum'));
+$monthTotalCount  = array_sum(array_column($monthCategories, 'count'));
+$yesterdayTotal   = array_sum(array_column($yesterdayCategories, 'sum'));
+$yesterdayTotalCount = array_sum(array_column($yesterdayCategories, 'count'));
 
 $currencySign = '₽';
 
@@ -240,21 +264,25 @@ if (empty($allCategories)) {
     // Сортируем категории по сумме за месяц (по убыванию)
     $sortedCategories = $allCategories;
     usort($sortedCategories, function ($a, $b) use ($monthCategories) {
-        return ($monthCategories[$b] ?? 0) <=> ($monthCategories[$a] ?? 0);
+        $sumA = $monthCategories[$a]['sum'] ?? 0;
+        $sumB = $monthCategories[$b]['sum'] ?? 0;
+        return $sumB <=> $sumA;
     });
 
     // --- Формируем Markdown-файл с таблицей ---
     $todayForFile = date('Y-m-d');
     $mdReport  = "# Аналитика расходов — " . date('F Y') . "\n\n";
     $mdReport .= "**Период:** с 1 по " . date('d', strtotime('-1 day')) . " число\n\n";
-    $mdReport .= "| Категория | За месяц ({$currencySign}) | Вчера ({$currencySign}) |\n";
-    $mdReport .= "|---|---:|---:|\n";
+    $mdReport .= "| Категория | За месяц ({$currencySign}) | (шт.) | Вчера ({$currencySign}) | (шт.) |\n";
+    $mdReport .= "|---|---:|---:|---:|---:|\n";
 
     $redCategories = []; // категории с 🔴 (>50%) для вывода в caption
 
     foreach ($sortedCategories as $cat) {
-        $monthSum     = $monthCategories[$cat] ?? 0;
-        $yesterdaySum = $yesterdayCategories[$cat] ?? 0;
+        $monthSum       = $monthCategories[$cat]['sum'] ?? 0;
+        $monthCount     = $monthCategories[$cat]['count'] ?? 0;
+        $yesterdaySum   = $yesterdayCategories[$cat]['sum'] ?? 0;
+        $yesterdayCount = $yesterdayCategories[$cat]['count'] ?? 0;
 
         // Определяем эмодзи-пометку для категории
         $marker = '';
@@ -273,11 +301,21 @@ if (empty($allCategories)) {
             }
         }
 
-        $monthFormatted     = number_format($monthSum, 0, '.', ' ');
-        $yesterdayFormatted = $yesterdaySum > 0 ? number_format($yesterdaySum, 0, '.', ' ') : '—';
+        $monthFormatted       = number_format($monthSum, 0, '.', ' ');
+        $yesterdaySumFormatted = $yesterdaySum > 0 ? number_format($yesterdaySum, 0, '.', ' ') : '—';
+        $yesterdayCountFormatted = $yesterdayCount > 0 ? $yesterdayCount : '—';
 
-        $mdReport .= "| **{$cat}**{$marker} | {$monthFormatted} | {$yesterdayFormatted} |\n";
+        $mdReport .= "| **{$cat}**{$marker} | {$monthFormatted} | {$monthCount} | {$yesterdaySumFormatted} | {$yesterdayCountFormatted} |\n";
     }
+
+    $mdReport .= "\n---\n";
+
+    // Итоговая информация о количестве транзакций
+    $mdReport .= "\n**Всего транзакций за месяц:** {$monthTotalCount}";
+    if ($yesterdayTotalCount > 0) {
+        $mdReport .= " | **Вчера:** {$yesterdayTotalCount}";
+    }
+    $mdReport .= "\n";
 
     // Сохраняем md-файл
     $mdFilePath = __DIR__ . '/alfa_report_' . $todayForFile . '.md';
@@ -287,7 +325,7 @@ if (empty($allCategories)) {
     if (!empty($redCategories)) {
         $tgMessage .= "⚠️ *>50% месячных трат:*\n";
         foreach ($redCategories as $rcat) {
-            $tgMessage .= "🔴 {$rcat}: " . number_format($yesterdayCategories[$rcat], 0, '.', ' ') . " {$currencySign}\n";
+            $tgMessage .= "🔴 {$rcat}: " . number_format($yesterdayCategories[$rcat]['sum'], 0, '.', ' ') . " {$currencySign}\n";
         }
         $tgMessage .= "\n";
     }
