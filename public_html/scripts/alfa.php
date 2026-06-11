@@ -58,12 +58,10 @@ if (file_exists($tokenStorage)) {
 
     // Если текущий токен еще живой (с запасом в 1 минуту)
     if (isset($tokens['access_token']) && isset($tokens['expires_at']) && $tokens['expires_at'] > time() + 60) {
-        echo "Использую действующий access_token из кэша.\n";
         $accessToken = $tokens['access_token'];
     }
     // Если протух — обновляем через refresh_token
     elseif (isset($tokens['refresh_token'])) {
-        echo "Access token истек. Обновляю через refresh_token...\n";
         $accessToken = requestTokens([
             'grant_type'    => 'refresh_token',
             'refresh_token' => $tokens['refresh_token']
@@ -79,7 +77,6 @@ if (file_exists($tokenStorage)) {
 
 // Сценарий 2: Первичный запуск (токенов нет, берем код авторизации из ENV)
 if (!$accessToken && !empty(getenv('ALFA_AUTH_CODE'))) {
-    echo "Обмениваю полученный из ENV код на токены...\n";
     $accessToken = requestTokens([
         'grant_type'   => 'authorization_code',
         'code'         => getenv('ALFA_AUTH_CODE'),
@@ -115,7 +112,6 @@ if (!$accessToken) {
 // =========================================================================
 // ШАГ 3: Запрос выписки по счету
 // =========================================================================
-echo "Делаю запрос за выпиской по счету...\n";
 
 // Текущий месяц: с 1 числа по вчера
 $monthStart = date('Y-m-01');
@@ -201,7 +197,6 @@ $yesterdayData = $fetchOperations($yesterday, $yesterday);
 // =========================================================================
 // ШАГ 4: Группировка по категориям, форматирование и отправка в Телеграм
 // =========================================================================
-echo "Группирую операции по категориям и генерирую аналитику...\n";
 
 /**
  * Агрегирует операции из ответа API в массив [категория => ['sum' => сумма, 'count' => количество]]
@@ -346,9 +341,7 @@ if (!empty($mdFilePath) && file_exists($mdFilePath)) {
 }
 
 if ($sent) {
-    echo "✅ Готово! Аналитический отчет успешно доставлен в Telegram.\n";
-} else {
-    echo "❌ Ошибка: Не удалось доставить сообщение.\n";
+    //good
 }
 
 // =========================================================================
