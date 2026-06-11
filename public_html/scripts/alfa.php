@@ -117,8 +117,11 @@ if (!$accessToken) {
 // =========================================================================
 echo "Делаю запрос за выпиской по счету...\n";
 
+$dateCheck = date('Y-m-d', time() - 60*60*24);
+
 $queryParams = [
-    //'dateFrom' => date('Y-m-d', time() - 60*60*24*2),
+    'dateFrom' => $dateCheck,
+    'dateTo' => $dateCheck,
     'operationDirection' => 'EXPENSE',
 ];
 
@@ -216,7 +219,7 @@ $decodedResponse = json_decode($apiResponse, true);
 
 // Собираем стартовую шапку сообщения
 $tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
-$tgMessage .= date('d.m.Y H:i') . "\n\n";
+$tgMessage .= "отчет за " . $dateCheck . "\n\n";
 
 if (isset($decodedResponse['operations']) && is_array($decodedResponse['operations']) && count($decodedResponse['operations']) > 0) {
 
