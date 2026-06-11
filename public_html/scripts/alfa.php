@@ -7,25 +7,42 @@ include __DIR__.'/_env.php';
 // =========================================================================
 define('TG_BOT_TOKEN', getenv('TG_TOKEN_STAT'));
 define('TG_CHAT_ID', getenv('TG_CHAT_ID'));
+define('ALFA_DEBUG', getenv('ALFA_DEBUG') === 'true');
+define('ALFA_PROD', getenv('ALFA_PROD') === 'true');
 
 // =========================================================================
 // 2. НАСТРОЙКИ АЛЬФА-БАНКА
 // =========================================================================
-$clientId     = getenv('ALFA_CLIENT_ID');
-$clientSecret = getenv('ALFA_CLIENT_SECRET');
-$passphrase   = getenv('ALFA_KEY_PASSPHRASE');
-$redirectUri  = 'https://paShaman.dev/alfa/connect/';
+$clientId     = getenv(ALFA_PROD ? 'ALFA_CLIENT_ID_PROD' : 'ALFA_CLIENT_ID');
+$clientSecret = getenv(ALFA_PROD ? 'ALFA_CLIENT_SECRET_PROD' : 'ALFA_CLIENT_SECRET');
+$passphrase   = getenv(ALFA_PROD ? 'ALFA_KEY_PASSPHRASE_PROD' : 'ALFA_KEY_PASSPHRASE');
+$redirectUri  = 'https://pashaman.dev/alfa/connect/';
 $scope        = 'openid accounts cards operations-history';
 $state        = uniqid();
 
-$certPath     = __DIR__ . '/cert/alfa/test/sandbox_cert_2026.cer';
-$keyPath      = __DIR__ . '/cert/alfa/test/sandbox_key_2026.key';
-$caChainPath  = __DIR__ . '/cert/alfa/test/apica_2022_chain.cer';
+if (ALFA_PROD) {
+    $certPath = __DIR__ . '/cert/alfa/prod/IP_Nikitin_PV_2026.cer';
+    $keyPath = __DIR__ . '/cert/alfa/prod/ip_nikitin_pavel_viktorovich.key';
+    $caChainPath = __DIR__ . '/cert/alfa/prod/apica_2022_chain.cer';
 
-$authorizeUrl = 'https://id-sandbox.alfabank.ru/oidc/authorize';
-$tokenUrl     = 'https://sandbox.alfabank.ru/api/token';
-$apiUrl       = 'https://sandbox.alfabank.ru/api/pp/v1/operations'; // https://developers.alfabank.ru/products/alfa-api/documentation/articles/operations-history/articles/operations-list/v1/operations-list
+    $authorizeUrl = 'https://id.alfabank.ru/oidc/authorize';
+    $tokenUrl     = 'https://baas.alfabank.ru/oidc/token';
+    $apiUrl       = 'https://baas.alfabank.ru/api/pp/v1/operations';
 
+    /*
+     * https://developers.alfabank.ru/products/alfa-api/documentation/articles/alfa-id/articles/acf/articles/get-auth-code/v1/get-auth-code
+     * https://developers.alfabank.ru/products/alfa-api/documentation/articles/alfa-id/articles/acf/articles/get-access-token/v1/get-access-token
+     * https://developers.alfabank.ru/products/alfa-api/documentation/articles/operations-history/articles/operations-list/v1/operations-list
+     */
+} else {
+    $certPath = __DIR__ . '/cert/alfa/test/sandbox_cert_2026.cer';
+    $keyPath = __DIR__ . '/cert/alfa/test/sandbox_key_2026.key';
+    $caChainPath = __DIR__ . '/cert/alfa/test/apica_2022_chain.cer';
+
+    $authorizeUrl = 'https://id-sandbox.alfabank.ru/oidc/authorize';
+    $tokenUrl = 'https://sandbox.alfabank.ru/api/token';
+    $apiUrl = 'https://sandbox.alfabank.ru/api/pp/v1/operations';
+}
 
 $tokenStorage = __DIR__ . '/tokens.json';
 
@@ -87,8 +104,6 @@ if (!$accessToken) {
             'state'         => $state
         ]);
 
-    //https://id-sandbox.alfabank.ru/oidc/authorize?response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}
-
     echo "\n\n=== ПЕРВИЧНАЯ НАСТРОЙКА ===\n";
     echo "1. Открой ссылку в браузере:\n" . $link . "\n\n";
     echo "2. Авторизуйся, скопируй 'code' из адресной строки.\n";
@@ -102,9 +117,8 @@ if (!$accessToken) {
 // =========================================================================
 echo "Делаю запрос за выпиской по счету...\n";
 
-// Передаем обязательные параметры согласно спецификации
 $queryParams = [
-    'dateFrom' => date('Y-m-d', time() - 60*60*24*2),
+    //'dateFrom' => date('Y-m-d', time() - 60*60*24*2),
     'operationDirection' => 'EXPENSE',
 ];
 
@@ -134,6 +148,17 @@ if (curl_errno($ch)) {
 }
 
 curl_close($ch);
+
+// Логируем сырой ответ выписки, если включен флаг
+if (ALFA_DEBUG) {
+    $logTimestamp = date('Y-m-d H:i:s');
+    $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ===\n";
+    $logContent .= "URL: {$queryApiUrl}\n";
+    $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
+    $logContent .= "─────────────────────────────────────────────────────────\n\n";
+    file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
+    echo "Сырой ответ выписки записан в лог (alfa_debug.log).\n";
+}
 
 /*
     "operations": [
@@ -298,9 +323,7 @@ function requestTokens($postFields) {
     $response = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        $curlError = curl_error($ch);
-
-        $errorMsg = "❌ Системная ошибка cURL при запросе токена: " . $curlError($ch);
+        $errorMsg = "❌ Системная ошибка cURL при запросе токена: " . curl_error($ch);
         sendToTelegram($errorMsg);
         echo $errorMsg . "\n";
 
@@ -309,6 +332,15 @@ function requestTokens($postFields) {
     }
 
     curl_close($ch);
+
+    // Логируем ответ авторизации/обновления токенов, если включен флаг
+    if (ALFA_DEBUG) {
+        $logTimestamp = date('Y-m-d H:i:s');
+        $logContent = "=== [{$logTimestamp}] ЗАПРОС ТОКЕНА ({$postFields['grant_type']}) ===\n";
+        $logContent .= "ОТВЕТ СЕРВЕРА:\n{$response}\n";
+        $logContent .= "─────────────────────────────────────────────────────────\n\n";
+        file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
+    }
 
     $data = json_decode($response, true);
 
