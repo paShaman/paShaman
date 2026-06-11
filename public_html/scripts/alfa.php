@@ -216,7 +216,7 @@ $decodedResponse = json_decode($apiResponse, true);
 
 // Собираем стартовую шапку сообщения
 $tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
-$tgMessage .= "───────────────────\n\n";
+$tgMessage .= date('d.m.Y H:i') . "\n\n";
 
 if (isset($decodedResponse['operations']) && is_array($decodedResponse['operations']) && count($decodedResponse['operations']) > 0) {
 
@@ -224,7 +224,6 @@ if (isset($decodedResponse['operations']) && is_array($decodedResponse['operatio
 
     // Массивы для агрегации сумм по категориям
     $categoryExpenses = [];
-    $categoryIncome   = [];
     $totalExpenses    = 0;
     $totalIncome      = 0;
     $currencySign     = '₽'; // По умолчанию рубль
@@ -246,10 +245,7 @@ if (isset($decodedResponse['operations']) && is_array($decodedResponse['operatio
             $currencySign = $op['amount']['currency'];
         }
 
-        if ($direction === 'INCOME') {
-            $categoryIncome[$categoryName] = ($categoryIncome[$categoryName] ?? 0) + $amountValue;
-            $totalIncome += $amountValue;
-        } else {
+        if ($direction === 'EXPENSE') {
             $categoryExpenses[$categoryName] = ($categoryExpenses[$categoryName] ?? 0) + $amountValue;
             $totalExpenses += $amountValue;
         }
@@ -258,8 +254,6 @@ if (isset($decodedResponse['operations']) && is_array($decodedResponse['operatio
     // -----------------------------------------------------------------
     // ЭТАП 2: Формируем блок сводки по категориям
     // -----------------------------------------------------------------
-    $tgMessage .= "📊 *СВОДКА ПО КАТЕГОРИЯМ*\n\n";
-
     if (!empty($categoryExpenses)) {
         $tgMessage .= "🔻 *Расходы по категориям:*\n";
         arsort($categoryExpenses); // Сортируем: от самых больших трат к меньшим
@@ -267,15 +261,6 @@ if (isset($decodedResponse['operations']) && is_array($decodedResponse['operatio
             $tgMessage .= "• {$cat}: *" . number_format($sum, 2, '.', ' ') . " {$currencySign}*\n";
         }
         $tgMessage .= "🛑 Всего расходов: *" . number_format($totalExpenses, 2, '.', ' ') . " {$currencySign}*\n\n";
-    }
-
-    if (!empty($categoryIncome)) {
-        $tgMessage .= "🔺 *Доходы по категориям:*\n";
-        arsort($categoryIncome); // Сортируем доходы по убыванию
-        foreach ($categoryIncome as $cat => $sum) {
-            $tgMessage .= "• {$cat}: *" . number_format($sum, 2, '.', ' ') . " {$currencySign}*\n";
-        }
-        $tgMessage .= "❇️ Всего доходов: *" . number_format($totalIncome, 2, '.', ' ') . " {$currencySign}*\n\n";
     }
 
 } else {
