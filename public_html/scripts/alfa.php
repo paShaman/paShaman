@@ -18,7 +18,7 @@ $clientSecret = getenv(ALFA_PROD ? 'ALFA_CLIENT_SECRET_PROD' : 'ALFA_CLIENT_SECR
 $passphrase   = getenv(ALFA_PROD ? 'ALFA_KEY_PASSPHRASE_PROD' : 'ALFA_KEY_PASSPHRASE');
 $redirectUri  = 'https://pashaman.dev/alfa/connect/';
 $scope        = 'openid accounts cards operations-history';
-$state        = uniqid();
+$state        = uniqid('', true);
 
 if (ALFA_PROD) {
     $certPath = __DIR__ . '/cert/alfa/prod/IP_Nikitin_PV_2026.cer';
@@ -54,59 +54,50 @@ $accessToken = null;
 
 // Сценарий 1: Основной режим работы для Cron (проверяем сохраненные токены)
 if (file_exists($tokenStorage)) {
-    $tokens = json_decode(file_get_contents($tokenStorage), true);
+    $tokens = json_decode(file_get_contents($tokenStorage), true) ?? [];
 
-    // Если текущий токен еще живой (с запасом в 1 минуту)
-    if (isset($tokens['access_token']) && isset($tokens['expires_at']) && $tokens['expires_at'] > time() + 60) {
+    // Если текущий токен ещё живой (с запасом в 1 минуту)
+    if (!empty($tokens['access_token']) && ($tokens['expires_at'] ?? 0) > time() + 60) {
         $accessToken = $tokens['access_token'];
     }
     // Если протух — обновляем через refresh_token
-    elseif (isset($tokens['refresh_token'])) {
+    elseif (!empty($tokens['refresh_token'])) {
         $accessToken = requestTokens([
             'grant_type'    => 'refresh_token',
-            'refresh_token' => $tokens['refresh_token']
+            'refresh_token' => $tokens['refresh_token'],
         ]);
-
-        if (!$accessToken) {
-            $errorMsg = "❌ Ошибка: Не удалось обновить токен через refresh_token. Завершаю работу.";
-            sendToTelegram($errorMsg);
-            die($errorMsg . "\n");
-        }
     }
 }
 
-// Сценарий 2: Первичный запуск (токенов нет, берем код авторизации из ENV)
+// Сценарий 2: Первичный запуск (токенов нет, берём код авторизации из ENV)
 if (!$accessToken && !empty(getenv('ALFA_AUTH_CODE'))) {
     $accessToken = requestTokens([
         'grant_type'   => 'authorization_code',
         'code'         => getenv('ALFA_AUTH_CODE'),
         'redirect_uri' => $redirectUri,
-        'scope'        => $scope
+        'scope'        => $scope,
     ]);
-
-    if (!$accessToken) {
-        $errorMsg = "❌ Ошибка: Не удалось обменять код из ENV на токен. Завершаю работу.";
-        sendToTelegram($errorMsg);
-        die($errorMsg . "\n");
-    }
 }
 
 // Сценарий 3: Если вообще ничего нет — генерируем ссылку для ручного получения кода
 if (!$accessToken) {
     $link = $authorizeUrl . '?' . http_build_query([
-            'response_type' => 'code',
-            'client_id'     => $clientId,
-            'redirect_uri'  => $redirectUri,
-            'scope'         => $scope,
-            'state'         => $state
-        ]);
+        'response_type' => 'code',
+        'client_id'     => $clientId,
+        'redirect_uri'  => $redirectUri,
+        'scope'         => $scope,
+        'state'         => $state,
+    ]);
 
-    echo "\n\n=== ПЕРВИЧНАЯ НАСТРОЙКА ===\n";
-    echo "1. Открой ссылку в браузере:\n" . $link . "\n\n";
+    $msg = "❌ Не удалось получить access_token. Требуется ручная авторизация.";
+    sendToTelegram($msg);
+
+    echo "\n=== ПЕРВИЧНАЯ НАСТРОЙКА ===\n";
+    echo "1. Открой ссылку в браузере:\n{$link}\n\n";
     echo "2. Авторизуйся, скопируй 'code' из адресной строки.\n";
-    echo "3. Добавь его в свой _env.php: putenv('ALFA_AUTH_CODE=твоя_строка_кода');\n";
+    echo "3. Добавь в _env.php: putenv('ALFA_AUTH_CODE=твоя_строка_кода');\n";
     echo "4. Запусти скрипт снова.\n\n";
-    exit;
+    exit(1);
 }
 
 // =========================================================================
@@ -139,29 +130,16 @@ $fetchOperations = function ($dateFrom, $dateTo) use ($apiUrl, $accessToken, $ce
 
         $queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL            => $queryApiUrl,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER     => [
+        $apiResponse = alfaCurl($queryApiUrl, [
+            CURLOPT_HTTPHEADER => [
                 'Authorization: Bearer ' . $accessToken,
                 'Accept: application/json',
             ],
-            CURLOPT_SSLCERT        => $certPath,
-            CURLOPT_SSLKEY         => $keyPath,
-            CURLOPT_SSLKEYPASSWD   => $passphrase,
-            CURLOPT_CAINFO         => $caChainPath,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
-        ]);
-        $apiResponse = curl_exec($ch);
+        ], $certPath, $keyPath, $passphrase, $caChainPath);
 
-        if (curl_errno($ch)) {
-            $errorMsg = "❌ Ошибка cURL при запросе к Alfa API (offset {$offset}): " . curl_error($ch);
-            sendToTelegram($errorMsg);
-            die($errorMsg . "\n");
+        if ($apiResponse === null) {
+            return null;
         }
-        curl_close($ch);
 
         // Логируем сырой ответ выписки, если включен флаг
         if (ALFA_DEBUG) {
@@ -169,7 +147,7 @@ $fetchOperations = function ($dateFrom, $dateTo) use ($apiUrl, $accessToken, $ce
             $logContent = "=== [{$logTimestamp}] ЗАПРОС ВЫПИСКИ ({$dateFrom} – {$dateTo}, offset={$offset}) ===\n";
             $logContent .= "URL: {$queryApiUrl}\n";
             $logContent .= "ОТВЕТ СЕРВЕРА:\n{$apiResponse}\n";
-            $logContent .= "─────────────────────────────────────────────────────────\n\n";
+            $logContent .= str_repeat('─', 57) . "\n\n";
             file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
             echo "Сырой ответ выписки ({$dateFrom} – {$dateTo}, offset={$offset}) записан в лог.\n";
         }
@@ -348,49 +326,65 @@ if ($sent) {
 // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // =========================================================================
 
-function requestTokens($postFields) {
-    global $tokenUrl, $certPath, $keyPath, $passphrase, $caChainPath, $clientId, $clientSecret, $tokenStorage;
-
-    $postFields['client_id']     = $clientId;
-    $postFields['client_secret'] = $clientSecret;
-
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $tokenUrl,
-        CURLOPT_POST           => true,
+/**
+ * Выполняет cURL-запрос с mTLS-сертификатами Альфы.
+ * Возвращает тело ответа или null при ошибке cURL.
+ */
+function alfaCurl($url, array $extraOptions, $certPath, $keyPath, $passphrase, $caChainPath): ?string
+{
+    $baseOptions = [
+        CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => [
-            'accept: application/json',
-            'Content-Type: application/x-www-form-urlencoded'
-        ],
-        CURLOPT_POSTFIELDS     => http_build_query($postFields),
         CURLOPT_SSLCERT        => $certPath,
         CURLOPT_SSLKEY         => $keyPath,
         CURLOPT_SSLKEYPASSWD   => $passphrase,
         CURLOPT_CAINFO         => $caChainPath,
         CURLOPT_SSL_VERIFYPEER => false, // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
         CURLOPT_SSL_VERIFYHOST => 0,     // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
-    ]);
+    ];
+
+    $ch = curl_init();
+    curl_setopt_array($ch, $extraOptions + $baseOptions); // $extraOptions имеют приоритет
 
     $response = curl_exec($ch);
+    $error    = curl_errno($ch) ? curl_error($ch) : null;
+    curl_close($ch);
 
-    if (curl_errno($ch)) {
-        $errorMsg = "❌ Системная ошибка cURL при запросе токена: " . curl_error($ch);
-        sendToTelegram($errorMsg);
-        echo $errorMsg . "\n";
-
-        curl_close($ch);
+    if ($error) {
+        $msg = "❌ Ошибка cURL [{$url}]: {$error}";
+        echo $msg . "\n";
+        sendToTelegram($msg);
         return null;
     }
 
-    curl_close($ch);
+    return $response;
+}
+
+function requestTokens($postFields) {
+    global $tokenUrl, $certPath, $keyPath, $passphrase, $caChainPath, $clientId, $clientSecret, $tokenStorage;
+
+    $postFields['client_id']     = $clientId;
+    $postFields['client_secret'] = $clientSecret;
+
+    $response = alfaCurl($tokenUrl, [
+        CURLOPT_POST       => true,
+        CURLOPT_POSTFIELDS => http_build_query($postFields),
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
+        ],
+    ], $certPath, $keyPath, $passphrase, $caChainPath);
+
+    if ($response === null) {
+        return null;
+    }
 
     // Логируем ответ авторизации/обновления токенов, если включен флаг
     if (ALFA_DEBUG) {
         $logTimestamp = date('Y-m-d H:i:s');
         $logContent = "=== [{$logTimestamp}] ЗАПРОС ТОКЕНА ({$postFields['grant_type']}) ===\n";
         $logContent .= "ОТВЕТ СЕРВЕРА:\n{$response}\n";
-        $logContent .= "─────────────────────────────────────────────────────────\n\n";
+        $logContent .= str_repeat('─', 57) . "\n\n";
         file_put_contents(__DIR__ . '/alfa_debug.log', $logContent, FILE_APPEND);
     }
 
@@ -403,11 +397,9 @@ function requestTokens($postFields) {
     }
 
     echo "⚠️ Альфа-Банк вернул ошибку при запросе токена:\n";
-    if ($data) {
-        echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
-    } else {
-        echo "Сырой ответ (Raw Response): " . $response . "\n";
-    }
+    echo $data
+        ? json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n"
+        : "Сырой ответ: {$response}\n";
 
     sendToTelegram("❌ Ошибка работы с токенами. Ответ сервера Альфы: " . $response);
     return null;
@@ -465,7 +457,7 @@ function sendToTelegram($text, $parseMode = 'Markdown') {
 
     // Защита от превышения лимита ТГ (макс 4096 символов)
     if (mb_strlen($text) > 4000) {
-        $text = mb_substr($text, 0, 3800) . "\n\n... [Часть выписки обрезана, так как превышен лимит Telegram в 4096 символов] ...";
+        $text = mb_substr($text, 0, 3800) . "\n\n… [обрезано: превышен лимит Telegram в 4096 символов]";
     }
 
     $ch = curl_init();
@@ -478,32 +470,31 @@ function sendToTelegram($text, $parseMode = 'Markdown') {
             'text'       => $text,
             'parse_mode' => $parseMode,
         ],
-        CURLOPT_SSL_VERIFYPEER => false, // На случай если у сервера проблемы с SSL-цепочкой до ТГ
+        CURLOPT_SSL_VERIFYPEER => false,
     ]);
 
     $response = curl_exec($ch);
+    $error    = curl_errno($ch) ? curl_error($ch) : null;
+    curl_close($ch);
 
-    if (curl_errno($ch)) {
-        echo "❌ Системная ошибка cURL при отправке в Telegram: " . curl_error($ch) . "\n";
-        curl_close($ch);
+    if ($error) {
+        echo "❌ Ошибка cURL при отправке в Telegram: {$error}\n";
         return false;
     }
 
-    curl_close($ch);
-
     $result = json_decode($response, true);
 
-    // Если всё улетело успешно
-    if (isset($result['ok']) && $result['ok'] === true) {
+    if (!empty($result['ok'])) {
         return true;
     }
 
-    // Если Телеграм вернул ошибку — выводим её на чистую воду
-    echo "❌ Telegram API вернул ошибку: [" . ($result['error_code'] ?? '???') . "] " . ($result['description'] ?? 'Неизвестная ошибка') . "\n";
+    $code = $result['error_code']  ?? '???';
+    $desc = $result['description'] ?? 'Неизвестная ошибка';
+    echo "❌ Telegram API вернул ошибку: [{$code}] {$desc}\n";
 
-    // Авто-фолбек: если ТГ ругается на разметку (Markdown parse error), пробуем послать голым текстом
+    // Авто-фолбек: если ТГ ругается на разметку — пробуем послать голым текстом
     if ($parseMode !== null && isset($result['description']) && strpos($result['description'], 'parse') !== false) {
-        echo "⚠️ Пробую переотправить отчет как чистый текст без разметки Markdown...\n";
+        echo "⚠️ Пробую переотправить как plain text…\n";
         $plainText = str_replace(['```json', '```', '*', '`'], '', $text);
         return sendToTelegram($plainText, null);
     }
