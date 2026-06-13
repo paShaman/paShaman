@@ -225,14 +225,18 @@ if (isset($monthData['operations'][0]['amount']['currency'])
     $currencySign = $monthData['operations'][0]['amount']['currency'];
 }
 
-$tgMessage = "🤖 *Alfa API: Аналитика расходов*\n";
-$tgMessage .= "📅 " . date('F Y') . " (с 1 по " . date('d', strtotime('-1 day')) . " число)\n\n";
+$todayForFile = date('Y-m-d');
+$htmlReport = '';
+
+$htmlReport .= "<b>🤖 Alfa API: Аналитика расходов</b>\n";
+$htmlReport .= "<p>📅 " . date('F Y') . " (с 1 по " . date('d', strtotime('-1 day')) . " число)</p>\n";
 
 if (empty($allCategories)) {
-    $tgMessage .= "📭 Операций по картам не обнаружено.\n";
+    $htmlReport .= "<p>📭 Операций по картам не обнаружено.</p>\n";
     if (isset($monthData['error_description'])) {
-        $tgMessage .= "⚠️ Контекст ошибки: `{$monthData['error_description']}`\n";
+        $htmlReport .= "<p>⚠️ Контекст ошибки: <code>" . htmlspecialchars($monthData['error_description']) . "</code></p>\n";
     }
+    $sent = sendRichMessageToTelegram($htmlReport);
 } else {
     // Сортируем категории по сумме за месяц (по убыванию)
     $sortedCategories = $allCategories;
@@ -242,15 +246,10 @@ if (empty($allCategories)) {
         return $sumB <=> $sumA;
     });
 
-    // --- Формируем Markdown-файл с таблицей ---
-    $todayForFile = date('Y-m-d');
-    $mdReport  = "# Аналитика расходов — " . date('F Y') . "\n\n";
-    $mdReport .= "**Период:** с 1 по " . date('d', strtotime('-1 day')) . " число\n\n";
-    $mdReport .= "| Категория | За месяц ({$currencySign}) | (шт.) | Вчера ({$currencySign}) | (шт.) |\n";
-    $mdReport .= "|---|---:|---:|---:|---:|\n";
+    $redCategories = []; // категории с 🔴 (>50%) для алерта
 
-    $redCategories = []; // категории с 🔴 (>50%) для вывода в caption
-
+    // --- Строим строки таблицы ---
+    $tableRows = '';
     foreach ($sortedCategories as $cat) {
         $monthSum       = $monthCategories[$cat]['sum'] ?? 0;
         $monthCount     = $monthCategories[$cat]['count'] ?? 0;
@@ -260,66 +259,61 @@ if (empty($allCategories)) {
         // Определяем эмодзи-пометку для категории
         $marker = '';
         if ($monthSum > 0 && $monthSum == $yesterdaySum) {
-            // Категория появилась только вчера — все траты за месяц пришлись на вчера
             $marker = ' 🆕';
         } elseif ($monthSum > 0 && $yesterdaySum > 0) {
             $pct = ($yesterdaySum / $monthSum) * 100;
             if ($pct > 50) {
-                $marker = ' 🔴'; // траты за вчера > 50% от месячных
+                $marker = ' 🔴';
                 $redCategories[] = $cat;
             } elseif ($pct > 20) {
-                $marker = ' 🟡'; // траты за вчера > 20% от месячных
-            }elseif ($pct > 10) {
-                $marker = ' 🟢'; // траты за вчера > 10% от месячных
+                $marker = ' 🟡';
+            } elseif ($pct > 10) {
+                $marker = ' 🟢';
             }
         }
 
-        $monthFormatted       = number_format($monthSum, 0, '.', ' ');
+        $monthFormatted        = number_format($monthSum, 0, '.', ' ');
         $yesterdaySumFormatted = $yesterdaySum > 0 ? number_format($yesterdaySum, 0, '.', ' ') : '—';
-        $yesterdayCountFormatted = $yesterdayCount > 0 ? $yesterdayCount : '—';
+        $yesterdayCountFormatted = $yesterdayCount > 0 ? (string)$yesterdayCount : '—';
 
-        $mdReport .= "| **{$cat}**{$marker} | {$monthFormatted} | {$monthCount} | {$yesterdaySumFormatted} | {$yesterdayCountFormatted} |\n";
+        $tableRows .= "<tr><td><b>" . htmlspecialchars($cat) . "</b>{$marker}</td><td align=\"right\">{$monthFormatted}</td><td align=\"right\">{$monthCount}</td><td align=\"right\">{$yesterdaySumFormatted}</td><td align=\"right\">{$yesterdayCountFormatted}</td></tr>\n";
     }
 
-    $mdReport .= "\n---\n";
+    // --- Алерт по >50% категориям (видна всегда) ---
+    if (!empty($redCategories)) {
+        $htmlReport .= "<p>⚠️ <b>>50% месячных трат:</b></p>\n";
+        foreach ($redCategories as $rcat) {
+            $htmlReport .= "<p>🔴 " . htmlspecialchars($rcat) . ": " . number_format($yesterdayCategories[$rcat]['sum'], 0, '.', ' ') . " {$currencySign}</p>\n";
+        }
+    }
+
+    // --- Итоговая сумма (видна всегда) ---
+    $htmlReport .= "<p>💸 <b>Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}</b></p>\n";
+    if ($yesterdayTotal > 0) {
+        $htmlReport .= "<p>📆 Вчера: +" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign}</p>\n";
+    }
+
+    // --- Таблица в сворачиваемом блоке <details> ---
+    $htmlReport .= "<details>\n";
+    $htmlReport .= "<summary><b>📊 Таблица расходов по категориям</b></summary>\n";
+    $htmlReport .= "<table bordered>\n";
+    $htmlReport .= "<tr><th>Категория</th><th align=\"right\">За месяц ({$currencySign})</th><th align=\"right\">(шт.)</th><th align=\"right\">Вчера ({$currencySign})</th><th align=\"right\">(шт.)</th></tr>\n";
+    $htmlReport .= $tableRows;
+    $htmlReport .= "</table>\n";
 
     // Итоговая информация о количестве транзакций
-    $mdReport .= "\n**Всего транзакций за месяц:** {$monthTotalCount}";
+    $htmlReport .= "<p><b>Всего транзакций за месяц:</b> {$monthTotalCount}";
     if ($yesterdayTotalCount > 0) {
-        $mdReport .= " | **Вчера:** {$yesterdayTotalCount}";
+        $htmlReport .= " | <b>Вчера:</b> {$yesterdayTotalCount}";
     }
-    $mdReport .= "\n";
+    $htmlReport .= "</p>\n";
+    $htmlReport .= "</details>\n";
 
-    // Сохраняем md-файл
-    $mdFilePath = __DIR__ . '/alfa_report_' . $todayForFile . '.md';
-    file_put_contents($mdFilePath, $mdReport);
-
-    // --- Краткая подпись (caption) к документу ---
-    if (!empty($redCategories)) {
-        $tgMessage .= "⚠️ *>50% месячных трат:*\n";
-        foreach ($redCategories as $rcat) {
-            $tgMessage .= "🔴 {$rcat}: " . number_format($yesterdayCategories[$rcat]['sum'], 0, '.', ' ') . " {$currencySign}\n";
-        }
-        $tgMessage .= "\n";
-    }
-
-    $tgMessage .= "💸 *Всего расходов: " . number_format($monthTotal, 0, '.', ' ') . " {$currencySign}*";
-    if ($yesterdayTotal > 0) {
-        $tgMessage .= "\n📆 Вчера: +" . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign}";
-    }
-}
-
-// Отправляем документ с кратким итогом в подписи (всё одним сообщением)
-if (!empty($mdFilePath) && file_exists($mdFilePath)) {
-    $sent = sendDocumentToTelegram($mdFilePath, basename($mdFilePath), $tgMessage);
-    unlink($mdFilePath); // удаляем временный файл
-} else {
-    // Если файла нет (нет данных) — отправляем просто текст
-    $sent = sendToTelegram($tgMessage);
+    $sent = sendRichMessageToTelegram($htmlReport);
 }
 
 if ($sent) {
-    //good
+    // good
 }
 
 // =========================================================================
@@ -406,21 +400,22 @@ function requestTokens($postFields) {
 }
 
 /**
- * Отправляет документ (файл) в Telegram через sendDocument API.
+ * Отправляет rich message в Telegram через sendRichMessage API.
+ * Сообщение содержит HTML с таблицей в сворачиваемом блоке details.
  *
- * @param string $filePath Полный путь к файлу
- * @param string $fileName Имя файла для отображения в Telegram
- * @param string $caption  Подпись к документу
+ * @param string $html HTML-содержимое rich message
  * @return bool
  */
-function sendDocumentToTelegram($filePath, $fileName, $caption = '') {
-    $url = "https://api.telegram.org/bot" . TG_BOT_TOKEN . "/sendDocument";
+function sendRichMessageToTelegram($html) {
+    $url = "https://api.telegram.org/bot" . TG_BOT_TOKEN . "/sendRichMessage";
+
+    $richMessage = [
+        'html' => $html,
+    ];
 
     $postFields = [
-        'chat_id'  => TG_CHAT_ID,
-        'document' => new CURLFile($filePath, 'text/markdown', $fileName),
-        'caption'  => $caption,
-        'parse_mode' => 'Markdown',
+        'chat_id'      => TG_CHAT_ID,
+        'rich_message' => json_encode($richMessage, JSON_UNESCAPED_UNICODE),
     ];
 
     $ch = curl_init();
@@ -435,7 +430,7 @@ function sendDocumentToTelegram($filePath, $fileName, $caption = '') {
     $response = curl_exec($ch);
 
     if (curl_errno($ch)) {
-        echo "❌ Системная ошибка cURL при отправке документа в Telegram: " . curl_error($ch) . "\n";
+        echo "❌ Системная ошибка cURL при отправке rich message в Telegram: " . curl_error($ch) . "\n";
         curl_close($ch);
         return false;
     }
@@ -448,7 +443,15 @@ function sendDocumentToTelegram($filePath, $fileName, $caption = '') {
         return true;
     }
 
-    echo "❌ Telegram API вернул ошибку при отправке документа: [" . ($result['error_code'] ?? '???') . "] " . ($result['description'] ?? 'Неизвестная ошибка') . "\n";
+    echo "❌ Telegram API вернул ошибку при отправке rich message: [" . ($result['error_code'] ?? '???') . "] " . ($result['description'] ?? 'Неизвестная ошибка') . "\n";
+
+    // Авто-фолбек: если rich message не поддерживается — пробуем отправить обычным текстом
+    if (isset($result['description']) && strpos($result['description'], 'rich') !== false) {
+        echo "⚠️ Rich message не поддерживается, пробую отправить обычным текстом…\n";
+        $plainText = "🤖 Alfa API: Аналитика расходов\n\n" . strip_tags($html);
+        return sendToTelegram($plainText, null);
+    }
+
     return false;
 }
 
