@@ -10,6 +10,7 @@ include __DIR__ . '/_env.php';
 // --- КОНФИГУРАЦИЯ ---
 define('TG_TOKEN', getenv('TG_TOKEN'));
 define('TG_CHAT_ID', (int)getenv('TG_CHAT_ID'));
+define('OPENROUTER_KEY', getenv('OPENROUTER_KEY'));
 define('DEEPSEEK_KEY', getenv('DEEPSEEK_KEY'));
 define('DEEPSEEK_MODEL', getenv('DEEPSEEK_MODEL'));
 
@@ -22,8 +23,9 @@ const ALLOWED_TELEGRAM_IDS = [
 ];
 
 // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
-define('LOG_TG_DEBUG', getenv('LOG_TG_DEBUG') === 'true');      // Все входящие запросы от Telegram (tg_debug.log)
+define('LOG_TG', getenv('LOG_TG') === 'true');      // Все входящие запросы от Telegram (tg_debug.log)
 define('LOG_DEEPSEEK', getenv('LOG_DEEPSEEK') === 'true');      // Запросы и ответы от DeepSeek (deepseek_debug.log)
+define('LOG_OPENROUTER', getenv('LOG_OPENROUTER') === 'true');      // Запросы и ответы от OpenRouter (openrouter_debug.log)
 define('LOG_TG_ERRORS', getenv('LOG_TG_ERRORS') === 'true');     // Ошибки при отправке методов в Telegram (tg_api_errors.log)
 define('LOG_TG_MESSAGES', getenv('LOG_TG_MESSAGES') === 'true');
 define('LOG_USER_REQUESTS', getenv('LOG_USER_REQUESTS') === 'true');  // Логирование запросов пользователей (user_requests.log)
@@ -35,7 +37,7 @@ header('Content-Type: application/json');
 $input = file_get_contents('php://input');
 
 // Отладочный лог Telegram — записывает входящий JSON, если флаг включен
-if (LOG_TG_DEBUG) {
+if (LOG_TG) {
     file_put_contents('tg_debug.log', $input . PHP_EOL, FILE_APPEND);
 }
 
@@ -50,6 +52,7 @@ $text = null;
 $userId = null;
 $username = 'unknown';
 $replyToText = null;
+$replyVoiceFileId = null; // file_id голосового сообщения, на которое ответили
 $isBusiness = false;
 $isGroup = false;
 $messageId = null; // ID сообщения для reply в группах
@@ -65,6 +68,9 @@ if (isset($update['business_message'])) {
     $replyToText = $update['business_message']['reply_to_message']['text']
         ?? $update['business_message']['reply_to_message']['caption']
         ?? null;
+
+    // file_id голосового сообщения, на которое ответили (business)
+    $replyVoiceFileId = $update['business_message']['reply_to_message']['voice']['file_id'] ?? null;
 
     // Извлекаем business_connection_id из входящего сообщения
     // Telegram присылает его в каждом бизнес-сообщении; у каждого бизнес-аккаунта он свой
@@ -84,6 +90,9 @@ if (isset($update['business_message'])) {
         ?? $message['reply_to_message']['caption']
         ?? null;
 
+    // file_id голосового сообщения, на которое ответили (обычный/групповой чат)
+    $replyVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
+
     // Определяем, является ли чат группой
     $isGroup = in_array($chatType, ['group', 'supergroup'], true);
 }
@@ -100,7 +109,7 @@ if (strpos($text, '/info') === 0) {
         . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
         . "⚡️ *Как это работает:*\n"
         . "1\\. Добавь бота в личный чат\\, группу или подключи к бизнес\\-аккаунту\\.\n"
-        . "2\\. Ответь \\(reply\\) на любое сообщение словом «список»\\.\n"
+        . "2\\. Ответь \\(reply\\) на любое сообщение \\(текст или голосовое\\) словом «список»\\.\n"
         . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n\n"
         . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы\\. Группы и личные чаты — текстовый список с reply\\.\n"
         . "🔒 Доступ только по белому списку\\.\n"
@@ -123,13 +132,47 @@ if (!$isAllowed || empty($text)) {
 }
 
 // Проверяем, является ли запрос триггером на создание списка
-$isListRequest = (!empty($replyToText) && trim(mb_strtolower($text)) === 'список');
+// Срабатывает при reply на текст/подпись ИЛИ на голосовое сообщение
+$requestLower = trim(mb_strtolower($text));
+$isListRequest = (
+    $requestLower === 'список'
+    && (!empty($replyToText) || !empty($replyVoiceFileId))
+);
 
 // Если это не реплай со словом "список" — мягко выходим
 if ($isListRequest) {
     $text = $replyToText;
 } else {
     exit(json_encode(['status' => 'ignored']));
+}
+
+// Если ответили на голосовое сообщение — транскрибируем
+if (!empty($replyVoiceFileId)) {
+    $voiceFileUrl = getTelegramFileUrl($replyVoiceFileId);
+    if (empty($voiceFileUrl)) {
+        sendTelegramMessage(
+            $chatId,
+            "⚠️ Не удалось получить аудиофайл из Telegram\\.",
+            $businessConnectionId
+        );
+        exit(json_encode(['status' => 'voice_file_error']));
+    }
+
+    $transcription = transcribeWithOpenRouter($voiceFileUrl);
+    if (empty($transcription)) {
+        sendTelegramMessage(
+            $chatId,
+            "⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.",
+            $businessConnectionId
+        );
+        exit(json_encode(['status' => 'voice_transcribe_error']));
+    }
+
+    // Добавляем к транскрибации контекст из reply-текста (если есть)
+    if (!empty($text)) {
+        $transcription = $text . "\n--- транскрибация аудио ---\n" . $transcription;
+    }
+    $text = "Это транскрибация голосового сообщения:\n\n" . $transcription;
 }
 
 // 1. Отправляем текст в DeepSeek V4 и замеряем время генерации
@@ -376,6 +419,121 @@ function sendCurl(string $url, array $payload): bool {
     }
 
     return false;
+}
+
+/**
+ * Получает прямую ссылку на файл из Telegram по file_id.
+ * Возвращает временный URL для скачивания или null при ошибке.
+ */
+function getTelegramFileUrl(string $fileId): ?string {
+    $url = 'https://api.telegram.org/bot' . TG_TOKEN . '/getFile?file_id=' . urlencode($fileId);
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) {
+        return null;
+    }
+
+    $data = json_decode($response, true);
+    if (!($data['ok'] ?? false) || empty($data['result']['file_path'])) {
+        return null;
+    }
+
+    return 'https://api.telegram.org/file/bot' . TG_TOKEN . '/' . $data['result']['file_path'];
+}
+
+/**
+ * Транскрибация аудио через OpenRouter API
+ * Принимает прямую ссылку на аудиофайл из Telegram, возвращает текст или null.
+ */
+function transcribeWithOpenRouter($audioUrl) {
+    // 1. Скачиваем файл во временное хранилище хостинга
+    $tmpFile = tempnam(sys_get_temp_dir(), 'tg_voice_');
+    $ch = curl_init($audioUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    $audioData = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || empty($audioData)) {
+        if (is_file($tmpFile)) {
+            unlink($tmpFile);
+        }
+        return null;
+    }
+
+    file_put_contents($tmpFile, $audioData);
+
+    // 2. Кодируем бинарные данные файла в строку Base64
+    $base64Audio = base64_encode($audioData);
+
+    // Определяем MIME-тип для проверки формата
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $tmpFile);
+    finfo_close($finfo);
+
+    $ext = 'ogg';
+    if (strpos($mime, 'mpeg') !== false || strpos($mime, 'mp3') !== false) {
+        $ext = 'mp3';
+    }
+
+    // Нам больше не нужен временный файл на диске, удаляем его сразу
+    if (is_file($tmpFile)) {
+        unlink($tmpFile);
+    }
+
+    // 3. Формируем чистый JSON-запрос по спецификации OpenRouter
+    $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
+
+    $postData = [
+        'model' => 'openai/whisper-large-v3-turbo',
+        'language' => 'ru',
+        'input_audio' => [
+            'data' => $base64Audio,
+            'format' => $ext
+        ]
+    ];
+
+    // 4. Отправляем в OpenRouter как application/json
+    $ch = curl_init($apiUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData)); // Упаковываем в JSON строку
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . OPENROUTER_KEY,
+        'Content-Type: application/json', // Обязательный заголовок для OpenRouter
+    ]);
+
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    // Логирование в твой файл openrouter_debug.log
+    if (LOG_OPENROUTER) {
+        $logMsg = "=== " . date('Y-m-d H:i:s') . " ===" . PHP_EOL;
+        $logMsg .= ">>> TO OPENROUTER WHISPER: файл голосовое.{$ext} (Base64 encoded)" . PHP_EOL;
+        $logMsg .= "<<< FROM OPENROUTER [HTTP $httpCode]: " . ($response ? $response : 'Ошибка cURL: ' . $curlError) . PHP_EOL . PHP_EOL;
+        file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
+    }
+
+    if ($curlError || $httpCode !== 200 || !$response) {
+        return null;
+    }
+
+    // 5. Парсим текстовый ответ
+    $result = json_decode($response, true);
+    return !empty($result['text']) ? trim($result['text']) : null;
 }
 
 /**
