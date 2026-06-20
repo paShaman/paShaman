@@ -53,48 +53,39 @@ $username = 'unknown';
 $replyToText = null;
 $replyVoiceFileId = null; // file_id голосового сообщения, на которое ответили
 $isBusiness = false;
-$messageId = null; // ID сообщения для reply в группах
 $replyToMessageId = null; // ID сообщения, на которое ответили (для editChecklist)
 $businessConnectionId = ''; // Динамический ID подключения из входящего сообщения
 
 // Универсальный перехват данных (из бизнес-чатов, групповых чатов или прямых сообщений боту)
 if (isset($update['business_message'])) {
-    $chatId = $update['business_message']['chat']['id'];
-    $text = $update['business_message']['text'] ?? '';
-    $userId = $update['business_message']['from']['id'] ?? null;
-    $username = $update['business_message']['from']['username'] ?? 'no_username';
-
-    $replyToText = $update['business_message']['reply_to_message']['text']
-        ?? $update['business_message']['reply_to_message']['caption']
-        ?? null;
-    $replyToChecklist = $update['business_message']['reply_to_message']['checklist'] ?? null;
-
-    // file_id голосового сообщения, на которое ответили (business)
-    $replyVoiceFileId = $update['business_message']['reply_to_message']['voice']['file_id'] ?? null;
-    $replyToMessageId = $update['business_message']['reply_to_message']['message_id'] ?? null;
-
-    // Извлекаем business_connection_id из входящего сообщения
-    // Telegram присылает его в каждом бизнес-сообщении; у каждого бизнес-аккаунта он свой
-    $businessConnectionId = $update['business_message']['business_connection_id'] ?? '';
-
-    $isBusiness = true;
-} elseif (isset($update['message'])) {
-    $message = $update['message'];
+    $message = $update['business_message'];
+    
     $chatId = $message['chat']['id'];
-    $chatType = $message['chat']['type'] ?? 'private';
-    $text = $message['text'] ?? ($message['caption'] ?? '');
+    $text = $message['text'] ?? '';
     $userId = $message['from']['id'] ?? null;
     $username = $message['from']['username'] ?? 'no_username';
-    $messageId = $message['message_id'] ?? null;
 
     $replyToText = $message['reply_to_message']['text']
         ?? $message['reply_to_message']['caption']
         ?? null;
-    $replyToChecklist = $update['reply_to_message']['checklist'] ?? null;
+    $replyToChecklist = $message['reply_to_message']['checklist'] ?? null;
 
-    // file_id голосового сообщения, на которое ответили (обычный/групповой чат)
+    // file_id голосового сообщения, на которое ответили (business)
     $replyVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
     $replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
+
+    // Извлекаем business_connection_id из входящего сообщения
+    // Telegram присылает его в каждом бизнес-сообщении; у каждого бизнес-аккаунта он свой
+    $businessConnectionId = $message['business_connection_id'] ?? '';
+
+    $isBusiness = true;
+} elseif (isset($update['message'])) {
+    $message = $update['message'];
+    
+    $chatId = $message['chat']['id'];
+    $text = $message['text'] ?? ($message['caption'] ?? '');
+    $userId = $message['from']['id'] ?? null;
+    $username = $message['from']['username'] ?? 'no_username';
 }
 
 // Тестовая проверка на команду старта
