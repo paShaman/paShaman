@@ -56,7 +56,7 @@ $isBusiness = false;
 $replyToMessageId = null; // ID сообщения, на которое ответили (для editChecklist)
 $businessConnectionId = ''; // Динамический ID подключения из входящего сообщения
 
-// Универсальный перехват данных (из бизнес-чатов, групповых чатов или прямых сообщений боту)
+// Универсальный перехват данных (из бизнес-чатов или прямых сообщений боту)
 if (isset($update['business_message'])) {
     $message = $update['business_message'];
     
