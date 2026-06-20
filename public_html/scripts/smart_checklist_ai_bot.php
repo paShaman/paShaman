@@ -109,11 +109,12 @@ if (strpos($text, '/info') === 0) {
         . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
         . "⚡️ *Как это работает:*\n"
         . "1\\. Добавь бота к бизнес\\-аккаунту\\.\n"
-        . "2\\. Ответь \\(reply\\) на любое сообщение \\(текст или голосовое\\) словом «список»\\.\n"
-        . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n\n"
-        . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы\\. Группы и личные чаты — текстовый список с reply\\.\n"
+        . "2\\. *Создать список:* ответь \\(reply\\) на сообщение фразой «список» \\(или «чеклист», «задачи»\\)\\.\n"
+        . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n"
+        . "4\\. *Дополнить список:* ответь \\(reply\\) на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
+        . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы с возможностью дополнения\\.\n"
         . "🔒 Доступ только по белому списку\\.\n"
-        . "⚙️ *Поддерживаемые типы чатов:* личные\\, группы\\, супергруппы и бизнес\\-чаты\\.";
+        . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты\\.";
 
     sendTelegramMessage($chatId, $infoText, $businessConnectionId);
     exit(json_encode(['status' => 'ok']));
@@ -131,25 +132,42 @@ if (!$isAllowed || empty($text)) {
     exit(json_encode(['status' => 'forbidden']));
 }
 
+// Массивы фраз-триггеров
+const LIST_CREATE_TRIGGERS = [
+    'список', 'чеклист', 'задачи', 'checklist', 'list',
+];
+const LIST_ADD_TRIGGERS = [
+    'добавить', 'дополнить', 'добавь', 'дополни', 'add',
+];
+
 // Проверяем, является ли запрос триггером на создание или дополнение списка
 // Срабатывает при reply на текст/подпись ИЛИ на голосовое сообщение
 $requestLower = trim(mb_strtolower($text));
 $isListRequest = (
-    $requestLower === 'список'
+    in_array($requestLower, LIST_CREATE_TRIGGERS)
     && (!empty($replyToText) || !empty($replyVoiceFileId))
 );
-$isAddRequest = (
-    mb_strpos($requestLower, 'добавить') === 0
-    && !empty($replyToChecklist)
-    && !empty($replyToMessageId)
-);
+
+$isAddRequest = false;
+if (!$isListRequest) {
+    if (!empty($replyToChecklist) && !empty($replyToMessageId)) {
+        $matchedTrigger = '';
+
+        foreach (LIST_ADD_TRIGGERS as $trigger) {
+            if (mb_strpos($requestLower, $trigger) === 0) {
+                $matchedTrigger = $trigger;
+                $isAddRequest = true;
+                break;
+            }
+        }
+    }
+}
 
 // Если это не реплай со словом "список" или "добавить" — мягко выходим
 if ($isListRequest) {
     $text = $replyToText;
 } elseif ($isAddRequest) {
-    // Извлекаем контент после слова "добавить" (если написали доп. текст в триггере)
-    $text = trim(mb_substr($text, mb_strlen('добавить')));
+    $text = trim(mb_substr($text, mb_strlen($matchedTrigger ?? '')));
 } else {
     exit(json_encode(['status' => 'ignored']));
 }
@@ -225,22 +243,22 @@ if (empty($checklistEntries)) {
 // 3. Отправляем результат обратно в зависимости от типа чата
 if ($isBusiness && $businessConnectionId !== '') {
     if ($isAddRequest) {
-        $lines = $replyToChecklist['tasks'] ?? [];
+        $tasks = $replyToChecklist['tasks'] ?? [];
 
         // Перенумеровываем новые задачи продолжая с последнего id
-        $lastTaskId = $lines[count($lines) - 1]['id'] ?? 0;
+        $lastTaskId = $tasks[count($tasks) - 1]['id'] ?? 0;
         foreach ($checklistEntries as $entry) {
-            $lines[] = ['id' => ++$lastTaskId, 'text' => $entry['text']];
+            $tasks[] = ['id' => ++$lastTaskId, 'text' => $entry['text']];
         }
 
-        $result = sendTelegramChecklist($chatId, $checklistEntries, $generationTime, $businessConnectionId, $replyToMessageId);
+        $result = sendTelegramChecklist($chatId, $tasks, $generationTime, $businessConnectionId, $replyToMessageId);
     } else {
         $result = sendTelegramChecklist($chatId, $checklistEntries, $generationTime, $businessConnectionId);
     }
 } else {
     sendTelegramMessage(
         $chatId,
-        "⚠️ Генерация списка доступна только в личном чате\\.",
+        "⚠️ Генерация списка доступна только в бизнес чате\\.",
         $businessConnectionId
     );
     exit(json_encode(['status' => 'empty_checklist']));
