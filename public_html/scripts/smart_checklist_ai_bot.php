@@ -334,11 +334,19 @@ class SmartChecklistAIBot
             $tasks = $this->replyToChecklist['tasks'] ?? [];
 
             $lastTaskId = $tasks[count($tasks) - 1]['id'] ?? 0;
+            $addedCount = 0;
             foreach ($checklistEntries as $entry) {
                 $tasks[] = ['id' => ++$lastTaskId, 'text' => $entry['text']];
+                $addedCount++;
             }
 
-            return $this->sendTelegramChecklist($tasks, $generationTime, $this->replyToMessageId);
+            $ok = $this->sendTelegramChecklist($tasks, 0, $this->replyToMessageId);
+
+            if ($ok) {
+                $this->sendTelegramMessage("➕ Добавлено пунктов: *{$addedCount} шт\\.* `за " . str_replace(".", "\\.", $generationTime) . "с`");
+            }
+
+            return $ok;
         }
 
         return $this->sendTelegramChecklist($checklistEntries, $generationTime);
@@ -444,7 +452,11 @@ class SmartChecklistAIBot
             $url .= '/sendChecklist';
         }
 
-        $title = "📋 Список задач (~{$generationTime}с)";
+        $title = "📋 Список задач";
+
+        if ($generationTime) {
+            $title .= " ({$generationTime}с)";
+        }
 
         if (count($entries) > 30) {
             $title .= ". ⚠️️ Максимум 30 задач";
@@ -570,6 +582,7 @@ class SmartChecklistAIBot
 
     private function transcribeWithOpenRouter(string $audioUrl): ?string
     {
+        $startApi = microtime(true);
         $tmpFile = tempnam(sys_get_temp_dir(), 'tg_voice_');
         $ch = curl_init($audioUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -644,7 +657,23 @@ class SmartChecklistAIBot
             }
 
             $result = json_decode($response, true);
-            return !empty($result['text']) ? trim($result['text']) : null;
+            $transcriptionText = !empty($result['text']) ? trim($result['text']) : null;
+
+            if ($this->logUserRequests && $transcriptionText !== null) {
+                $usage = $result['usage'] ?? [];
+                $cost = $usage['cost'] ?? 0;
+                $duration = round(microtime(true) - $startApi, 2);
+                $log = sprintf(
+                    "[%s] User: @%s | Transcription | Cost: %s | Duration: %.2fs\n",
+                    date('Y-m-d H:i:s'),
+                    $this->username,
+                    is_numeric($cost) ? number_format((float)$cost, 6) : 'N/A',
+                    $duration
+                );
+                file_put_contents('user_requests.log', $log, FILE_APPEND);
+            }
+
+            return $transcriptionText;
         } finally {
             if (is_file($tmpFile)) {
                 unlink($tmpFile);
