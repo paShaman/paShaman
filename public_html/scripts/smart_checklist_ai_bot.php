@@ -3,9 +3,9 @@
 include __DIR__ . '/_env.php';
 
 /*
- * @getWebhook https://api.telegram.org/bot TG_TOKEN /getWebhookInfo
- * @setWebhook https://api.telegram.org/bot TG_TOKEN /setWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php
- * @deleteWebhook https://api.telegram.org/bot TG_TOKEN /deleteWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php
+ * @getWebhook https://api.telegram.org/bot<TG_TOKEN>/getWebhookInfo
+ * @setWebhook https://api.telegram.org/bot<TG_TOKEN>/setWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php&secret_token=<TG_WEBHOOK_SECRET>
+ * @deleteWebhook https://api.telegram.org/bot <TG_TOKEN>/deleteWebhook?url=https://paShaman.dev/scripts/smart_checklist_ai_bot.php
  */
 
 // Устанавливаем Content-Type для ответа Telegram
@@ -81,7 +81,7 @@ class SmartChecklistAIBot
      * Главный метод — точка входа.
      * Парсит входящий запрос и запускает обработку.
      */
-    public function run(): void
+    public function run(): string
     {
         // Получаем входящий JSON от Telegram
         $input = file_get_contents('php://input');
@@ -94,18 +94,26 @@ class SmartChecklistAIBot
         $data = json_decode($input, true);
 
         if (!$data) {
-            throw new Exception('no_data');
+            return 'no_data';
         }
 
         $this->parseInput($data);
 
-        match (true) {
-            $this->text !== null && str_starts_with($this->text, '/start') => $this->handleStart(),
-            $this->text !== null && str_starts_with($this->text, '/info')  => $this->handleInfo(),
-            $this->text !== null && str_starts_with($this->text, '/tgid')  => $this->handleTgId(),
-            !$this->isAccessAllowed() => throw new Exception('forbidden'),
-            default => $this->processRequest(),
-        };
+        // Проверка Webhook Secret Token
+        $secret = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
+        if (!hash_equals($secret, getenv('TG_WEBHOOK_SECRET'))) {
+            return 'unauthorized_webhook';
+        }
+
+        if ($this->text !== null && str_starts_with($this->text, '/start')) { $this->handleStart(); return 'ok'; }
+        if ($this->text !== null && str_starts_with($this->text, '/info'))  { $this->handleInfo(); return 'ok'; }
+        if ($this->text !== null && str_starts_with($this->text, '/tgid'))  { $this->handleTgId(); return 'ok'; }
+
+        if (!$this->isAccessAllowed()) {
+            return 'forbidden';
+        }
+
+        return $this->processRequest();
     }
 
     // ============================================================
@@ -185,16 +193,27 @@ class SmartChecklistAIBot
     // ОСНОВНАЯ ЛОГИКА ОБРАБОТКИ
     // ============================================================
 
-    private function processRequest(): void
+    private function processRequest(): string
     {
         $requestLower = trim(mb_strtolower($this->text ?? ''));
         $isListRequest = $this->isListCreateTrigger($requestLower);
 
         [$isAddRequest, $matchedTrigger] = $this->detectAddRequest($isListRequest, $requestLower);
 
-        $this->text = $this->resolveText($isListRequest, $isAddRequest, $matchedTrigger);
+        if ($matchedTrigger === '__VOICE_ERROR__') {
+            return 'voice_transcribe_error';
+        }
 
-        $this->handleReplyVoice();
+        $text = $this->resolveText($isListRequest, $isAddRequest, $matchedTrigger);
+        if ($text === null) {
+            return 'ignored';
+        }
+        $this->text = $text;
+
+        $voiceError = $this->handleReplyVoice();
+        if ($voiceError !== null) {
+            return $voiceError;
+        }
 
         ['text' => $aiRawOutput, 'time' => $generationTime] = $this->askDeepSeek($this->text);
 
@@ -202,18 +221,20 @@ class SmartChecklistAIBot
 
         if (empty($checklistEntries)) {
             $this->sendTelegramMessage("⚠️ Не удалось извлечь задачи из сообщения\\. Попробуйте переформулировать текст\\.");
-            throw new Exception('empty_checklist');
+            return 'empty_checklist';
         }
 
         if (!$this->isBusiness || $this->businessConnectionId === '') {
             $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате\\.");
-            throw new Exception('empty_checklist');
+            return 'empty_checklist';
         }
 
         if (!$this->sendChecklistResponse($checklistEntries, $generationTime, $isAddRequest)) {
             $this->sendTelegramMessage("⚠️ Ошибка генерации списка\\.");
-            throw new Exception('error');
+            return 'error';
         }
+
+        return 'ok';
     }
 
     private function isListCreateTrigger(string $requestLower): bool
@@ -232,7 +253,7 @@ class SmartChecklistAIBot
             $transcribed = $this->getVoiceTranscription($this->voiceFileId);
             if (empty($transcribed)) {
                 $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
-                throw new Exception('voice_transcribe_error');
+                return [false, 'Voice_transcription_error'];
             }
 
             $this->text = $transcribed;
@@ -257,26 +278,28 @@ class SmartChecklistAIBot
         return match (true) {
             $isListRequest => $this->replyToText,
             $isAddRequest => trim(mb_substr($this->text, mb_strlen($matchedTrigger))),
-            default => throw new Exception('ignored'),
+            default => null,
         };
     }
 
-    private function handleReplyVoice(): void
+    private function handleReplyVoice(): ?string
     {
         if (empty($this->replyVoiceFileId)) {
-            return;
+            return null;
         }
 
         $transcription = $this->getVoiceTranscription($this->replyVoiceFileId);
         if (empty($transcription)) {
             $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
-            throw new Exception('voice_transcribe_error');
+            return 'voice_transcribe_error';
         }
 
         if (!empty($this->text)) {
             $transcription = $this->text . "\n--- транскрибация аудио ---\n" . $transcription;
         }
         $this->text = "Это транскрибация голосового сообщения:\n\n" . $transcription;
+
+        return null;
     }
 
     private function parseChecklistLines(string $aiRawOutput): array
@@ -566,65 +589,67 @@ class SmartChecklistAIBot
 
         file_put_contents($tmpFile, $audioData);
 
-        $base64Audio = base64_encode($audioData);
+        try {
+            $base64Audio = base64_encode($audioData);
 
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = finfo_file($finfo, $tmpFile);
-        finfo_close($finfo);
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($finfo, $tmpFile);
+            finfo_close($finfo);
 
-        $ext = 'ogg';
-        if (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) {
-            $ext = 'mp3';
+            $ext = 'ogg';
+            if (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) {
+                $ext = 'mp3';
+            }
+
+            $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
+
+            $postData = [
+                'model' => 'openai/whisper-large-v3-turbo',
+                'language' => 'ru',
+                'input_audio' => [
+                    'data' => $base64Audio,
+                    'format' => $ext,
+                ],
+            ];
+
+            $ch = curl_init($apiUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . $this->openRouterKey,
+                'Content-Type: application/json',
+            ]);
+
+            $response = curl_exec($ch);
+            $curlError = curl_error($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($this->logOpenRouter) {
+                $logMsg = sprintf(
+                    "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
+                    date('Y-m-d H:i:s'),
+                    $ext,
+                    $httpCode,
+                    $response ?: 'Ошибка cURL: ' . $curlError
+                );
+                file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
+            }
+
+            if ($curlError || $httpCode !== 200 || !$response) {
+                return null;
+            }
+
+            $result = json_decode($response, true);
+            return !empty($result['text']) ? trim($result['text']) : null;
+        } finally {
+            if (is_file($tmpFile)) {
+                unlink($tmpFile);
+            }
         }
-
-        if (is_file($tmpFile)) {
-            unlink($tmpFile);
-        }
-
-        $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
-
-        $postData = [
-            'model' => 'openai/whisper-large-v3-turbo',
-            'language' => 'ru',
-            'input_audio' => [
-                'data' => $base64Audio,
-                'format' => $ext,
-            ],
-        ];
-
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $this->openRouterKey,
-            'Content-Type: application/json',
-        ]);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($this->logOpenRouter) {
-            $logMsg = sprintf(
-                "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
-                date('Y-m-d H:i:s'),
-                $ext,
-                $httpCode,
-                $response ?: 'Ошибка cURL: ' . $curlError
-            );
-            file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
-        }
-
-        if ($curlError || $httpCode !== 200 || !$response) {
-            return null;
-        }
-
-        $result = json_decode($response, true);
-        return !empty($result['text']) ? trim($result['text']) : null;
     }
 }
 
@@ -632,9 +657,5 @@ class SmartChecklistAIBot
 // ТОЧКА ВХОДА
 // ============================================================
 
-try {
-    new SmartChecklistAIBot()->run();
-    echo json_encode(['status' => 'ok']);
-} catch (Exception $e) {
-    exit(json_encode(['status' => $e->getMessage()]));
-}
+$bot = new SmartChecklistAIBot();
+echo json_encode(['status' => $bot->run()]);
