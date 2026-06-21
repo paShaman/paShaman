@@ -17,7 +17,6 @@ define('DEEPSEEK_MODEL', getenv('DEEPSEEK_MODEL'));
 // Список дополнительных разрешенных Telegram ID (белый список)
 // TG_CHAT_ID проверяется отдельно — всегда имеет доступ
 const ALLOWED_TELEGRAM_IDS = [
-    223434009,  // Ильдар (sila-uma)
     224028930,  // Алёнка
     1780404823, // alpus
 ];
@@ -40,9 +39,9 @@ if (LOG_TG) {
     file_put_contents('tg_debug.log', $input . PHP_EOL, FILE_APPEND);
 }
 
-$update = json_decode($input, true);
+$data = json_decode($input, true);
 
-if (!$update) {
+if (!$data) {
     exit(json_encode(['status' => 'no_data']));
 }
 
@@ -51,19 +50,23 @@ $text = null;
 $userId = null;
 $username = 'unknown';
 $replyToText = null;
+$voiceFileId = null;      // file_id голосового из входящего сообщения пользователя
 $replyVoiceFileId = null; // file_id голосового сообщения, на которое ответили
 $isBusiness = false;
 $replyToMessageId = null; // ID сообщения, на которое ответили (для editChecklist)
 $businessConnectionId = ''; // Динамический ID подключения из входящего сообщения
 
 // Универсальный перехват данных (из бизнес-чатов или прямых сообщений боту)
-if (isset($update['business_message'])) {
-    $message = $update['business_message'];
+if (isset($data['business_message'])) {
+    $message = $data['business_message'];
     
     $chatId = $message['chat']['id'];
     $text = $message['text'] ?? '';
     $userId = $message['from']['id'] ?? null;
     $username = $message['from']['username'] ?? 'no_username';
+
+    // file_id голосового из самого входящего сообщения (пользователь прислал голосовое как триггер)
+    $voiceFileId = $message['voice']['file_id'] ?? null;
 
     $replyToText = $message['reply_to_message']['text']
         ?? $message['reply_to_message']['caption']
@@ -79,8 +82,8 @@ if (isset($update['business_message'])) {
     $businessConnectionId = $message['business_connection_id'] ?? '';
 
     $isBusiness = true;
-} elseif (isset($update['message'])) {
-    $message = $update['message'];
+} elseif (isset($data['message'])) {
+    $message = $data['message'];
     
     $chatId = $message['chat']['id'];
     $text = $message['text'] ?? ($message['caption'] ?? '');
@@ -118,8 +121,8 @@ if (strpos($text, '/tgid') === 0) {
 
 // Безопасность: реагируем ТОЛЬКО на разрешенных пользователей
 // TG_CHAT_ID всегда имеет доступ, плюс дополнительные ID из белого списка
-$isAllowed = ($userId === TG_CHAT_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS, true);
-if (!$isAllowed || empty($text)) {
+$isAllowed = ($userId === TG_CHAT_ID) || in_array($userId, ALLOWED_TELEGRAM_IDS);
+if (!$isAllowed || (empty($text) && empty($voiceFileId))) {
     exit(json_encode(['status' => 'forbidden']));
 }
 
@@ -140,12 +143,38 @@ $isListRequest = (
 );
 
 $isAddRequest = false;
+$matchedTrigger = '';
 if (!$isListRequest) {
     if (!empty($replyToChecklist) && !empty($replyToMessageId)) {
-        $matchedTrigger = '';
+        if (!empty($voiceFileId)) {
+            $voiceFileUrl = getTelegramFileUrl($voiceFileId);
+            if (empty($voiceFileUrl)) {
+                sendTelegramMessage(
+                    $chatId,
+                    "⚠️ Не удалось получить аудиофайл из Telegram\\.",
+                    $businessConnectionId
+                );
+                exit(json_encode(['status' => 'voice_file_error']));
+            }
 
+            $text = transcribeWithOpenRouter($voiceFileUrl);
+            if (empty($text)) {
+                sendTelegramMessage(
+                    $chatId,
+                    "⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.",
+                    $businessConnectionId
+                );
+                exit(json_encode(['status' => 'voice_transcribe_error']));
+            }
+
+            $requestLower = trim(mb_strtolower($text));
+        }
+
+        // Текстовый триггер — слово в начале сообщения
         foreach (LIST_ADD_TRIGGERS as $trigger) {
-            if (mb_strpos($requestLower, $trigger) === 0) {
+            $fl = empty($voiceFileId) ? (mb_strpos($requestLower, $trigger) === 0) : (mb_strpos($requestLower, $trigger) !== false);
+
+            if ($fl) {
                 $matchedTrigger = $trigger;
                 $isAddRequest = true;
                 break;
@@ -154,17 +183,13 @@ if (!$isListRequest) {
     }
 }
 
-// Если это не реплай со словом "список" или "добавить" — мягко выходим
+// Если это не реплай со словом "список" или "добавить/голосовое" — мягко выходим
 if ($isListRequest) {
     $text = $replyToText;
 } elseif ($isAddRequest) {
-    $text = trim(mb_substr($text, mb_strlen($matchedTrigger ?? '')));
+    $text = trim(mb_substr($text, mb_strlen($matchedTrigger)));
 } else {
     exit(json_encode(['status' => 'ignored']));
-}
-
-if (empty($text)) {
-    exit(json_encode(['status' => 'empty_text']));
 }
 
 // Если ответили на голосовое сообщение — транскрибируем
