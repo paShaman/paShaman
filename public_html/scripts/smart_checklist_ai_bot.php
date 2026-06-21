@@ -113,6 +113,11 @@ class SmartChecklistAIBot
             return 'forbidden';
         }
 
+        if (!$this->isBusiness || $this->businessConnectionId === '') {
+            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате\\.");
+            return 'empty_checklist';
+        }
+
         return $this->processRequest();
     }
 
@@ -221,11 +226,6 @@ class SmartChecklistAIBot
 
         if (empty($checklistEntries)) {
             $this->sendTelegramMessage("⚠️ Не удалось извлечь задачи из сообщения\\. Попробуйте переформулировать текст\\.");
-            return 'empty_checklist';
-        }
-
-        if (!$this->isBusiness || $this->businessConnectionId === '') {
-            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате\\.");
             return 'empty_checklist';
         }
 
@@ -490,7 +490,7 @@ class SmartChecklistAIBot
             'parse_mode' => 'MarkdownV2',
         ];
 
-        if ($this->businessConnectionId !== '') {
+        if ($this->businessConnectionId !== '' && $this->isBusiness) {
             $payload['business_connection_id'] = $this->businessConnectionId;
         }
 
