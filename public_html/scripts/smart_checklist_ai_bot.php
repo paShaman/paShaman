@@ -147,17 +147,7 @@ $matchedTrigger = '';
 if (!$isListRequest) {
     if (!empty($replyToChecklist) && !empty($replyToMessageId)) {
         if (!empty($voiceFileId)) {
-            $voiceFileUrl = getTelegramFileUrl($voiceFileId);
-            if (empty($voiceFileUrl)) {
-                sendTelegramMessage(
-                    $chatId,
-                    "⚠️ Не удалось получить аудиофайл из Telegram\\.",
-                    $businessConnectionId
-                );
-                exit(json_encode(['status' => 'voice_file_error']));
-            }
-
-            $text = transcribeWithOpenRouter($voiceFileUrl);
+            $text = getVoiceTranscription($voiceFileId);
             if (empty($text)) {
                 sendTelegramMessage(
                     $chatId,
@@ -194,17 +184,7 @@ if ($isListRequest) {
 
 // Если ответили на голосовое сообщение — транскрибируем
 if (!empty($replyVoiceFileId)) {
-    $voiceFileUrl = getTelegramFileUrl($replyVoiceFileId);
-    if (empty($voiceFileUrl)) {
-        sendTelegramMessage(
-            $chatId,
-            "⚠️ Не удалось получить аудиофайл из Telegram\\.",
-            $businessConnectionId
-        );
-        exit(json_encode(['status' => 'voice_file_error']));
-    }
-
-    $transcription = transcribeWithOpenRouter($voiceFileUrl);
+    $transcription = getVoiceTranscription($replyVoiceFileId);
     if (empty($transcription)) {
         sendTelegramMessage(
             $chatId,
@@ -472,6 +452,19 @@ function sendCurl(string $url, array $payload): bool {
     }
 
     return false;
+}
+
+/**
+ * Получает транскрипцию голосового сообщения по file_id.
+ * Объединяет получение URL файла через getTelegramFileUrl и транскрибацию через OpenRouter.
+ * Возвращает текст транскрипции или null при ошибке на любом этапе.
+ */
+function getVoiceTranscription(string $fileId): ?string {
+    $voiceFileUrl = getTelegramFileUrl($fileId);
+    if (empty($voiceFileUrl)) {
+        return null;
+    }
+    return transcribeWithOpenRouter($voiceFileUrl);
 }
 
 /**
