@@ -253,7 +253,7 @@ class SmartChecklistAIBot
             $transcribed = $this->getVoiceTranscription($this->voiceFileId);
             if (empty($transcribed)) {
                 $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
-                return [false, 'Voice_transcription_error'];
+                return [false, '__VOICE_ERROR__'];
             }
 
             $this->text = $transcribed;
