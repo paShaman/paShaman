@@ -37,6 +37,7 @@ class SmartChecklistAIBot
     private bool $logOpenRouter;
     private bool $logTgErrors;
     private bool $logUserRequests;
+    private bool $logBotStatus;
 
     // --- ТРИГГЕРЫ ---
     private const array LIST_CREATE_TRIGGERS = [
@@ -53,7 +54,7 @@ class SmartChecklistAIBot
     private string $username = 'unknown';
     private ?string $replyToText = null;
     private ?string $voiceFileId = null;
-    private ?string $replyVoiceFileId = null;
+    private ?string $replyToVoiceFileId = null;
     private bool $isBusiness = false;
     private ?int $replyToMessageId = null;
     private array $replyToChecklist = [];
@@ -75,6 +76,7 @@ class SmartChecklistAIBot
         $this->logOpenRouter = getenv('LOG_OPENROUTER') === 'true';
         $this->logTgErrors = getenv('LOG_TG_ERRORS') === 'true';
         $this->logUserRequests = getenv('LOG_USER_REQUESTS') === 'true';
+        $this->logBotStatus = getenv('LOG_BOT_STATUS') === 'true';
     }
 
     /**
@@ -172,7 +174,7 @@ class SmartChecklistAIBot
                 ?? null;
             $this->replyToChecklist = $message['reply_to_message']['checklist'] ?? [];
 
-            $this->replyVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
+            $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
             $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
 
             $this->businessConnectionId = $message['business_connection_id'] ?? '';
@@ -209,15 +211,17 @@ class SmartChecklistAIBot
             return 'voice_transcribe_error';
         }
 
-        $text = $this->resolveText($isListRequest, $isAddRequest, $matchedTrigger);
-        if ($text === null) {
-            return 'ignored';
-        }
-        $this->text = $text;
-
-        $voiceError = $this->handleReplyVoice();
-        if ($voiceError !== null) {
-            return $voiceError;
+        if (empty($this->replyToVoiceFileId)) {
+            $text = $this->resolveText($isListRequest, $isAddRequest, $matchedTrigger);
+            if ($text === null) {
+                return 'ignored';
+            }
+            $this->text = $text;
+        } else {
+            $voiceError = $this->handleReplyVoice();
+            if ($voiceError !== null) {
+                return $voiceError;
+            }
         }
 
         ['text' => $aiRawOutput, 'time' => $generationTime] = $this->askDeepSeek($this->text);
@@ -240,7 +244,7 @@ class SmartChecklistAIBot
     private function isListCreateTrigger(string $requestLower): bool
     {
         return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true)
-            && (!empty($this->replyToText) || !empty($this->replyVoiceFileId));
+            && (!empty($this->replyToText) || !empty($this->replyToVoiceFileId));
     }
 
     private function detectAddRequest(bool $isListRequest, string $requestLower): array
@@ -284,11 +288,11 @@ class SmartChecklistAIBot
 
     private function handleReplyVoice(): ?string
     {
-        if (empty($this->replyVoiceFileId)) {
+        if (empty($this->replyToVoiceFileId)) {
             return null;
         }
 
-        $transcription = $this->getVoiceTranscription($this->replyVoiceFileId);
+        $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
         if (empty($transcription)) {
             $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
             return 'voice_transcribe_error';
@@ -481,7 +485,7 @@ class SmartChecklistAIBot
         return $this->sendCurl($url, $payload);
     }
 
-    private function sendTelegramMessage(string $text, ?int $replyToMsgId = null): bool
+    private function sendTelegramMessage(string $text, ?int $replyToMsgId = null): void
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendMessage';
         $payload = [
@@ -498,7 +502,7 @@ class SmartChecklistAIBot
             $payload['reply_to_message_id'] = $replyToMsgId;
         }
 
-        return $this->sendCurl($url, $payload);
+        $this->sendCurl($url, $payload);
     }
 
     private function sendCurl(string $url, array $payload): bool
@@ -542,6 +546,30 @@ class SmartChecklistAIBot
         }
 
         return false;
+    }
+
+    // ============================================================
+    // ЛОГИРОВАНИЕ СТАТУСОВ
+    // ============================================================
+
+    /**
+     * Логирует статус обработки запроса ботом.
+     */
+    public function logBotStatus(string $status): void
+    {
+        if (!$this->logBotStatus) {
+            return;
+        }
+
+        $log = sprintf(
+            "[%s] Status: %-25s | User: @%-15s | ID: %-10s | ChatID: %s\n",
+            date('Y-m-d H:i:s'),
+            $status,
+            $this->username,
+            $this->userId ?? 'N/A',
+            $this->chatId ?? 'N/A'
+        );
+        file_put_contents('bot_status.log', $log, FILE_APPEND);
     }
 
     // ============================================================
@@ -687,4 +715,6 @@ class SmartChecklistAIBot
 // ============================================================
 
 $bot = new SmartChecklistAIBot();
-echo json_encode(['status' => $bot->run()]);
+$status = $bot->run();
+$bot->logBotStatus($status);
+echo json_encode(['status' => $status]);
