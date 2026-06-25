@@ -59,6 +59,7 @@ class SmartChecklistAIBot
     private ?int $replyToMessageId = null;
     private array $replyToChecklist = [];
     private string $businessConnectionId = '';
+    private ?int $statusMessageId = null;
 
     /**
      * Конструктор: инициализирует конфигурацию из переменных окружения
@@ -116,7 +117,7 @@ class SmartChecklistAIBot
         }
 
         if (!$this->isBusiness || $this->businessConnectionId === '') {
-            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате\\.");
+            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате");
             return 'empty_checklist';
         }
 
@@ -202,6 +203,8 @@ class SmartChecklistAIBot
 
     private function processRequest(): string
     {
+        $totalStart = microtime(true);
+
         $requestLower = trim(mb_strtolower($this->text ?? ''));
         $isListRequest = $this->isListCreateTrigger($requestLower);
 
@@ -224,18 +227,36 @@ class SmartChecklistAIBot
             }
         }
 
-        ['text' => $aiRawOutput, 'time' => $generationTime] = $this->askDeepSeek($this->text);
+        // Отправляем сообщение о начале генерации
+        $this->sendTelegramMessage("⏳ Генерирую список\\.\\.\\.", isStatusMessage: true);
+
+        $aiRawOutput = $this->askDeepSeek($this->text);
 
         $checklistEntries = $this->parseChecklistLines($aiRawOutput);
 
         if (empty($checklistEntries)) {
-            $this->sendTelegramMessage("⚠️ Не удалось извлечь задачи из сообщения\\. Попробуйте переформулировать текст\\.");
+            $this->editStatusMessage("⚠️ Не удалось извлечь задачи из сообщения");
             return 'empty_checklist';
         }
 
-        if (!$this->sendChecklistResponse($checklistEntries, $generationTime, $isAddRequest)) {
-            $this->sendTelegramMessage("⚠️ Ошибка генерации списка\\.");
+        $result = $this->sendChecklistResponse($checklistEntries, $isAddRequest);
+        $count = $result['count'];
+        $added = $result['added'] ?? 0;
+
+        $truncatedSuffix = $count > 30 ? ' \\(макс 30\\)' : '';
+
+        if (!$result['ok']) {
+            $this->editStatusMessage("⚠️ Ошибка генерации списка");
             return 'error';
+        }
+
+        $totalTime = round(microtime(true) - $totalStart, 2);
+        $timeStr = str_replace(".", "\\.", (string)$totalTime);
+
+        if ($isAddRequest) {
+            $this->editStatusMessage("✅ Добавлено пунктов: *{$added} шт\\.*{$truncatedSuffix} за `{$timeStr}с`*`");
+        } else {
+            $this->editStatusMessage("✅ Создано пунктов: *{$count} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
         }
 
         return 'ok';
@@ -256,7 +277,7 @@ class SmartChecklistAIBot
         if (!empty($this->voiceFileId)) {
             $transcribed = $this->getVoiceTranscription($this->voiceFileId);
             if (empty($transcribed)) {
-                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
+                $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
                 return [false, '__VOICE_ERROR__'];
             }
 
@@ -294,7 +315,7 @@ class SmartChecklistAIBot
 
         $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
         if (empty($transcription)) {
-            $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение\\. Попробуйте еще раз или отправьте текст\\.");
+            $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
             return 'voice_transcribe_error';
         }
 
@@ -332,7 +353,7 @@ class SmartChecklistAIBot
         return $entries;
     }
 
-    private function sendChecklistResponse(array $checklistEntries, float $generationTime, bool $isAddRequest): bool
+    private function sendChecklistResponse(array $checklistEntries, bool $isAddRequest): array
     {
         if ($isAddRequest) {
             $tasks = $this->replyToChecklist['tasks'] ?? [];
@@ -344,23 +365,21 @@ class SmartChecklistAIBot
                 $addedCount++;
             }
 
-            $ok = $this->sendTelegramChecklist($tasks, 0, $this->replyToMessageId);
+            $ok = $this->sendTelegramChecklist($tasks, $this->replyToMessageId);
 
-            if ($ok) {
-                $this->sendTelegramMessage("➕ Добавлено пунктов: *{$addedCount} шт\\.* `за " . str_replace(".", "\\.", $generationTime) . "с`");
-            }
-
-            return $ok;
+            return ['ok' => $ok, 'count' => count($tasks), 'added' => $addedCount];
         }
 
-        return $this->sendTelegramChecklist($checklistEntries, $generationTime);
+        $ok = $this->sendTelegramChecklist($checklistEntries);
+
+        return ['ok' => $ok, 'count' => count($checklistEntries)];
     }
 
     // ============================================================
     // API DEEPSEEK
     // ============================================================
 
-    private function askDeepSeek(string $message): array
+    private function askDeepSeek(string $message): string
     {
         $startApi = microtime(true);
 
@@ -411,10 +430,7 @@ class SmartChecklistAIBot
         }
 
         if (!$response || $curlError) {
-            return [
-                'text' => "Ошибка связи с DeepSeek API.",
-                'time' => round(microtime(true) - $startApi, 2),
-            ];
+            return "Ошибка связи с DeepSeek API.";
         }
 
         $res = json_decode($response, true);
@@ -436,17 +452,14 @@ class SmartChecklistAIBot
             file_put_contents('user_requests.log', $log, FILE_APPEND);
         }
 
-        return [
-            'text' => $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.",
-            'time' => $generationTime,
-        ];
+        return $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.";
     }
 
     // ============================================================
     // ОТПРАВКА В TELEGRAM
     // ============================================================
 
-    private function sendTelegramChecklist(array $entries, float $generationTime, int $replyToMessageId = 0): bool
+    private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken;
 
@@ -456,16 +469,11 @@ class SmartChecklistAIBot
             $url .= '/sendChecklist';
         }
 
-        $title = "📋 Список задач";
-
-        if ($generationTime) {
-            $title .= " ({$generationTime}с)";
-        }
-
         if (count($entries) > 30) {
-            $title .= ". ⚠️️ Максимум 30 задач";
             $entries = array_slice($entries, 0, 30);
         }
+
+        $title = "📋 Список задач";
 
         $payload = [
             'business_connection_id' => $this->businessConnectionId,
@@ -485,7 +493,30 @@ class SmartChecklistAIBot
         return $this->sendCurl($url, $payload);
     }
 
-    private function sendTelegramMessage(string $text, ?int $replyToMsgId = null): void
+    private function editStatusMessage(string $text): void
+    {
+        if ($this->statusMessageId === null) {
+            return;
+        }
+
+        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/editMessageText';
+        $payload = [
+            'chat_id' => $this->chatId,
+            'message_id' => $this->statusMessageId,
+            'text' => $text,
+            'parse_mode' => 'MarkdownV2',
+        ];
+
+        if ($this->businessConnectionId !== '' && $this->isBusiness) {
+            $payload['business_connection_id'] = $this->businessConnectionId;
+        }
+
+        $this->sendCurl($url, $payload);
+
+        $this->statusMessageId = null;
+    }
+
+    private function sendTelegramMessage(string $text, ?int $replyToMsgId = null, bool $isStatusMessage = false): void
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendMessage';
         $payload = [
@@ -502,10 +533,10 @@ class SmartChecklistAIBot
             $payload['reply_to_message_id'] = $replyToMsgId;
         }
 
-        $this->sendCurl($url, $payload);
+        $this->sendCurl($url, $payload, $isStatusMessage);
     }
 
-    private function sendCurl(string $url, array $payload): bool
+    private function sendCurl(string $url, array $payload, bool $isStatusMessage = false): bool
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -541,6 +572,10 @@ class SmartChecklistAIBot
                     );
                 }
                 return false;
+            } else {
+                if ($isStatusMessage) {
+                    $this->statusMessageId = $resArr['result']['message_id'] ?? null;
+                }
             }
             return true;
         }
