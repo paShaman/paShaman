@@ -17,6 +17,8 @@ header('Content-Type: application/json');
 
 class SmartChecklistAIBot
 {
+    const MAX_ITEMS = 30;
+
     // --- КОНФИГУРАЦИЯ ---
     private string $tgToken;
     private int $tgChatId;
@@ -243,7 +245,7 @@ class SmartChecklistAIBot
         $count = $result['count'];
         $added = $result['added'] ?? 0;
 
-        $truncatedSuffix = $count > 30 ? ' \\(макс 30\\)' : '';
+        $truncatedSuffix = $count > self::MAX_ITEMS ? ' \\(макс '.self::MAX_ITEMS.'\\)' : '';
 
         if (!$result['ok']) {
             $this->editStatusMessage("⚠️ Ошибка генерации списка");
@@ -254,9 +256,21 @@ class SmartChecklistAIBot
         $timeStr = str_replace(".", "\\.", (string)$totalTime);
 
         if ($isAddRequest) {
-            $this->editStatusMessage("➕ Добавлено пунктов: *{$added} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            if ($count > self::MAX_ITEMS && $added > 0) {
+                $actualAdded = min(self::MAX_ITEMS, $count + $added) - $count;
+
+                $this->editStatusMessage("➕ Обработано пунктов: *{$added}  шт\\.*, добавлено: *{$actualAdded} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            } else {
+                $this->editStatusMessage("➕ Добавлено пунктов: *{$added} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            }
         } else {
-            $this->editStatusMessage("✅ Создано пунктов: *{$count} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            if ($count > self::MAX_ITEMS) {
+                $actualCount = min(self::MAX_ITEMS, $count);
+
+                $this->editStatusMessage("✅ Обработано пунктов: *{$count}  шт\\.*, создано: *{$actualCount} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            } else {
+                $this->editStatusMessage("✅ Создано пунктов: *{$count} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
+            }
         }
 
         return 'ok';
@@ -469,8 +483,8 @@ class SmartChecklistAIBot
             $url .= '/sendChecklist';
         }
 
-        if (count($entries) > 30) {
-            $entries = array_slice($entries, 0, 30);
+        if (count($entries) > self::MAX_ITEMS) {
+            $entries = array_slice($entries, 0, self::MAX_ITEMS);
         }
 
         $title = "📋 Список задач";
