@@ -254,7 +254,7 @@ class SmartChecklistAIBot
         $timeStr = str_replace(".", "\\.", (string)$totalTime);
 
         if ($isAddRequest) {
-            $this->editStatusMessage("✅ Добавлено пунктов: *{$added} шт\\.*{$truncatedSuffix} за `{$timeStr}с`*`");
+            $this->editStatusMessage("➕ Добавлено пунктов: *{$added} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
         } else {
             $this->editStatusMessage("✅ Создано пунктов: *{$count} шт\\.*{$truncatedSuffix} за `{$timeStr}с`");
         }
