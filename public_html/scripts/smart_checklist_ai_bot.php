@@ -1,6 +1,12 @@
 <?php
 
+require_once __DIR__ . '/../../vendor/autoload.php';
+
 include __DIR__ . '/_env.php';
+
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\AppInfo;
 
 /*
  * @getWebhook https://api.telegram.org/bot<TG_TOKEN>/getWebhookInfo
@@ -25,6 +31,7 @@ class SmartChecklistAIBot
     private string $openRouterKey;
     private string $deepseekKey;
     private string $deepseekModel;
+    private $MadelineProto = null;
 
     // Список дополнительных разрешенных Telegram ID (белый список)
     // TG_CHAT_ID проверяется отдельно — всегда имеет доступ
@@ -70,6 +77,8 @@ class SmartChecklistAIBot
     {
         $this->tgToken = (string)getenv('TG_TOKEN');
         $this->tgChatId = (int)getenv('TG_CHAT_ID');
+        $this->tgAppId = (int)getenv('TG_APP_ID');
+        $this->tgAppHash = (int)getenv('TG_APP_HASH');
         $this->openRouterKey = (string)getenv('OPENROUTER_KEY');
         $this->deepseekKey = (string)getenv('DEEPSEEK_KEY');
         $this->deepseekModel = (string)getenv('DEEPSEEK_MODEL');
@@ -120,7 +129,7 @@ class SmartChecklistAIBot
 
         if (!$this->isBusiness || $this->businessConnectionId === '') {
             $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате");
-            return 'empty_checklist';
+            return 'only_business';
         }
 
         return $this->processRequest();
@@ -165,32 +174,31 @@ class SmartChecklistAIBot
         if (isset($data['business_message'])) {
             $message = $data['business_message'];
 
-            $this->chatId = $message['chat']['id'];
-            $this->text = $message['text'] ?? '';
-            $this->userId = $message['from']['id'] ?? null;
-            $this->username = $message['from']['username'] ?? 'no_username';
-
-            $this->voiceFileId = $message['voice']['file_id'] ?? null;
-
-            $this->replyToText = $message['reply_to_message']['text']
-                ?? $message['reply_to_message']['caption']
-                ?? null;
-            $this->replyToChecklist = $message['reply_to_message']['checklist'] ?? [];
-
-            $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
-            $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
-
             $this->businessConnectionId = $message['business_connection_id'] ?? '';
 
             $this->isBusiness = true;
         } elseif (isset($data['message'])) {
             $message = $data['message'];
-
-            $this->chatId = $message['chat']['id'];
-            $this->text = $message['text'] ?? ($message['caption'] ?? '');
-            $this->userId = $message['from']['id'] ?? null;
-            $this->username = $message['from']['username'] ?? 'no_username';
         }
+
+        if (empty($message)) {
+            return;
+        }
+
+        $this->chatId = $message['chat']['id'];
+        $this->text = $message['text'] ?? '';
+        $this->userId = $message['from']['id'] ?? null;
+        $this->username = $message['from']['username'] ?? 'no_username';
+
+        $this->voiceFileId = $message['voice']['file_id'] ?? null;
+
+        $this->replyToText = $message['reply_to_message']['text']
+            ?? $message['reply_to_message']['caption']
+            ?? null;
+        $this->replyToChecklist = $message['reply_to_message']['checklist'] ?? [];
+
+        $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
+        $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
     }
 
     private function isAccessAllowed(): bool
@@ -385,6 +393,7 @@ class SmartChecklistAIBot
         }
 
         $ok = $this->sendTelegramChecklist($checklistEntries);
+        //$ok = $this->sendFromMyself($checklistEntries);
 
         return ['ok' => $ok, 'count' => count($checklistEntries)];
     }
@@ -472,6 +481,53 @@ class SmartChecklistAIBot
     // ============================================================
     // ОТПРАВКА В TELEGRAM
     // ============================================================
+
+    private function sendFromMyself(array $entries, int $replyToMessageId = 0): array
+    {
+        if (empty($this->MadelineProto)) {
+            $settings = new Settings();
+
+            $appInfo = new AppInfo();
+            $appInfo->setApiId(getenv('TG_APP_ID'));
+            $appInfo->setApiHash(getenv('TG_APP_HASH'));
+
+            $settings->setAppInfo($appInfo);
+            $MadelineProto = new API('session.madeline', $settings);
+
+            // Запускаем сессию
+            $MadelineProto->start();
+        }
+
+        if (count($entries) > self::MAX_ITEMS) {
+            $entries = array_slice($entries, 0, self::MAX_ITEMS);
+        }
+
+        foreach ($entries as &$entry) {
+            $entry['_'] = 'todoItem';
+            $entry['title'] =   [
+                '_' => 'textWithEntities',
+                'text' => $entry['text'],
+                'entities' => []
+            ];
+        }
+
+        $inputMediaTodo = [
+            '_' => 'inputMediaTodo',
+            'todo' => [
+                '_' => 'todoList',
+                'title' => [
+                    '_' => 'textWithEntities',
+                    'text' => "📋 Список задач",
+                    'entities' => []
+                ],
+                'list' => $entries,
+                'others_can_append' => true,
+                'others_can_complete' => true,
+            ]
+        ];
+
+        return $MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
+    }
 
     private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool
     {

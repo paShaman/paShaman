@@ -3,9 +3,10 @@
     "license": "MIT",
     "type": "project",
     "require": {
-        "php": "8.5",
+        "php": ">=8.0",
         "laravel/lumen-framework": "v9.0.0",
-        "vlucas/phpdotenv": "^5.5"
+        "vlucas/phpdotenv": "^5.5",
+        "danog/madelineproto": "^8.7"
     },
     "autoload": {
         "psr-4": {
