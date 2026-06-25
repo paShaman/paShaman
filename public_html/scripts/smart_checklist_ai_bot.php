@@ -28,6 +28,8 @@ class SmartChecklistAIBot
     // --- КОНФИГУРАЦИЯ ---
     private string $tgToken;
     private int $tgChatId;
+    private int $tgAppId;
+    private string $tgAppHash;
     private string $openRouterKey;
     private string $deepseekKey;
     private string $deepseekModel;
@@ -65,6 +67,7 @@ class SmartChecklistAIBot
     private ?string $voiceFileId = null;
     private ?string $replyToVoiceFileId = null;
     private bool $isBusiness = false;
+    private bool $isGroup = false;
     private ?int $replyToMessageId = null;
     private array $replyToChecklist = [];
     private string $businessConnectionId = '';
@@ -78,7 +81,7 @@ class SmartChecklistAIBot
         $this->tgToken = (string)getenv('TG_TOKEN');
         $this->tgChatId = (int)getenv('TG_CHAT_ID');
         $this->tgAppId = (int)getenv('TG_APP_ID');
-        $this->tgAppHash = (int)getenv('TG_APP_HASH');
+        $this->tgAppHash = (string)getenv('TG_APP_HASH');
         $this->openRouterKey = (string)getenv('OPENROUTER_KEY');
         $this->deepseekKey = (string)getenv('DEEPSEEK_KEY');
         $this->deepseekModel = (string)getenv('DEEPSEEK_MODEL');
@@ -127,8 +130,11 @@ class SmartChecklistAIBot
             return 'forbidden';
         }
 
-        if (!$this->isBusiness || $this->businessConnectionId === '') {
-            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате");
+        if (
+            (!$this->isBusiness && !$this->isGroup) ||
+            ($this->isBusiness && $this->businessConnectionId === '')
+        ) {
+            $this->sendTelegramMessage("⚠️ Генерация списка доступна только в бизнес чате или группах");
             return 'only_business';
         }
 
@@ -149,13 +155,13 @@ class SmartChecklistAIBot
         $infoText = "📋 *Бизнес\\-помощник на базе DeepSeek V4*\n\n"
             . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
             . "⚡️ *Как это работает:*\n"
-            . "1\\. Добавь бота к бизнес\\-аккаунту\\.\n"
+            . "1\\. Добавь бота к бизнес\\-аккаунту или в группу\\.\n"
             . "2\\. *Создать список:* ответь \\(reply\\) на сообщение фразой «список» \\(или «чеклист», «задачи»\\)\\.\n"
             . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n"
             . "4\\. *Дополнить список:* ответь \\(reply\\) на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
             . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы с возможностью дополнения\\.\n"
             . "🔒 Доступ только по белому списку\\.\n"
-            . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты\\.";
+            . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты и группы\\.";
 
         $this->sendTelegramMessage($infoText);
     }
@@ -179,6 +185,11 @@ class SmartChecklistAIBot
             $this->isBusiness = true;
         } elseif (isset($data['message'])) {
             $message = $data['message'];
+
+            $chatType = $message['chat']['type'] ?? 'private';
+            if ($chatType === 'group' || $chatType === 'supergroup') {
+                $this->isGroup = true;
+            }
         }
 
         if (empty($message)) {
@@ -392,8 +403,11 @@ class SmartChecklistAIBot
             return ['ok' => $ok, 'count' => count($tasks), 'added' => $addedCount];
         }
 
-        $ok = $this->sendTelegramChecklist($checklistEntries);
-        //$ok = $this->sendFromMyself($checklistEntries);
+        if ($this->isGroup) {
+            $ok = $this->sendFromMyself($checklistEntries);
+        } else {
+            $ok = $this->sendTelegramChecklist($checklistEntries);
+        }
 
         return ['ok' => $ok, 'count' => count($checklistEntries)];
     }
@@ -482,51 +496,132 @@ class SmartChecklistAIBot
     // ОТПРАВКА В TELEGRAM
     // ============================================================
 
-    private function sendFromMyself(array $entries, int $replyToMessageId = 0): array
+    private function sendFromMyself(array $entries, int $replyToMessageId = 0): bool
     {
-        if (empty($this->MadelineProto)) {
-            $settings = new Settings();
+        try {
+            if (empty($this->MadelineProto)) {
+                $settings = new Settings();
 
-            $appInfo = new AppInfo();
-            $appInfo->setApiId(getenv('TG_APP_ID'));
-            $appInfo->setApiHash(getenv('TG_APP_HASH'));
+                $appInfo = new AppInfo();
+                $appInfo->setApiId($this->tgAppId);
+                $appInfo->setApiHash($this->tgAppHash);
 
-            $settings->setAppInfo($appInfo);
-            $MadelineProto = new API('session.madeline', $settings);
+                $settings->setAppInfo($appInfo);
+                $this->MadelineProto = new API('session.madeline', $settings);
 
-            // Запускаем сессию
-            $MadelineProto->start();
-        }
+                // Запускаем сессию
+                $this->MadelineProto->start();
+            }
 
-        if (count($entries) > self::MAX_ITEMS) {
-            $entries = array_slice($entries, 0, self::MAX_ITEMS);
-        }
+            if (count($entries) > self::MAX_ITEMS) {
+                $entries = array_slice($entries, 0, self::MAX_ITEMS);
+            }
 
-        foreach ($entries as &$entry) {
-            $entry['_'] = 'todoItem';
-            $entry['title'] =   [
-                '_' => 'textWithEntities',
-                'text' => $entry['text'],
-                'entities' => []
-            ];
-        }
-
-        $inputMediaTodo = [
-            '_' => 'inputMediaTodo',
-            'todo' => [
-                '_' => 'todoList',
-                'title' => [
+            foreach ($entries as &$entry) {
+                $entry['_'] = 'todoItem';
+                $entry['title'] = [
                     '_' => 'textWithEntities',
-                    'text' => "📋 Список задач",
+                    'text' => $entry['text'],
                     'entities' => []
-                ],
-                'list' => $entries,
-                'others_can_append' => true,
-                'others_can_complete' => true,
-            ]
-        ];
+                ];
+            }
 
-        return $MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
+            $inputMediaTodo = [
+                '_' => 'inputMediaTodo',
+                'todo' => [
+                    '_' => 'todoList',
+                    'title' => [
+                        '_' => 'textWithEntities',
+                        'text' => "📋 Список задач",
+                        'entities' => []
+                    ],
+                    'list' => $entries,
+                    'others_can_append' => true,
+                    'others_can_complete' => true,
+                ]
+            ];
+
+            $result = $this->MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
+
+            if (
+                !empty($result['updates']) &&
+                is_array($result['updates']) &&
+                isset($result['updates'][0]['id'])
+            ) {
+                return true;
+            }
+
+            /*
+{
+  "_": "updates",
+  "updates": [
+    {
+      "_": "updateMessageID",
+      "id": 5776,
+      "random_id": 4528061371861473300
+    },
+    {
+      "_": "updateReadChannelInbox",
+      "channel_id": -1001507435988,
+      "max_id": 5776,
+      "still_unread_count": 0,
+      "pts": 6562
+    },
+    {
+      "_": "updateNewChannelMessage",
+      "message": {
+        "_": "message",
+        "out": true,
+        "mentioned": false,
+        "media_unread": false,
+        "silent": false,
+        "post": false,
+        "from_scheduled": false,
+        "legacy": false,
+        "edit_hide": false,
+        "pinned": false,
+        "noforwards": false,
+        "invert_media": false,
+        "offline": false,
+        "video_processing_pending": false,
+        "paid_suggested_post_stars": false,
+        "paid_suggested_post_ton": false,
+        "id": 5776,
+        "from_id": 115462629,
+        "from_rank": "Папа",
+        "peer_id": -1001507435988,
+        "date": 1782420479,
+        "message": "",
+        "media": {
+          "_": "messageMediaToDo",
+          "todo": {
+
+          }
+        },
+        "replies": {
+          "_": "messageReplies",
+          "comments": false,
+          "replies": 0,
+          "replies_pts": 6562
+        }
+      },
+      "pts": 6562,
+      "pts_count": 1
+    }
+  ],
+}
+             */
+        } catch (\Throwable $e) {
+            if ($this->logTgErrors) {
+                file_put_contents(
+                    'tg_api_errors.log',
+                    sprintf("%s | MadelineProto sendFromMyself Error: %s\n", date('Y-m-d H:i:s'), $e->getMessage()),
+                    FILE_APPEND
+                );
+            }
+        }
+
+        return false;
     }
 
     private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool

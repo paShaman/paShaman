@@ -3,7 +3,7 @@
     "license": "MIT",
     "type": "project",
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.5",
         "laravel/lumen-framework": "v9.0.0",
         "vlucas/phpdotenv": "^5.5",
         "danog/madelineproto": "^8.7"
