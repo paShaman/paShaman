@@ -77,6 +77,7 @@ class SmartChecklistAIBot
     private array $replyToChecklist = [];
     private string $businessConnectionId = '';
     private ?int $statusMessageId = null;
+    private ?int $replyToAuthorId = null;
 
     /**
      * Конструктор: инициализирует конфигурацию из переменных окружения
@@ -260,6 +261,7 @@ class SmartChecklistAIBot
 
         $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
         $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
+        $this->replyToAuthorId = $message['reply_to_message']['from']['id'] ?? null;
     }
 
     /** Проверяет, есть ли у пользователя доступ (белый список + TG_CHAT_ID) */
@@ -535,7 +537,7 @@ class SmartChecklistAIBot
 
         // Отправляем одной строкой в зависимости от типа чата
         $ok = $this->isGroup
-            ? $this->sendFromMyself($tasks, $targetMessageId)
+            ? $this->sendFromMyself($tasks, $targetMessageId, $isAddRequest ? $this->replyToAuthorId : null)
             : $this->sendTelegramChecklist($tasks, $targetMessageId);
 
         return ['ok' => $ok, 'created' => $totalCount, 'added' => $addedCount];
@@ -582,7 +584,6 @@ class SmartChecklistAIBot
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($this->logDeepseek) {
             $dsLog = sprintf(
@@ -627,10 +628,12 @@ class SmartChecklistAIBot
     // ============================================================
 
     /** Отправляет/редактирует нативный чек-лист через MadelineProto (для групп, от своего имени) */
-    private function sendFromMyself(array $entries, ?int $replyToMessageId = null): bool
+    private function sendFromMyself(array $entries, ?int $replyToMessageId = null, ?int $authorId = null): bool
     {
         try {
             if (empty($this->MadelineProto)) {
+                $sessionUserId = $authorId ?? $this->userId;
+
                 $settings = new Settings();
 
                 $appInfo = new AppInfo();
@@ -641,13 +644,13 @@ class SmartChecklistAIBot
 
                 $settings->getLogger()->setLevel(\danog\MadelineProto\Logger::LEVEL_ERROR);
 
-                $this->MadelineProto = new API('session_' . $this->userId, $settings);
+                $this->MadelineProto = new API('session_' . $sessionUserId, $settings);
 
                 // Запускаем сессию
                 $this->MadelineProto->start();
 
-                // Быстрый прогрев базы диалогов для MadelineProto 8.7+
-                $this->MadelineProto->getDialogIds();
+                // Принудительно импортируем чат в локальную базу сессии, чтобы избежать "Peer not found"
+                $this->MadelineProto->getInfo($this->chatId);
             }
 
             // Форматируем элементы под спецификацию TodoItem и textWithEntities
@@ -783,7 +786,6 @@ class SmartChecklistAIBot
 
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
-        curl_close($ch);
 
         if ($curlError) {
             if ($this->logTgErrors) {
@@ -866,7 +868,6 @@ class SmartChecklistAIBot
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         $response = curl_exec($ch);
-        curl_close($ch);
 
         if (!$response) {
             return null;
@@ -894,7 +895,6 @@ class SmartChecklistAIBot
 
         $audioData = curl_exec($ch);
         $httpCodeDownload = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         if ($httpCodeDownload !== 200 || empty($audioData)) {
             if ($this->logOpenRouter) {
@@ -941,7 +941,6 @@ class SmartChecklistAIBot
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
         $httpCodeApi = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         // Логирование дебага OpenRouter
         if ($this->logOpenRouter) {
