@@ -124,13 +124,13 @@ class SmartChecklistAIBot
             return 'no_data';
         }
 
-        $this->parseInput($data);
-
         // Проверка Webhook Secret Token
         $secret = $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ?? '';
         if (!hash_equals($secret, getenv('TG_WEBHOOK_SECRET'))) {
             return 'unauthorized_webhook';
         }
+
+        $this->parseInput($data);
 
         if ($this->text !== null && str_starts_with($this->text, '/start')) { $this->handleStart(); return 'ok'; }
         if ($this->text !== null && str_starts_with($this->text, '/info'))  { $this->handleInfo(); return 'ok'; }
@@ -246,7 +246,7 @@ class SmartChecklistAIBot
         }
 
         $this->chatId = $message['chat']['id'];
-        $this->text = $message['text'] ?? '';
+        $this->text = $message['text'] ?? null;
         $this->userId = $message['from']['id'] ?? null;
         $this->username = $message['from']['username'] ?? 'no_username';
 
@@ -274,7 +274,7 @@ class SmartChecklistAIBot
      */
     private function isUpdateLocked(int $updateId): bool
     {
-        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+        $lockFile = $this->getLockFilePath($updateId);
 
         if (file_exists($lockFile)) {
             // Если лок-файл старше 5 минут, значит прошлый процесс умер, не удалив его.
@@ -294,7 +294,7 @@ class SmartChecklistAIBot
      */
     private function createLock(int $updateId): void
     {
-        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+        $lockFile = $this->getLockFilePath($updateId);
         file_put_contents($lockFile, time());
     }
 
@@ -303,10 +303,14 @@ class SmartChecklistAIBot
      */
     private function releaseLock(int $updateId): void
     {
-        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+        $lockFile = $this->getLockFilePath($updateId);
         if (file_exists($lockFile)) {
             @unlink($lockFile);
         }
+    }
+
+    private function getLockFilePath(int $updateId): string {
+        return sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
     }
 
     /**
@@ -319,23 +323,23 @@ class SmartChecklistAIBot
             ob_end_clean();
         }
 
-        header("Connection: close");
-        header("Content-Type: application/json");
-
         ignore_user_abort(true);
 
         ob_start();
         echo json_encode(['status' => 'processing']);
 
+        header("Connection: close");
+        header("Content-Type: application/json");
         header("Content-Length: " . ob_get_length());
 
         ob_end_flush();
-        flush();
 
-        // Если используется PHP-FPM, закрываем fastcgi сессию мгновенно
         if (function_exists('fastcgi_finish_request')) {
             fastcgi_finish_request();
+            return;
         }
+
+        flush();
     }
 
     // ============================================================
@@ -356,11 +360,9 @@ class SmartChecklistAIBot
             return 'voice_transcribe_error';
         }
 
-        if (empty($this->replyToVoiceFileId)) {
-            $this->prompt = $this->resolveToText($isListRequest, $isAddRequest, $matchedTrigger);
-        } else {
-            $this->handleReplyToVoice();
-        }
+        $this->prompt = empty($this->replyToVoiceFileId)
+            ? $this->resolveToText($isListRequest, $isAddRequest, $matchedTrigger)
+            : $this->handleReplyToVoice();
 
         if ($this->prompt === null) {
             return 'ignored';
@@ -379,8 +381,8 @@ class SmartChecklistAIBot
         }
 
         $result = $this->sendChecklistResponse($checklistEntries, $isAddRequest);
-        $count = $result['count'];
-        $added = $result['added'] ?? 0;
+        $count = $result['created'];
+        $added = $result['added'];
 
         $truncatedSuffix = $count > self::MAX_ITEMS ? ' \\(макс '.self::MAX_ITEMS.'\\)' : '';
 
@@ -430,7 +432,7 @@ class SmartChecklistAIBot
         if (!empty($this->voiceFileId)) {
             $transcribed = $this->getVoiceTranscription($this->voiceFileId);
             if (empty($transcribed)) {
-                $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
+                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
                 return [false, '__VOICE_ERROR__'];
             }
 
@@ -462,19 +464,19 @@ class SmartChecklistAIBot
     }
 
     /** Обрабатывает reply на голосовое: транскрибирует и подставляет текст в промпт */
-    private function handleReplyToVoice(): void
+    private function handleReplyToVoice(): ?string
     {
         if (empty($this->replyToVoiceFileId)) {
-            return;
+            return null;
         }
 
         $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
         if (empty($transcription)) {
             $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
-            return;
+            return null;
         }
 
-        $this->prompt = "Это транскрибация голосового сообщения:\n\n" . $transcription;
+        return "Это транскрибация голосового сообщения:\n\n" . $transcription;
     }
 
     /** Парсит сырой ответ ИИ в массив задач: чистит маркдаун, обрезает длинные строки */
@@ -490,7 +492,7 @@ class SmartChecklistAIBot
                 continue;
             }
 
-            $cleanedLine = ltrim($cleanedLine, "-*•·/ \t");
+            $cleanedLine = preg_replace('/^[\-*•·\/\d.)\s]+/', '', $cleanedLine);
             if (mb_strlen($cleanedLine) > 97) {
                 $cleanedLine = mb_substr($cleanedLine, 0, 97) . '…';
             }
@@ -507,32 +509,35 @@ class SmartChecklistAIBot
     /** Отправляет чек-лист в Telegram (новый или редактирует существующий при дополнении) */
     private function sendChecklistResponse(array $checklistEntries, bool $isAddRequest): array
     {
+        $tasks = $checklistEntries;
+        $addedCount = 0;
+
         if ($isAddRequest) {
             $tasks = $this->replyToChecklist['tasks'] ?? [];
-
             $lastTaskId = $tasks[count($tasks) - 1]['id'] ?? 0;
-            $addedCount = 0;
+
             foreach ($checklistEntries as $entry) {
                 $tasks[] = ['id' => ++$lastTaskId, 'text' => $entry['text']];
                 $addedCount++;
             }
-
-            if ($this->isGroup) {
-                $ok = $this->sendFromMyself($tasks, $this->replyToMessageId);
-            } else {
-                $ok = $this->sendTelegramChecklist($tasks, $this->replyToMessageId);
-            }
-
-            return ['ok' => $ok, 'count' => count($tasks), 'added' => $addedCount];
         }
 
-        if ($this->isGroup) {
-            $ok = $this->sendFromMyself($checklistEntries);
-        } else {
-            $ok = $this->sendTelegramChecklist($checklistEntries);
+        $totalCount = count($tasks);
+
+        // Обрезаем до лимита в одном месте для всех кейсов
+        if ($totalCount > self::MAX_ITEMS) {
+            $tasks = array_slice($tasks, 0, self::MAX_ITEMS);
         }
 
-        return ['ok' => $ok, 'count' => count($checklistEntries)];
+        // Определяем ID сообщения для редактирования (только при дополнении)
+        $targetMessageId = $isAddRequest ? $this->replyToMessageId : null;
+
+        // Отправляем одной строкой в зависимости от типа чата
+        $ok = $this->isGroup
+            ? $this->sendFromMyself($tasks, $targetMessageId)
+            : $this->sendTelegramChecklist($tasks, $targetMessageId);
+
+        return ['ok' => $ok, 'created' => $totalCount, 'added' => $addedCount];
     }
 
     // ============================================================
@@ -621,7 +626,7 @@ class SmartChecklistAIBot
     // ============================================================
 
     /** Отправляет/редактирует нативный чек-лист через MadelineProto (для групп, от своего имени) */
-    private function sendFromMyself(array $entries, int $replyToMessageId = 0): bool
+    private function sendFromMyself(array $entries, ?int $replyToMessageId = null): bool
     {
         try {
             if (empty($this->MadelineProto)) {
@@ -640,10 +645,6 @@ class SmartChecklistAIBot
 
                 // Быстрый прогрев базы диалогов для MadelineProto 8.7+
                 $this->MadelineProto->getDialogIds();
-            }
-
-            if (count($entries) > self::MAX_ITEMS) {
-                $entries = array_slice($entries, 0, self::MAX_ITEMS);
             }
 
             // Форматируем элементы под спецификацию TodoItem и textWithEntities
@@ -702,10 +703,6 @@ class SmartChecklistAIBot
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken;
         $url .= $replyToMessageId ? '/editMessageChecklist' : '/sendChecklist';
-
-        if (count($entries) > self::MAX_ITEMS) {
-            $entries = array_slice($entries, 0, self::MAX_ITEMS);
-        }
 
         $payload = [
             'business_connection_id' => $this->businessConnectionId,
@@ -884,102 +881,100 @@ class SmartChecklistAIBot
     private function transcribeWithOpenRouter(string $audioUrl): ?string
     {
         $startApi = microtime(true);
-        $tmpFile = tempnam(sys_get_temp_dir(), 'tg_voice_');
+
+        // 1. Скачиваем аудиофайл напрямую в память
         $ch = curl_init($audioUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
         $audioData = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCodeDownload = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($httpCode !== 200 || empty($audioData)) {
-            if (is_file($tmpFile)) {
-                unlink($tmpFile);
+        if ($httpCodeDownload !== 200 || empty($audioData)) {
+            if ($this->logOpenRouter) {
+                file_put_contents(
+                    'openrouter_debug.log',
+                    sprintf("[%s] Ошибка скачивания файла из TG: HTTP %d\n", date('Y-m-d H:i:s'), $httpCodeDownload),
+                    FILE_APPEND
+                );
             }
             return null;
         }
 
-        file_put_contents($tmpFile, $audioData);
+        // 2. Определяем расширение файла через MIME-тип из буфера памяти
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->buffer($audioData);
 
-        try {
-            $base64Audio = base64_encode($audioData);
+        $ext = (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) ? 'mp3' : 'ogg';
 
-            $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $tmpFile);
-            finfo_close($finfo);
+        // 3. Кодируем в Base64 для API OpenRouter
+        $base64Audio = base64_encode($audioData);
 
-            $ext = 'ogg';
-            if (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) {
-                $ext = 'mp3';
-            }
+        $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
+        $postData = [
+            'model' => 'openai/whisper-large-v3-turbo',
+            'language' => 'ru',
+            'input_audio' => [
+                'data' => $base64Audio,
+                'format' => $ext,
+            ],
+        ];
 
-            $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
+        // 4. Отправляем запрос в OpenRouter
+        $ch = curl_init($apiUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $this->openRouterKey,
+            'Content-Type: application/json',
+        ]);
 
-            $postData = [
-                'model' => 'openai/whisper-large-v3-turbo',
-                'language' => 'ru',
-                'input_audio' => [
-                    'data' => $base64Audio,
-                    'format' => $ext,
-                ],
-            ];
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCodeApi = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-            $ch = curl_init($apiUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: Bearer ' . $this->openRouterKey,
-                'Content-Type: application/json',
-            ]);
-
-            $response = curl_exec($ch);
-            $curlError = curl_error($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            if ($this->logOpenRouter) {
-                $logMsg = sprintf(
-                    "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
-                    date('Y-m-d H:i:s'),
-                    $ext,
-                    $httpCode,
-                    $response ?: 'Ошибка cURL: ' . $curlError
-                );
-                file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
-            }
-
-            if ($curlError || $httpCode !== 200 || !$response) {
-                return null;
-            }
-
-            $result = json_decode($response, true);
-            $transcriptionText = !empty($result['text']) ? trim($result['text']) : null;
-
-            if ($this->logUserRequests && $transcriptionText !== null) {
-                $usage = $result['usage'] ?? [];
-                $cost = $usage['cost'] ?? 0;
-                $duration = round(microtime(true) - $startApi, 2);
-                $log = sprintf(
-                    "[%s] User: @%s | Transcription | Cost: %s | Duration: %.2fs\n",
-                    date('Y-m-d H:i:s'),
-                    $this->username,
-                    is_numeric($cost) ? number_format((float)$cost, 6) : 'N/A',
-                    $duration
-                );
-                file_put_contents('user_requests.log', $log, FILE_APPEND);
-            }
-
-            return $transcriptionText;
-        } finally {
-            if (is_file($tmpFile)) {
-                unlink($tmpFile);
-            }
+        // Логирование дебага OpenRouter
+        if ($this->logOpenRouter) {
+            $logMsg = sprintf(
+                "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
+                date('Y-m-d H:i:s'),
+                $ext,
+                $httpCodeApi,
+                $response ?: 'Ошибка cURL: ' . $curlError
+            );
+            file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
         }
+
+        if ($curlError || $httpCodeApi !== 200 || !$response) {
+            return null;
+        }
+
+        $result = json_decode($response, true);
+        $transcriptionText = !empty($result['text']) ? trim($result['text']) : null;
+
+        // Логирование статистики запроса
+        if ($this->logUserRequests && $transcriptionText !== null) {
+            $usage = $result['usage'] ?? [];
+            $cost = $usage['cost'] ?? 0;
+            $duration = round(microtime(true) - $startApi, 2);
+            $log = sprintf(
+                "[%s] User: @%s | Transcription | Cost: %s | Duration: %.2fs\n",
+                date('Y-m-d H:i:s'),
+                $this->username,
+                is_numeric($cost) ? number_format((float)$cost, 6) : 'N/A',
+                $duration
+            );
+            file_put_contents('user_requests.log', $log, FILE_APPEND);
+        }
+
+        return $transcriptionText;
     }
 }
 
