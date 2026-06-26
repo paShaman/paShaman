@@ -340,32 +340,33 @@ class SmartChecklistAIBot
     {
         $totalStart = microtime(true);
 
+        // Ранняя транскрибация голоса пользователя — до проверки триггеров
+        $isVoice = !empty($this->voiceFileId);
+        if ($isVoice) {
+            $transcribed = $this->getVoiceTranscription($this->voiceFileId);
+            if (empty($transcribed)) {
+                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
+                return 'voice_transcribe_error';
+            }
+            $this->text = $transcribed;
+        }
+
         $requestLower = trim(mb_strtolower($this->text ?? ''));
-        $isListRequest = $this->isListCreateTrigger($requestLower);
+        $isListRequest = $this->isListCreateTrigger($requestLower, $isVoice);
 
         [$isAddRequest, $matchedTrigger] = $this->detectAddRequest($isListRequest, $requestLower);
 
-        if ($matchedTrigger === '__VOICE_ERROR__') {
-            return 'voice_transcribe_error';
-        }
+        // Сборка AI-промпта
+        $aiPrompt = $this->buildAiPrompt($isListRequest, $isAddRequest, $matchedTrigger);
 
-        if (empty($this->replyToVoiceFileId)) {
-            $text = $this->resolveText($isListRequest, $isAddRequest, $matchedTrigger);
-            if ($text === null) {
-                return 'ignored';
-            }
-            $this->text = $text;
-        } else {
-            $voiceError = $this->handleReplyVoice();
-            if ($voiceError !== null) {
-                return $voiceError;
-            }
+        if ($aiPrompt === null) {
+            return 'ignored';
         }
 
         // Отправляем сообщение о начале генерации
         $this->sendTelegramMessage("⏳ Генерирую список\\.\\.\\.", isStatusMessage: true);
 
-        $aiRawOutput = $this->askDeepSeek($this->text);
+        $aiRawOutput = $this->askDeepSeek($aiPrompt);
 
         $checklistEntries = $this->parseChecklistLines($aiRawOutput);
 
@@ -409,10 +410,20 @@ class SmartChecklistAIBot
         return 'ok';
     }
 
-    private function isListCreateTrigger(string $requestLower): bool
+    private function isListCreateTrigger(string $requestLower, bool $isVoice): bool
     {
-        return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true)
-            && (!empty($this->replyToText) || !empty($this->replyToVoiceFileId));
+        if (empty($this->replyToText) && empty($this->replyToVoiceFileId)) {
+            return false;
+        }
+        if ($isVoice) {
+            foreach (self::LIST_CREATE_TRIGGERS as $trigger) {
+                if (str_contains($requestLower, $trigger)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true);
     }
 
     private function detectAddRequest(bool $isListRequest, string $requestLower): array
@@ -421,23 +432,8 @@ class SmartChecklistAIBot
             return [false, ''];
         }
 
-        if (!empty($this->voiceFileId)) {
-            $transcribed = $this->getVoiceTranscription($this->voiceFileId);
-            if (empty($transcribed)) {
-                $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
-                return [false, '__VOICE_ERROR__'];
-            }
-
-            $this->text = $transcribed;
-            $requestLower = trim(mb_strtolower($this->text));
-        }
-
         foreach (self::LIST_ADD_TRIGGERS as $trigger) {
-            $matched = empty($this->voiceFileId)
-                ? str_starts_with($requestLower, $trigger)
-                : str_contains($requestLower, $trigger);
-
-            if ($matched) {
+            if (str_contains($requestLower, $trigger)) {
                 return [true, $trigger];
             }
         }
@@ -445,31 +441,35 @@ class SmartChecklistAIBot
         return [false, ''];
     }
 
-    private function resolveText(bool $isListRequest, bool $isAddRequest, string $matchedTrigger): ?string
+    /**
+     * Собирает финальный промпт для AI из всех доступных источников.
+     *
+     * @param bool $isListRequest флаг «создать новый список»
+     * @param bool $isAddRequest  флаг «дополнить существующий список»
+     * @param string $matchedTrigger
+     *
+     * @return string|null промпт для DeepSeek или null если нечего обрабатывать
+     */
+    private function buildAiPrompt(bool $isListRequest, bool $isAddRequest, string $matchedTrigger): ?string
     {
-        return match (true) {
-            $isListRequest => $this->replyToText,
-            $isAddRequest => trim(mb_substr($this->text, mb_strlen($matchedTrigger))),
-            default => null,
-        };
-    }
+        if ($isListRequest) { // --- Создание нового списка ---
+            // Основа — текстовый reply
+            $base = $this->replyToText ?? '';
 
-    private function handleReplyVoice(): ?string
-    {
-        if (empty($this->replyToVoiceFileId)) {
-            return null;
-        }
+            // Если reply — голосовое сообщение, транскрибируем его
+            if (!empty($this->replyToVoiceFileId)) {
+                $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
+                if (empty($transcription)) {
+                    $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
+                    return null;
+                }
+                $base = $transcription;
+            }
 
-        $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
-        if (empty($transcription)) {
-            $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
-            return 'voice_transcribe_error';
+            return $base;
+        } else if ($isAddRequest) { // --- Дополнение существующего списка ---
+            return trim(mb_substr($this->text, mb_strlen($matchedTrigger)));
         }
-
-        if (!empty($this->text)) {
-            $transcription = $this->text . "\n--- транскрибация аудио ---\n" . $transcription;
-        }
-        $this->text = "Это транскрибация голосового сообщения:\n\n" . $transcription;
 
         return null;
     }
