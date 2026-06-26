@@ -33,7 +33,7 @@ class SmartChecklistAIBot
     private string $openRouterKey;
     private string $deepseekKey;
     private string $deepseekModel;
-    private $MadelineProto = null;
+    private ?API $MadelineProto = null;
 
     // Список дополнительных разрешенных Telegram ID (белый список)
     // TG_CHAT_ID проверяется отдельно — всегда имеет доступ
@@ -105,7 +105,11 @@ class SmartChecklistAIBot
 
         // Отладочный лог Telegram
         if ($this->logTg) {
-            file_put_contents('tg_debug.log', $input . PHP_EOL, FILE_APPEND);
+            file_put_contents(
+                'tg_debug.log',
+                sprintf("%s | Telegram input \n %s\n", date('Y-m-d H:i:s'), $input),
+                FILE_APPEND
+            );
         }
 
         $data = json_decode($input, true);
@@ -398,7 +402,11 @@ class SmartChecklistAIBot
                 $addedCount++;
             }
 
-            $ok = $this->sendTelegramChecklist($tasks, $this->replyToMessageId);
+            if ($this->isGroup) {
+                $ok = $this->sendFromMyself($tasks, $this->replyToMessageId);
+            } else {
+                $ok = $this->sendTelegramChecklist($tasks, $this->replyToMessageId);
+            }
 
             return ['ok' => $ok, 'count' => count($tasks), 'added' => $addedCount];
         }
@@ -511,6 +519,9 @@ class SmartChecklistAIBot
 
                 // Запускаем сессию
                 $this->MadelineProto->start();
+
+                //обновляем базу диалогов, чтобы не регистрировать их отдельно
+                $this->MadelineProto->getDialogIds();
             }
 
             if (count($entries) > self::MAX_ITEMS) {
@@ -541,7 +552,11 @@ class SmartChecklistAIBot
                 ]
             ];
 
-            $result = $this->MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
+            if ($replyToMessageId) {
+                $result = $this->MadelineProto->messages->editMessage(peer: $this->chatId, id: $replyToMessageId, media: $inputMediaTodo);
+            } else {
+                $result = $this->MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
+            }
 
             if (
                 !empty($result['updates']) &&
@@ -550,67 +565,6 @@ class SmartChecklistAIBot
             ) {
                 return true;
             }
-
-            /*
-{
-  "_": "updates",
-  "updates": [
-    {
-      "_": "updateMessageID",
-      "id": 5776,
-      "random_id": 4528061371861473300
-    },
-    {
-      "_": "updateReadChannelInbox",
-      "channel_id": -1001507435988,
-      "max_id": 5776,
-      "still_unread_count": 0,
-      "pts": 6562
-    },
-    {
-      "_": "updateNewChannelMessage",
-      "message": {
-        "_": "message",
-        "out": true,
-        "mentioned": false,
-        "media_unread": false,
-        "silent": false,
-        "post": false,
-        "from_scheduled": false,
-        "legacy": false,
-        "edit_hide": false,
-        "pinned": false,
-        "noforwards": false,
-        "invert_media": false,
-        "offline": false,
-        "video_processing_pending": false,
-        "paid_suggested_post_stars": false,
-        "paid_suggested_post_ton": false,
-        "id": 5776,
-        "from_id": 115462629,
-        "from_rank": "Папа",
-        "peer_id": -1001507435988,
-        "date": 1782420479,
-        "message": "",
-        "media": {
-          "_": "messageMediaToDo",
-          "todo": {
-
-          }
-        },
-        "replies": {
-          "_": "messageReplies",
-          "comments": false,
-          "replies": 0,
-          "replies_pts": 6562
-        }
-      },
-      "pts": 6562,
-      "pts_count": 1
-    }
-  ],
-}
-             */
         } catch (\Throwable $e) {
             if ($this->logTgErrors) {
                 file_put_contents(
