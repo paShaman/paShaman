@@ -151,7 +151,108 @@ class SmartChecklistAIBot
             return 'only_business';
         }
 
-        return $this->processRequest();
+        // ------------------------------------------------------------
+        // ПРОВЕРКА И УСТАНОВКА LOCK-ФАЙЛА (Защита от параллельных дублей)
+        // ------------------------------------------------------------
+        $updateId = $data['update_id'] ?? null;
+
+        if ($updateId) {
+            if ($this->isUpdateLocked($updateId)) {
+                // Если этот update_id уже обрабатывается другим процессом,
+                // просто тихо отдаем Telegram статус и выходим, не запуская ИИ повторно.
+                echo json_encode(['status' => 'already_processing']);
+                return 'duplicate_ignored';
+            }
+
+            $this->createLock($updateId);
+        }
+
+        // ------------------------------------------------------------
+        // Отпускаем Telegram, закрывая соединение
+        // ------------------------------------------------------------
+        $this->sendEarlyResponseAndContinue();
+
+        // Запускаем основную тяжелую логику в фоне
+        try {
+            $result = $this->processRequest();
+        } finally {
+            // Гарантированно снимаем блокировку после окончания работы (или при падении)
+            if ($updateId) {
+                $this->releaseLock($updateId);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Проверяет, существует ли активный лок для текущего update_id
+     * (с защитой от «протухания» лока, если скрипт когда-то упал намертво)
+     */
+    private function isUpdateLocked(int $updateId): bool
+    {
+        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+
+        if (file_exists($lockFile)) {
+            // Если лок-файл старше 5 минут, значит прошлый процесс умер, не удалив его.
+            // В таком случае игнорируем старый лок.
+            if (time() - filemtime($lockFile) > 300) {
+                @unlink($lockFile);
+                return false;
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Создает лок-файл
+     */
+    private function createLock(int $updateId): void
+    {
+        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+        file_put_contents($lockFile, time());
+    }
+
+    /**
+     * Удаляет лок-файл
+     */
+    private function releaseLock(int $updateId): void
+    {
+        $lockFile = sys_get_temp_dir() . "/tg_lock_{$updateId}.lock";
+        if (file_exists($lockFile)) {
+            @unlink($lockFile);
+        }
+    }
+
+    /**
+     * Моментально завершает HTTP-соединение с сервером Telegram,
+     * позволяя PHP-скрипту работать дальше в фоне.
+     */
+    private function sendEarlyResponseAndContinue(): void
+    {
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
+        header("Connection: close");
+        header("Content-Type: application/json");
+
+        ignore_user_abort(true);
+
+        ob_start();
+        echo json_encode(['status' => 'processing']);
+
+        header("Content-Length: " . ob_get_length());
+
+        ob_end_flush();
+        flush();
+
+        // Если используется PHP-FPM, закрываем fastcgi сессию мгновенно
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
     }
 
     // ============================================================
@@ -524,12 +625,13 @@ class SmartChecklistAIBot
                 $appInfo->setApiHash($this->tgAppHash);
 
                 $settings->setAppInfo($appInfo);
+
                 $this->MadelineProto = new API('session.madeline', $settings);
 
                 // Запускаем сессию
                 $this->MadelineProto->start();
 
-                //обновляем базу диалогов, чтобы не регистрировать их отдельно
+                // Быстрый прогрев базы диалогов для MadelineProto 8.7+
                 $this->MadelineProto->getDialogIds();
             }
 
@@ -537,6 +639,7 @@ class SmartChecklistAIBot
                 $entries = array_slice($entries, 0, self::MAX_ITEMS);
             }
 
+            // Форматируем элементы под спецификацию TodoItem и textWithEntities
             foreach ($entries as &$entry) {
                 $entry['_'] = 'todoItem';
                 $entry['title'] = [
@@ -546,6 +649,7 @@ class SmartChecklistAIBot
                 ];
             }
 
+            // Обертка под корректный inputMediaTodo
             $inputMediaTodo = [
                 '_' => 'inputMediaTodo',
                 'todo' => [
@@ -590,24 +694,17 @@ class SmartChecklistAIBot
     private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken;
-
-        if ($replyToMessageId) {
-            $url .= '/editMessageChecklist';
-        } else {
-            $url .= '/sendChecklist';
-        }
+        $url .= $replyToMessageId ? '/editMessageChecklist' : '/sendChecklist';
 
         if (count($entries) > self::MAX_ITEMS) {
             $entries = array_slice($entries, 0, self::MAX_ITEMS);
         }
 
-        $title = "📋 Список задач";
-
         $payload = [
             'business_connection_id' => $this->businessConnectionId,
             'chat_id' => $this->chatId,
             'checklist' => [
-                'title' => $title,
+                'title' => "📋 Список задач",
                 'tasks' => $entries,
                 'others_can_add_tasks' => true,
                 'others_can_mark_tasks_as_done' => true,
@@ -879,5 +976,6 @@ class SmartChecklistAIBot
 
 $bot = new SmartChecklistAIBot();
 $status = $bot->run();
+
+// Логируем финальный статус после завершения фоновой работы
 $bot->logBotStatus($status);
-echo json_encode(['status' => $status]);
