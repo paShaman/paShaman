@@ -186,6 +186,88 @@ class SmartChecklistAIBot
         return $result;
     }
 
+    // ============================================================
+    // ОБРАБОТЧИКИ КОМАНД
+    // ============================================================
+
+    /** Обработчик команды /start — приветственное сообщение */
+    private function handleStart(): void
+    {
+        $this->sendTelegramMessage("Бизнес\\-бот успешно настроен и готов к работе\!");
+    }
+
+    /** Обработчик команды /info — описание возможностей бота */
+    private function handleInfo(): void
+    {
+        $infoText = "📋 *Бизнес\\-помощник на базе DeepSeek V4*\n\n"
+            . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
+            . "⚡️ *Как это работает:*\n"
+            . "1\\. Добавь бота к бизнес\\-аккаунту или в группу\\.\n"
+            . "2\\. *Создать список:* ответь \\(reply\\) на сообщение фразой «список» \\(или «чеклист», «задачи»\\)\\.\n"
+            . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n"
+            . "4\\. *Дополнить список:* ответь \\(reply\\) текстом или голосом на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
+            . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы с возможностью дополнения\\.\n"
+            . "🔒 Доступ только по белому списку\\.\n"
+            . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты и группы\\.";
+
+        $this->sendTelegramMessage($infoText);
+    }
+
+    /** Обработчик команды /tgid — показывает Telegram ID и username пользователя */
+    private function handleTgId(): void
+    {
+        $this->sendTelegramMessage("🆔 {$this->userId}; 👤 @{$this->username}");
+    }
+
+    // ============================================================
+    // ПАРСИНГ И ПРОВЕРКИ
+    // ============================================================
+
+    /** Парсит входящий JSON от Telegram: извлекает chatId, текст, userId, голосовые и reply-данные */
+    private function parseInput(array $data): void
+    {
+        if (isset($data['business_message'])) {
+            $message = $data['business_message'];
+
+            $this->businessConnectionId = $message['business_connection_id'] ?? '';
+
+            $this->isBusiness = true;
+        } elseif (isset($data['message'])) {
+            $message = $data['message'];
+
+            $chatType = $message['chat']['type'] ?? 'private';
+            if ($chatType === 'group' || $chatType === 'supergroup') {
+                $this->isGroup = true;
+            }
+        }
+
+        if (empty($message)) {
+            return;
+        }
+
+        $this->chatId = $message['chat']['id'];
+        $this->text = $message['text'] ?? '';
+        $this->userId = $message['from']['id'] ?? null;
+        $this->username = $message['from']['username'] ?? 'no_username';
+
+        $this->voiceFileId = $message['voice']['file_id'] ?? null;
+
+        $this->replyToText = $message['reply_to_message']['text']
+            ?? $message['reply_to_message']['caption']
+            ?? null;
+        $this->replyToChecklist = $message['reply_to_message']['checklist'] ?? [];
+
+        $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
+        $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
+    }
+
+    /** Проверяет, есть ли у пользователя доступ (белый список + TG_CHAT_ID) */
+    private function isAccessAllowed(): bool
+    {
+        return ($this->userId === $this->tgChatId)
+            || in_array($this->userId, self::ALLOWED_TELEGRAM_IDS);
+    }
+
     /**
      * Проверяет, существует ли активный лок для текущего update_id
      * (с защитой от «протухания» лока, если скрипт когда-то упал намертво)
@@ -257,86 +339,10 @@ class SmartChecklistAIBot
     }
 
     // ============================================================
-    // ОБРАБОТЧИКИ КОМАНД
-    // ============================================================
-
-    private function handleStart(): void
-    {
-        $this->sendTelegramMessage("Бизнес\\-бот успешно настроен и готов к работе\!");
-    }
-
-    private function handleInfo(): void
-    {
-        $infoText = "📋 *Бизнес\\-помощник на базе DeepSeek V4*\n\n"
-            . "Превращает хаотичные сообщения и ТЗ от клиентов в аккуратные нативные чек\\-листы\\.\n\n"
-            . "⚡️ *Как это работает:*\n"
-            . "1\\. Добавь бота к бизнес\\-аккаунту или в группу\\.\n"
-            . "2\\. *Создать список:* ответь \\(reply\\) на сообщение фразой «список» \\(или «чеклист», «задачи»\\)\\.\n"
-            . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n"
-            . "4\\. *Дополнить список:* ответь \\(reply\\) текстом или голосом на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
-            . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы с возможностью дополнения\\.\n"
-            . "🔒 Доступ только по белому списку\\.\n"
-            . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты и группы\\.";
-
-        $this->sendTelegramMessage($infoText);
-    }
-
-    private function handleTgId(): void
-    {
-        $this->sendTelegramMessage("🆔 {$this->userId}; 👤 @{$this->username}");
-    }
-
-    // ============================================================
-    // ПАРСИНГ И ПРОВЕРКИ
-    // ============================================================
-
-    private function parseInput(array $data): void
-    {
-        if (isset($data['business_message'])) {
-            $message = $data['business_message'];
-
-            $this->businessConnectionId = $message['business_connection_id'] ?? '';
-
-            $this->isBusiness = true;
-        } elseif (isset($data['message'])) {
-            $message = $data['message'];
-
-            $chatType = $message['chat']['type'] ?? 'private';
-            if ($chatType === 'group' || $chatType === 'supergroup') {
-                $this->isGroup = true;
-            }
-        }
-
-        if (empty($message)) {
-            return;
-        }
-
-        $this->chatId = $message['chat']['id'];
-        $this->text = $message['text'] ?? '';
-        $this->userId = $message['from']['id'] ?? null;
-        $this->username = $message['from']['username'] ?? 'no_username';
-
-        $this->voiceFileId = $message['voice']['file_id'] ?? null;
-
-        $this->replyToText = $message['reply_to_message']['text']
-            ?? $message['reply_to_message']['caption']
-            ?? null;
-        $this->replyToChecklist = $message['reply_to_message']['checklist'] ?? [];
-
-        $this->replyToVoiceFileId = $message['reply_to_message']['voice']['file_id'] ?? null;
-        $this->replyToMessageId = $message['reply_to_message']['message_id'] ?? null;
-    }
-
-    private function isAccessAllowed(): bool
-    {
-        return ($this->userId === $this->tgChatId)
-            || in_array($this->userId, self::ALLOWED_TELEGRAM_IDS);
-    }
-
-    // ============================================================
     // ОСНОВНАЯ ЛОГИКА ОБРАБОТКИ
     // ============================================================
 
+    /** Основной обработчик: определяет тип запроса (создание/дополнение), вызывает ИИ, отправляет чек-лист */
     private function processRequest(): string
     {
         $totalStart = microtime(true);
@@ -407,12 +413,14 @@ class SmartChecklistAIBot
         return 'ok';
     }
 
+    /** Проверяет, является ли сообщение триггером создания нового списка */
     private function isListCreateTrigger(string $requestLower): bool
     {
         return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true)
             && (!empty($this->replyToText) || !empty($this->replyToVoiceFileId));
     }
 
+    /** Определяет, является ли запрос дополнением существующего чек-листа (reply + триггер + checklist) */
     private function detectAddRequest(bool $isListRequest, string $requestLower): array
     {
         if ($isListRequest || empty($this->replyToChecklist) || empty($this->replyToMessageId)) {
@@ -443,6 +451,7 @@ class SmartChecklistAIBot
         return [false, ''];
     }
 
+    /** Извлекает итоговый текст промпта в зависимости от типа запроса (создание или дополнение) */
     private function resolveToText(bool $isListRequest, bool $isAddRequest, string $matchedTrigger): ?string
     {
         return match (true) {
@@ -452,6 +461,7 @@ class SmartChecklistAIBot
         };
     }
 
+    /** Обрабатывает reply на голосовое: транскрибирует и подставляет текст в промпт */
     private function handleReplyToVoice(): void
     {
         if (empty($this->replyToVoiceFileId)) {
@@ -467,6 +477,7 @@ class SmartChecklistAIBot
         $this->prompt = "Это транскрибация голосового сообщения:\n\n" . $transcription;
     }
 
+    /** Парсит сырой ответ ИИ в массив задач: чистит маркдаун, обрезает длинные строки */
     private function parseChecklistLines(string $aiRawOutput): array
     {
         $entries = [];
@@ -493,6 +504,7 @@ class SmartChecklistAIBot
         return $entries;
     }
 
+    /** Отправляет чек-лист в Telegram (новый или редактирует существующий при дополнении) */
     private function sendChecklistResponse(array $checklistEntries, bool $isAddRequest): array
     {
         if ($isAddRequest) {
@@ -527,6 +539,7 @@ class SmartChecklistAIBot
     // API DEEPSEEK
     // ============================================================
 
+    /** Отправляет промпт в DeepSeek API и возвращает структурированный список задач */
     private function askDeepSeek(): string
     {
         $startApi = microtime(true);
@@ -607,6 +620,7 @@ class SmartChecklistAIBot
     // ОТПРАВКА В TELEGRAM
     // ============================================================
 
+    /** Отправляет/редактирует нативный чек-лист через MadelineProto (для групп, от своего имени) */
     private function sendFromMyself(array $entries, int $replyToMessageId = 0): bool
     {
         try {
@@ -683,6 +697,7 @@ class SmartChecklistAIBot
         return false;
     }
 
+    /** Отправляет/редактирует чек-лист через Bot API (для бизнес-чатов) */
     private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken;
@@ -710,6 +725,7 @@ class SmartChecklistAIBot
         return $this->sendCurl($url, $payload);
     }
 
+    /** Редактирует ранее отправленное статусное сообщение (⏳ → ✅) */
     private function editStatusMessage(string $text): void
     {
         if ($this->statusMessageId === null) {
@@ -733,6 +749,7 @@ class SmartChecklistAIBot
         $this->statusMessageId = null;
     }
 
+    /** Отправляет текстовое сообщение в чат через Bot API (с MarkdownV2) */
     private function sendTelegramMessage(string $text, ?int $replyToMsgId = null, bool $isStatusMessage = false): void
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendMessage';
@@ -753,6 +770,7 @@ class SmartChecklistAIBot
         $this->sendCurl($url, $payload, $isStatusMessage);
     }
 
+    /** Универсальный cURL-метод для отправки запросов к Telegram Bot API */
     private function sendCurl(string $url, array $payload, bool $isStatusMessage = false): bool
     {
         $ch = curl_init($url);
@@ -828,6 +846,7 @@ class SmartChecklistAIBot
     // ТРАНСКРИБАЦИЯ ГОЛОСОВЫХ
     // ============================================================
 
+    /** Получает URL голосового файла из Telegram и передаёт на транскрибацию в OpenRouter Whisper */
     private function getVoiceTranscription(string $fileId): ?string
     {
         $voiceFileUrl = $this->getTelegramFileUrl($fileId);
@@ -837,6 +856,7 @@ class SmartChecklistAIBot
         return $this->transcribeWithOpenRouter($voiceFileUrl);
     }
 
+    /** Получает прямую ссылку на файл из Telegram по file_id */
     private function getTelegramFileUrl(string $fileId): ?string
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken . '/getFile?file_id=' . urlencode($fileId);
@@ -860,6 +880,7 @@ class SmartChecklistAIBot
         return 'https://api.telegram.org/file/bot' . $this->tgToken . '/' . $data['result']['file_path'];
     }
 
+    /** Скачивает аудио, кодирует в base64 и отправляет в OpenRouter Whisper для распознавания речи */
     private function transcribeWithOpenRouter(string $audioUrl): ?string
     {
         $startApi = microtime(true);
