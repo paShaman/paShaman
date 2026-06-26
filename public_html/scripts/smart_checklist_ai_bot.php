@@ -700,7 +700,7 @@ class SmartChecklistAIBot
     }
 
     /** Отправляет/редактирует чек-лист через Bot API (для бизнес-чатов) */
-    private function sendTelegramChecklist(array $entries, int $replyToMessageId = 0): bool
+    private function sendTelegramChecklist(array $entries, ?int $replyToMessageId = null): bool
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken;
         $url .= $replyToMessageId ? '/editMessageChecklist' : '/sendChecklist';
