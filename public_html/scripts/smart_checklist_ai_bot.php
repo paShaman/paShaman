@@ -50,6 +50,9 @@ class SmartChecklistAIBot
     private bool $logUserRequests;
     private bool $logBotStatus;
 
+    // --- ТУМБЛЕР РАБОТЫ С ГРУППАМИ ---
+    private bool $groupsEnabled;
+
     // --- ТРИГГЕРЫ ---
     private const array LIST_CREATE_TRIGGERS = [
         'список', 'чеклист', 'задачи', 'checklist', 'list',
@@ -92,6 +95,8 @@ class SmartChecklistAIBot
         $this->logTgErrors = getenv('LOG_TG_ERRORS') === 'true';
         $this->logUserRequests = getenv('LOG_USER_REQUESTS') === 'true';
         $this->logBotStatus = getenv('LOG_BOT_STATUS') === 'true';
+
+        $this->groupsEnabled = getenv('TG_GROUPS_ENABLED') === 'true';
     }
 
     /**
@@ -132,6 +137,10 @@ class SmartChecklistAIBot
 
         if (!$this->isAccessAllowed()) {
             return 'forbidden';
+        }
+
+        if ($this->isGroup && !$this->groupsEnabled) {
+            return 'groups_disabled';
         }
 
         if (
