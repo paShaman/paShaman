@@ -639,7 +639,9 @@ class SmartChecklistAIBot
 
                 $settings->setAppInfo($appInfo);
 
-                $this->MadelineProto = new API('session.madeline', $settings);
+                $settings->getLogger()->setLevel(\danog\MadelineProto\Logger::LEVEL_ERROR);
+
+                $this->MadelineProto = new API('session_' . $this->userId, $settings);
 
                 // Запускаем сессию
                 $this->MadelineProto->start();
