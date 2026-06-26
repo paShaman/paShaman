@@ -24,6 +24,7 @@ header('Content-Type: application/json');
 class SmartChecklistAIBot
 {
     const MAX_ITEMS = 30;
+    const MAX_CHARS = 97;
 
     // --- КОНФИГУРАЦИЯ ---
     private string $tgToken;
@@ -493,8 +494,8 @@ class SmartChecklistAIBot
             }
 
             $cleanedLine = preg_replace('/^[\-*•·\/\d.)\s]+/', '', $cleanedLine);
-            if (mb_strlen($cleanedLine) > 97) {
-                $cleanedLine = mb_substr($cleanedLine, 0, 97) . '…';
+            if (mb_strlen($cleanedLine) > self::MAX_CHARS) {
+                $cleanedLine = mb_substr($cleanedLine, 0, self::MAX_CHARS) . '…';
             }
 
             $entries[] = [
