@@ -64,6 +64,7 @@ class SmartChecklistAIBot
     // --- ВХОДЯЩИЕ ДАННЫЕ ---
     private ?int $chatId = null;
     private ?string $text = null;
+    private ?string $prompt = null;
     private ?int $userId = null;
     private string $username = 'unknown';
     private ?string $replyToText = null;
@@ -272,7 +273,7 @@ class SmartChecklistAIBot
             . "1\\. Добавь бота к бизнес\\-аккаунту или в группу\\.\n"
             . "2\\. *Создать список:* ответь \\(reply\\) на сообщение фразой «список» \\(или «чеклист», «задачи»\\)\\.\n"
             . "3\\. Бот мгновенно пришлет структурированный чек\\-лист\\.\n"
-            . "4\\. *Дополнить список:* ответь \\(reply\\) на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
+            . "4\\. *Дополнить список:* ответь \\(reply\\) текстом или голосом на существующий чек\\-лист фразой «добавить» \\(или «add»\\) — бот расширит список новыми задачами\\.\n\n"
             . "👥 *Фичи:* Бизнес\\-чаты — нативные интерактивные чек\\-листы с возможностью дополнения\\.\n"
             . "🔒 Доступ только по белому списку\\.\n"
             . "⚙️ *Поддерживаемые типы чатов:* бизнес\\-чаты и группы\\.";
@@ -340,33 +341,29 @@ class SmartChecklistAIBot
     {
         $totalStart = microtime(true);
 
-        // Ранняя транскрибация голоса пользователя — до проверки триггеров
-        $isVoice = !empty($this->voiceFileId);
-        if ($isVoice) {
-            $transcribed = $this->getVoiceTranscription($this->voiceFileId);
-            if (empty($transcribed)) {
-                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
-                return 'voice_transcribe_error';
-            }
-            $this->text = $transcribed;
-        }
-
         $requestLower = trim(mb_strtolower($this->text ?? ''));
-        $isListRequest = $this->isListCreateTrigger($requestLower, $isVoice);
+        $isListRequest = $this->isListCreateTrigger($requestLower);
 
         [$isAddRequest, $matchedTrigger] = $this->detectAddRequest($isListRequest, $requestLower);
 
-        // Сборка AI-промпта
-        $aiPrompt = $this->buildAiPrompt($isListRequest, $isAddRequest, $matchedTrigger);
+        if ($matchedTrigger === '__VOICE_ERROR__') {
+            return 'voice_transcribe_error';
+        }
 
-        if ($aiPrompt === null) {
+        if (empty($this->replyToVoiceFileId)) {
+            $this->prompt = $this->resolveToText($isListRequest, $isAddRequest, $matchedTrigger);
+        } else {
+            $this->handleReplyToVoice();
+        }
+
+        if ($this->prompt === null) {
             return 'ignored';
         }
 
         // Отправляем сообщение о начале генерации
         $this->sendTelegramMessage("⏳ Генерирую список\\.\\.\\.", isStatusMessage: true);
 
-        $aiRawOutput = $this->askDeepSeek($aiPrompt);
+        $aiRawOutput = $this->askDeepSeek();
 
         $checklistEntries = $this->parseChecklistLines($aiRawOutput);
 
@@ -410,20 +407,10 @@ class SmartChecklistAIBot
         return 'ok';
     }
 
-    private function isListCreateTrigger(string $requestLower, bool $isVoice): bool
+    private function isListCreateTrigger(string $requestLower): bool
     {
-        if (empty($this->replyToText) && empty($this->replyToVoiceFileId)) {
-            return false;
-        }
-        if ($isVoice) {
-            foreach (self::LIST_CREATE_TRIGGERS as $trigger) {
-                if (str_contains($requestLower, $trigger)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true);
+        return in_array($requestLower, self::LIST_CREATE_TRIGGERS, true)
+            && (!empty($this->replyToText) || !empty($this->replyToVoiceFileId));
     }
 
     private function detectAddRequest(bool $isListRequest, string $requestLower): array
@@ -432,8 +419,23 @@ class SmartChecklistAIBot
             return [false, ''];
         }
 
+        if (!empty($this->voiceFileId)) {
+            $transcribed = $this->getVoiceTranscription($this->voiceFileId);
+            if (empty($transcribed)) {
+                $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
+                return [false, '__VOICE_ERROR__'];
+            }
+
+            $this->text = $transcribed;
+            $requestLower = trim(mb_strtolower($this->text));
+        }
+
         foreach (self::LIST_ADD_TRIGGERS as $trigger) {
-            if (str_contains($requestLower, $trigger)) {
+            $matched = empty($this->voiceFileId)
+                ? str_starts_with($requestLower, $trigger)
+                : str_contains($requestLower, $trigger);
+
+            if ($matched) {
                 return [true, $trigger];
             }
         }
@@ -441,37 +443,28 @@ class SmartChecklistAIBot
         return [false, ''];
     }
 
-    /**
-     * Собирает финальный промпт для AI из всех доступных источников.
-     *
-     * @param bool $isListRequest флаг «создать новый список»
-     * @param bool $isAddRequest  флаг «дополнить существующий список»
-     * @param string $matchedTrigger
-     *
-     * @return string|null промпт для DeepSeek или null если нечего обрабатывать
-     */
-    private function buildAiPrompt(bool $isListRequest, bool $isAddRequest, string $matchedTrigger): ?string
+    private function resolveToText(bool $isListRequest, bool $isAddRequest, string $matchedTrigger): ?string
     {
-        if ($isListRequest) { // --- Создание нового списка ---
-            // Основа — текстовый reply
-            $base = $this->replyToText ?? '';
+        return match (true) {
+            $isListRequest => $this->replyToText,
+            $isAddRequest => trim(mb_substr($this->text, mb_strlen($matchedTrigger))),
+            default => null,
+        };
+    }
 
-            // Если reply — голосовое сообщение, транскрибируем его
-            if (!empty($this->replyToVoiceFileId)) {
-                $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
-                if (empty($transcription)) {
-                    $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
-                    return null;
-                }
-                $base = $transcription;
-            }
-
-            return $base;
-        } else if ($isAddRequest) { // --- Дополнение существующего списка ---
-            return trim(mb_substr($this->text, mb_strlen($matchedTrigger)));
+    private function handleReplyToVoice(): void
+    {
+        if (empty($this->replyToVoiceFileId)) {
+            return;
         }
 
-        return null;
+        $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
+        if (empty($transcription)) {
+            $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
+            return;
+        }
+
+        $this->prompt = "Это транскрибация голосового сообщения:\n\n" . $transcription;
     }
 
     private function parseChecklistLines(string $aiRawOutput): array
@@ -534,7 +527,7 @@ class SmartChecklistAIBot
     // API DEEPSEEK
     // ============================================================
 
-    private function askDeepSeek(string $message): string
+    private function askDeepSeek(): string
     {
         $startApi = microtime(true);
 
@@ -548,7 +541,7 @@ class SmartChecklistAIBot
                 ],
                 [
                     'role' => 'user',
-                    'content' => $message,
+                    'content' => $this->prompt,
                 ],
             ],
             'temperature' => 0.2,
