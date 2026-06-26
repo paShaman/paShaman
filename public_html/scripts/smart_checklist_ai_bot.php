@@ -672,9 +672,8 @@ class SmartChecklistAIBot
             }
 
             if (
-                !empty($result['updates']) &&
-                is_array($result['updates']) &&
-                isset($result['updates'][0]['id'])
+                !empty($result['updates'][0]['message']['id']) || //edit
+                !empty($result['updates'][0]['id']) //new
             ) {
                 return true;
             }
