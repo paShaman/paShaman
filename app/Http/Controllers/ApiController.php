@@ -25,8 +25,8 @@ class ApiController extends Controller
             $_COOKIE['full'] = true;
         }
 
-        $projects = (new Project())->getList();
-        $tagsPre = (new Project())->getTags();
+        $projects = new Project()->getList();
+        $tagsPre = new Project()->getTags();
 
         $tags = [];
 
@@ -64,7 +64,7 @@ class ApiController extends Controller
 
     public function getProject($project)
     {
-        $projectData = (new Project())->getProjectDetail($project);
+        $projectData = new Project()->getProjectDetail($project);
 
         if (empty($projectData)) {
             return json_encode(false);

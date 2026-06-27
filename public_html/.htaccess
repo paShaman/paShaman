@@ -1,5 +1,10 @@
 AddDefaultCharset UTF-8
 
+# Отображение ошибок
+php_flag display_errors On
+php_flag display_startup_errors On
+php_value error_reporting E_ALL
+
 RewriteEngine On
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
 RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
