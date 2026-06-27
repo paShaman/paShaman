@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 class AddPages extends Migration
@@ -13,7 +11,7 @@ class AddPages extends Migration
      */
     public function up()
     {
-        \App\Page::create([
+        \App\Models\Page::create([
             'sort' => 100,
             'text' => '',
             'url' => '/',

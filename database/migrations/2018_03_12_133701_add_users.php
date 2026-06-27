@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
 class AddUsers extends Migration
@@ -13,23 +11,23 @@ class AddUsers extends Migration
      */
     public function up()
     {
-        \App\User::create([
+        \App\Models\User::create([
             'name' => 'Павел Никитин',
             'site' => 'http://paShaman.ru',
             'nick' => 'paShaman',
         ]);
 
-        \App\User::create([
+        \App\Models\User::create([
             'name' => 'Алексей Усольцев',
             'site' => 'http://www.behance.net/alpus',
             'nick' => 'Alpus',
         ]);
-        \App\User::create([
+        \App\Models\User::create([
             'name' => 'Дмитрий Щавлеев',
             'site' => 'http://mitia.ru',
             'nick' => 'Mitia',
         ]);
-        \App\User::create([
+        \App\Models\User::create([
             'name' => 'Маша Терешкова',
             'site' => 'http://maws.ru',
             'nick' => 'maws',

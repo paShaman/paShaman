@@ -1,5 +1,6 @@
-<?php namespace App;
+<?php namespace App\Models;
 
+use App\Image;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -22,7 +23,7 @@ class Project extends Model {
 
     public function authors()
     {
-        return $this->belongsToMany('App\User', 'users_to_projects')->withPivot('role');
+        return $this->belongsToMany('App\Models\User', 'users_to_projects')->withPivot('role');
     }
 
     /**
