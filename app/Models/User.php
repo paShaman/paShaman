@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 
-class User extends Model //implements AuthenticatableContract, AuthorizableContract
+class User extends Authenticatable
 {
-    //use Authenticatable, Authorizable;
+    use Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -14,7 +15,7 @@ class User extends Model //implements AuthenticatableContract, AuthorizableContr
      * @var array
      */
     protected $fillable = [
-        'name', 'site', 'nick'
+        'name', 'site', 'nick', 'email', 'password' // Добавил email и password для Filament
     ];
 
     /**
@@ -24,5 +25,12 @@ class User extends Model //implements AuthenticatableContract, AuthorizableContr
      */
     protected $hidden = [
         'password',
+    ];
+
+    /**
+     * Автоматическое хеширование пароля (очень полезно для Laravel 11+)
+     */
+    protected $casts = [
+        'password' => 'hashed',
     ];
 }

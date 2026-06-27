@@ -1,10 +1,5 @@
 AddDefaultCharset UTF-8
 
-# Отображение ошибок
-php_flag display_errors On
-php_flag display_startup_errors On
-php_value error_reporting E_ALL
-
 RewriteEngine On
 RewriteCond %{HTTP:X-Forwarded-Proto} !https
 RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
@@ -28,8 +23,8 @@ RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
     # Handle Front Controller...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_URI} /api/(.+)$
-    RewriteRule ^ app.php [L]
+    RewriteRule ^pashaman(/.*)?$ /paShaman$1 [R=301,L]
+    RewriteRule ^(api|vendor|paShaman|livewire[^/]*)(/.*)?$ app.php [L,NC]
 
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f

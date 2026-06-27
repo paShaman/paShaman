@@ -2,5 +2,5 @@
 
 return [
     App\Providers\AppServiceProvider::class,
-    //Illuminate\Redis\RedisServiceProvider::class,
+    App\Providers\Filament\PaShamanPanelProvider::class,
 ];
