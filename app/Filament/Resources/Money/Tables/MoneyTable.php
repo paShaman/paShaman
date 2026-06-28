@@ -17,14 +17,11 @@ class MoneyTable
         return $table
             ->columns([
                 TextColumn::make('id')
-                    ->searchable()
-                    ->sortable(),
+                    ->searchable(),
                 TextColumn::make('year')
-                    ->numeric()
-                    ->sortable(),
+                    ->numeric(),
                 TextColumn::make('month')
-                    ->numeric()
-                    ->sortable(),
+                    ->numeric(),
                 TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -34,20 +31,15 @@ class MoneyTable
                         'other' => 'gray',
                         'delta' => 'danger',
                         default => 'gray',
-                    })
-                    ->sortable(),
+                    }),
                 TextColumn::make('sum')
-                    ->numeric()
-                    ->sortable(),
+                    ->numeric(),
                 TextColumn::make('project')
-                    ->searchable()
-                    ->sortable(),
+                    ->searchable(),
                 TextColumn::make('date_payed')
-                    ->date()
-                    ->sortable(),
+                    ->date(),
                 IconColumn::make('is_payed')
-                    ->boolean()
-                    ->sortable(),
+                    ->boolean(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -57,8 +49,7 @@ class MoneyTable
                         'finish' => 'warning',
                         'payed' => 'success',
                         default => 'gray',
-                    })
-                    ->sortable(),
+                    }),
                 TextColumn::make('comment')
                     ->searchable(),
             ])
