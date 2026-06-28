@@ -52,6 +52,10 @@ class PaShamanPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            ->navigationGroups([
+                'Сайт',
+                'Деньги',
+            ])
             ->authMiddleware([
                 Authenticate::class,
             ]);

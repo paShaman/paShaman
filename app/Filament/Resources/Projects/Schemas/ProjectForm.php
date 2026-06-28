@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Projects\Schemas;
 use App\Models\User;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
@@ -63,14 +64,26 @@ class ProjectForm
                     ])
                     ->addActionLabel('Добавить автора'),
 
-                Select::make('active')
+                ToggleButtons::make('active')
+                    ->label('Статус')
                     ->required()
                     ->options([
-                        0 => 'Неактивен',
                         1 => 'Активен',
+                        0 => 'Неактивен',
                         2 => 'Скрыт',
                     ])
-                    ->default(1),
+                    ->icons([
+                        1 => 'heroicon-o-check-circle',
+                        0 => 'heroicon-o-x-circle',
+                        2 => 'heroicon-o-eye-slash',
+                    ])
+                    ->colors([
+                        1 => 'success',
+                        0 => 'danger',
+                        2 => 'warning',
+                    ])
+                    ->default(1)
+                    ->inline(),
             ]);
     }
 }

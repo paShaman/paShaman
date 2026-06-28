@@ -13,12 +13,20 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Support\Number;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
+
+    protected static string|null|\UnitEnum $navigationGroup = 'Сайт';
+
+    public static function getNavigationBadge(): ?string
+    {
+        return Number::abbreviate(static::getModel()::count());
+    }
 
     public static function form(Schema $schema): Schema
     {
