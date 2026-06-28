@@ -5,7 +5,8 @@
     "require": {
         "php": ">=8.5",
         "laravel/framework": "^v13.17.0",
-        "danog/madelineproto": "^8.7"
+        "danog/madelineproto": "^8.7",
+        "filament/filament": "^v5.6.7"
     },
     "autoload": {
         "psr-4": {
