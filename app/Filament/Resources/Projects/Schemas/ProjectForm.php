@@ -18,12 +18,10 @@ class ProjectForm
             ->components([
                 TextInput::make('name')
                     ->required(),
-                TextInput::make('site')
-                    ->required(),
+                TextInput::make('site'),
                 TextInput::make('link')
                     ->required(),
-                Textarea::make('info')
-                    ->required(),
+                Textarea::make('info'),
                 TextInput::make('tags')
                     ->required(),
                 TextInput::make('date')

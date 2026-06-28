@@ -6,6 +6,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
 
 class MoneyForm
@@ -35,13 +36,10 @@ class MoneyForm
                     ->numeric()
                     ->default(0.0),
                 Textarea::make('project')
-                    ->required()
                     ->columnSpanFull(),
                 DatePicker::make('date_payed'),
-                TextInput::make('is_payed')
-                    ->required()
-                    ->numeric()
-                    ->default(0),
+                Toggle::make('is_payed')
+                    ->default(false),
                 Select::make('status')
                     ->options([
             'plan' => 'Plan',
@@ -51,9 +49,9 @@ class MoneyForm
             'payed' => 'Payed',
         ])
                     ->default('plan')
+                    ->native(false)
                     ->required(),
                 Textarea::make('comment')
-                    ->required()
                     ->columnSpanFull(),
             ]);
     }
