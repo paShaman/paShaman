@@ -28,9 +28,32 @@ class User extends Authenticatable
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = ['avatar_url'];
+
+    /**
      * Автоматическое хеширование пароля (очень полезно для Laravel 11+)
      */
     protected $casts = [
         'password' => 'hashed',
     ];
+
+    /**
+     * Проекты пользователя
+     */
+    public function projects()
+    {
+        return $this->belongsToMany(Project::class, 'users_to_projects')->withPivot('role');
+    }
+
+    /**
+     * URL аватарки пользователя
+     */
+    public function getAvatarUrlAttribute(): string
+    {
+        return "https://pashaman.dev/images/authors/{$this->id}.jpg";
+    }
 }

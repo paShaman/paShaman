@@ -21,7 +21,8 @@ class MoneyTable
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('type')
-                    ->badge(),
+                    ->badge()
+                    ->sortable(),
                 TextColumn::make('sum')
                     ->numeric()
                     ->sortable(),
@@ -32,7 +33,10 @@ class MoneyTable
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('status')
-                    ->badge(),
+                    ->badge()
+                    ->sortable(),
+                TextColumn::make('comment')
+                    ->searchable(),
             ])
             ->filters([
                 //
