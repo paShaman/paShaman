@@ -38,8 +38,6 @@ class ProjectsTable
                     }),
                 TextColumn::make('name')
                     ->searchable(),
-                TextColumn::make('site')
-                    ->searchable(),
                 TextColumn::make('link')
                     ->searchable(),
                 TextColumn::make('active')
@@ -58,6 +56,10 @@ class ProjectsTable
                 TextColumn::make('tags')
                     ->searchable(),
                 TextColumn::make('date')
+                    ->searchable(),
+                TextColumn::make('site')
+                    ->searchable(),
+                TextColumn::make('info')
                     ->searchable(),
 
                 TextColumn::make('created_at')

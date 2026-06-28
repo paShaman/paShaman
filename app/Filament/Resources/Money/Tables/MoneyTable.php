@@ -14,6 +14,9 @@ class MoneyTable
     {
         return $table
             ->columns([
+                TextColumn::make('id')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('year')
                     ->numeric()
                     ->sortable(),
@@ -38,6 +41,7 @@ class MoneyTable
                 TextColumn::make('comment')
                     ->searchable(),
             ])
+            ->defaultSort('id', 'desc')
             ->filters([
                 //
             ])
