@@ -53,7 +53,9 @@ class MoneyTable
                 TextColumn::make('comment')
                     ->searchable(),
             ])
-            ->defaultSort('id', 'desc')
+            ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw(
+                'CASE WHEN `status` = \'cancel\' THEN 1 ELSE 0 END ASC, `is_payed` ASC, `status` ASC, `year` DESC, `month` DESC, `id` DESC'
+            ))
             ->filters([
                 //
             ])
