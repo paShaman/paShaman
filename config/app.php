@@ -49,7 +49,7 @@ return [
     */
 
     'locale' => 'ru',
-    'fallback_locale' => 'ru',
+    'fallback_locale' => 'en',
     'faker_locale' => 'ru_RU',
 
     /*
