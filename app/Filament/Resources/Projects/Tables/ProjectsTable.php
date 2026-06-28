@@ -8,6 +8,7 @@ use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder; // Не забудь добавить этот импорт
 
 class ProjectsTable
 {
@@ -27,6 +28,10 @@ class ProjectsTable
                     ->searchable(),
                 TextColumn::make('date')
                     ->searchable(),
+                TextColumn::make('authors.name')
+                    ->label('Пользователи')
+                    ->listWithLineBreaks()
+                    ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -36,6 +41,7 @@ class ProjectsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('authors'))
             ->filters([
                 //
             ])
