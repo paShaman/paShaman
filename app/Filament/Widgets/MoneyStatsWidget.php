@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On; // <--- Обязательно добавляем импорт атрибута
 
 class MoneyStatsWidget extends Widget
 {
@@ -36,6 +37,16 @@ class MoneyStatsWidget extends Widget
     }
 
     public function selectYear(int $year): void
+    {
+        $this->selectedYear = $year;
+        $this->loadYearData($year);
+    }
+
+    /**
+     * Слушатель события от графика. Автоматически поймает изменение года.
+     */
+    #[On('moneyYearChanged')]
+    public function updateYearFromChart(int $year): void
     {
         $this->selectedYear = $year;
         $this->loadYearData($year);

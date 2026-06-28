@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class MoneyChartWidget extends ChartWidget
 {
-    protected ?string $heading = '📈 Доход';
+    protected ?string $heading = '📈 Доход по месяцам';
 
     protected static ?int $sort = 2;
 
@@ -85,5 +85,13 @@ class MoneyChartWidget extends ChartWidget
             ],
             'labels' => $monthNames,
         ];
+    }
+
+    public function updatedFilter($value): void
+    {
+        if ($value) {
+            // Эмитим событие во вселенную Livewire, передавая выбранный год как integer
+            $this->dispatch('moneyYearChanged', year: (int) $value);
+        }
     }
 }
