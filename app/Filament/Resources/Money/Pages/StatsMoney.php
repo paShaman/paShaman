@@ -61,6 +61,52 @@ class StatsMoney extends Page implements HasTable
         }
     }
 
+    public static function getNavigationBadge(): ?string
+    {
+        $percent = static::fetchCurrentYearPercent();
+
+        if ($percent === null) {
+            return null;
+        }
+
+        return ($percent >= 0 ? '+' : '') . number_format($percent, 1) . '%';
+    }
+
+    public static function getNavigationBadgeColor(): string|array|null
+    {
+        $percent = static::fetchCurrentYearPercent();
+
+        if ($percent === null) {
+            return null;
+        }
+
+        return $percent >= 0 ? 'success' : 'danger';
+    }
+
+    protected static ?float $cachedPercent = null;
+
+    protected static function fetchCurrentYearPercent(): ?float
+    {
+        if (static::$cachedPercent !== null) {
+            return static::$cachedPercent;
+        }
+
+        $percentRow = DB::selectOne("
+            SELECT ((t.per_month_work / LAG(t.per_month_work) OVER (ORDER BY t.year) - 1) * 100) AS percent
+            FROM (
+                SELECT m.year,
+                       round(SUM(CASE WHEN TYPE IN ('site', 'salary') THEN m.sum ELSE 0 END) / COUNT(DISTINCT m.month)) AS per_month_work
+                FROM money m
+                WHERE m.status NOT IN ('cancel')
+                GROUP BY m.year
+            ) t
+            ORDER BY t.year DESC
+            LIMIT 1
+        ");
+
+        return static::$cachedPercent = $percentRow?->percent;
+    }
+
     public function table(Table $table): Table
     {
         $rows = DB::select("

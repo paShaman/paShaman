@@ -59,7 +59,7 @@ class MoneyResource extends Resource
     {
         return [
             NavigationItem::make()
-                ->label(static::$navigationLabel ?? 'Операции')
+                ->label('Операции')
                 ->icon(static::$navigationIcon)
                 ->group(static::$navigationGroup)
                 ->url(static::getUrl('index')),
@@ -68,7 +68,9 @@ class MoneyResource extends Resource
                 ->icon(Heroicon::OutlinedChartBar)
                 ->group(static::$navigationGroup)
                 ->sort(2)
+                ->badge(static fn () => StatsMoney::getNavigationBadge())
                 ->url(static::getUrl('stats')),
         ];
     }
+
 }
