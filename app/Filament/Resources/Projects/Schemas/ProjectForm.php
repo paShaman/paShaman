@@ -28,7 +28,6 @@ class ProjectForm
                     ->required(),
 
                 Repeater::make('authors')
-                    ->relationship()
                     ->label('Авторы')
                     ->schema([
                         Select::make('user_id')
@@ -58,7 +57,8 @@ class ProjectForm
                             })
                             ->allowHtml(),
                         TextInput::make('role')
-                            ->label('Роль'),
+                            ->label('Роль')
+                            ->default(''),
                     ])
                     ->addActionLabel('Добавить автора'),
 
