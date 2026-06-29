@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use function Filament\Support\original_request;
 
 class MoneyResource extends Resource
 {
@@ -62,6 +63,7 @@ class MoneyResource extends Resource
                 ->label('Операции')
                 ->icon(static::$navigationIcon)
                 ->group(static::$navigationGroup)
+                ->isActiveWhen(fn (): bool => original_request()->routeIs(static::getRouteBaseName() . '.index'))
                 ->url(static::getUrl('index')),
             NavigationItem::make()
                 ->label('Статистика')
@@ -69,6 +71,7 @@ class MoneyResource extends Resource
                 ->group(static::$navigationGroup)
                 ->sort(2)
                 ->badge(static fn () => StatsMoney::getNavigationBadge())
+                ->isActiveWhen(fn (): bool => original_request()->routeIs(static::getRouteBaseName() . '.stats'))
                 ->url(static::getUrl('stats')),
         ];
     }
