@@ -22,6 +22,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use AchyutN\FilamentLogViewer\FilamentLogViewer;
+use Illuminate\Support\HtmlString;
 
 class PaShamanPanelProvider extends PanelProvider
 {
@@ -75,6 +76,27 @@ class PaShamanPanelProvider extends PanelProvider
             ])
             ->plugins([
                 FilamentLogViewer::make()
-            ]);
+            ])
+            ->renderHook(
+                'panels::styles.after',
+                fn () => new HtmlString('
+                    <style>
+                        /* Сжимаем строки только внутри таблицы с классом .compact-table-rows */
+                        .compact-table-rows .fi-ta-cell:has(.fi-ta-actions), 
+                        .compact-table-rows .fi-ta-cell.fi-ta-selection-cell, 
+                        .compact-table-rows .fi-ta-text:not(.fi-inline),
+                        .compact-table-rows .fi-ta-icon:not(.fi-inline),
+                        .compact-table-rows .fi-ta-header-cell
+                        {
+                            padding-block: .25rem;
+                        }
+                        
+                        .table-row-accent {
+                            background-color: var(--bg);
+                        }
+                    </style>
+                '),
+            )
+        ;
     }
 }

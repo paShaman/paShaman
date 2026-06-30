@@ -16,11 +16,11 @@ class MoneyTable
     {
         return $table
             ->columns([
-                TextColumn::make('id')
-                    ->searchable(),
                 TextColumn::make('year')
+                    ->size('xs')
                     ->numeric(),
                 TextColumn::make('month')
+                    ->size('xs')
                     ->numeric(),
                 TextColumn::make('type')
                     ->badge()
@@ -28,31 +28,48 @@ class MoneyTable
                         'site' => 'primary',
                         'salary' => 'warning',
                         'bank' => 'info',
-                        'other' => 'gray',
+                        'other' => 'success',
                         'delta' => 'danger',
                         default => 'gray',
                     }),
                 TextColumn::make('sum')
+                    ->size('xs')
+                    ->alignRight()
                     ->numeric(),
                 TextColumn::make('project')
+                    ->size('xs')
                     ->searchable(),
                 TextColumn::make('date_payed')
+                    ->size('xs')
                     ->date(),
                 IconColumn::make('is_payed')
+                    ->size('sm')
                     ->boolean(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'plan' => 'gray',
+                        'plan' => 'info',
                         'active' => 'primary',
                         'cancel' => 'danger',
-                        'finish' => 'warning',
+                        'finish' => 'gray',
                         'payed' => 'success',
                         default => 'gray',
                     }),
                 TextColumn::make('comment')
+                    ->size('xs')
                     ->searchable(),
             ])
+            ->extraAttributes([
+                // Добавляем кастомный класс именно для этой таблицы
+                'class' => 'compact-table-rows',
+            ])
+            ->recordClasses(function ($record) {
+                return match($record->status) {
+                    'finish'    => 'table-row-accent fi-color fi-color-warning fi-bg-color-50',
+                    'active'    => 'table-row-accent fi-color fi-color-success fi-bg-color-50',
+                    default     => null,
+                };
+            })
             ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw(
                 'CASE WHEN `status` = \'cancel\' THEN 1 ELSE 0 END ASC, `is_payed` ASC, `status` ASC, `year` DESC, `month` DESC, `id` DESC'
             ))
@@ -66,6 +83,8 @@ class MoneyTable
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->defaultPaginationPageOption(25)
+        ;
     }
 }

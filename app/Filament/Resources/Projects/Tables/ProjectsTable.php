@@ -59,8 +59,6 @@ class ProjectsTable
                     ->searchable(),
                 TextColumn::make('site')
                     ->searchable(),
-                TextColumn::make('info')
-                    ->searchable(),
 
                 TextColumn::make('created_at')
                     ->dateTime()
