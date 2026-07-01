@@ -104,9 +104,19 @@ if (!$accessToken) {
 // ШАГ 3: Запрос выписки по счету
 // =========================================================================
 
-// Текущий месяц: с 1 числа по вчера
-$monthStart = date('Y-m-01');
-$monthEnd   = date('Y-m-d', strtotime('-1 day'));
+// Определяем период и заголовок месяца
+// Если сегодня 1-е число — берём ВЕСЬ прошлый месяц, иначе — текущий месяц с 1-го по вчера
+if (date('d') === '01') {
+    $monthStart = date('Y-m-01', strtotime('-1 month'));
+    $monthEnd   = date('Y-m-t', strtotime('-1 month'));
+    $reportMonth = date('F Y', strtotime('-1 month')) . ' <i>итог за месяц</i>';
+    $reportMonthDays = '1 по ' . date('t', strtotime('-1 month'));
+} else {
+    $monthStart = date('Y-m-01');
+    $monthEnd   = date('Y-m-d', strtotime('-1 day'));
+    $reportMonth = date('F Y');
+    $reportMonthDays = '1 по ' . date('d', strtotime('-1 day'));
+}
 
 // Вчерашний день
 $yesterday = date('Y-m-d', strtotime('-1 day'));
@@ -229,7 +239,7 @@ $todayForFile = date('Y-m-d');
 $htmlReport = '';
 
 $htmlReport .= "<b>🤖 Alfa API: Аналитика расходов</b>\n";
-$htmlReport .= "<p>📅 " . date('F Y') . " (с 1 по " . date('d', strtotime('-1 day')) . " число)</p>\n";
+$htmlReport .= "<p>📅 " . $reportMonth . " (с " . $reportMonthDays . " число)</p>\n";
 
 if (empty($allCategories)) {
     $htmlReport .= "<p>📭 Операций по картам не обнаружено.</p>\n";
