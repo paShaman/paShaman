@@ -246,7 +246,6 @@ if (empty($allCategories)) {
     if (isset($monthData['error_description'])) {
         $htmlReport .= "<p>⚠️ Контекст ошибки: <code>" . htmlspecialchars($monthData['error_description']) . "</code></p>\n";
     }
-    $sent = sendRichMessageToTelegram($htmlReport);
 } else {
     // Сортируем категории по сумме за месяц (по убыванию)
     $sortedCategories = $allCategories;
@@ -318,9 +317,42 @@ if (empty($allCategories)) {
     }
     $htmlReport .= "</p>\n";
     $htmlReport .= "</details>\n";
-
-    $sent = sendRichMessageToTelegram($htmlReport);
 }
+
+// --- Блок «Вчера» (для Hermes Agent) ---
+// Вынесен за пределы if/else, чтобы отправляться всегда
+$htmlReport .= "<details>\n";
+$htmlReport .= "<summary><b>📌 Вчера: " . date('d.m.Y', strtotime('-1 day')) . "</b></summary>\n";
+
+if (empty($yesterdayCategories)) {
+    $htmlReport .= "<p>📭 За вчера операций не было.</p>\n";
+} else {
+    // Сортируем категории за вчера по сумме (по убыванию)
+    $yesterdaySorted = array_keys($yesterdayCategories);
+    usort($yesterdaySorted, function ($a, $b) use ($yesterdayCategories) {
+        return $yesterdayCategories[$b]['sum'] <=> $yesterdayCategories[$a]['sum'];
+    });
+
+    $htmlReport .= "<pre>\n";
+    $htmlReport .= date('d.m.Y', strtotime('-1 day')) . "\n\n";
+    foreach ($yesterdaySorted as $cat) {
+        $ySum   = $yesterdayCategories[$cat]['sum'];
+        $yCount = $yesterdayCategories[$cat]['count'];
+        $sumFmt = number_format($ySum, 0, '.', ' ');
+        $htmlReport .= htmlspecialchars($cat) . ": {$sumFmt} {$currencySign}";
+        if ($yCount > 1) {
+            $htmlReport .= " ({$yCount} шт.)";
+        }
+        $htmlReport .= "\n";
+    }
+    $htmlReport .= "---\n";
+    $htmlReport .= "Всего: " . number_format($yesterdayTotal, 0, '.', ' ') . " {$currencySign} | Транзакций: {$yesterdayTotalCount}\n";
+    $htmlReport .= "</pre>\n";
+}
+
+$htmlReport .= "</details>\n";
+
+$sent = sendRichMessageToTelegram($htmlReport);
 
 if ($sent) {
     // good
