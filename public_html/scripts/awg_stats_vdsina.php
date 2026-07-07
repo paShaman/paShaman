@@ -10,10 +10,9 @@ $chatId    = getenv('TG_CHAT_ID');
 $interface = "awg0";
 $serverConfig = "/etc/amnezia/amneziawg/awg0.conf";
 $historyFile = "/root/awg_history.json";
-$monthlyLimitGB = false;
+$monthlyLimitGB = 1000;
 
-function formatBytes($bytes, $precision = 2)
-{
+function formatBytes($bytes, $precision = 2) {
     $units = ['B', 'KB', 'MB', 'GB', 'TB'];
     $bytes = max($bytes, 0);
     $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
@@ -42,10 +41,10 @@ if (file_exists($historyFile)) {
 
             // Начинаем месяц с "чистого листа"
             $history[$pubKey] = [
-                'rx'             => 0,
-                'tx'             => 0,
-                'last_total_rx'  => (int)$data[5],
-                'last_total_tx'  => (int)$data[6],
+                'rx' => 0,
+                'tx' => 0,
+                'last_total_rx' => (int)$data[5],
+                'last_total_tx' => (int)$data[6],
                 'prev_run_total' => (int)$data[5] + (int)$data[6]
             ];
         }
@@ -76,7 +75,7 @@ if (file_exists($serverConfig)) {
 }
 
 // 4. Обработка данных
-$message = "📊 *Отчет AmneziaWG (rdp-onedash) за " . date('F') . "*\n" . date('d.m.Y H:i') . "\n\n";
+$message = "📊 *Отчет AmneziaWG (vdsina) за " . date('F') . "*\n" . date('d.m.Y H:i') . "\n\n";
 $totalServerTraffic = 0;
 $activeCount = 0;
 
@@ -132,14 +131,9 @@ foreach ($lines as $line) {
 file_put_contents($historyFile, json_encode($history));
 
 // Итоги (остальной код отправки без изменений)
-$totalGB = $totalServerTraffic / (1024 ** 3);
-
-if ($monthlyLimitGB !== false) {
-    $percentUsed = round(($totalGB / $monthlyLimitGB) * 100, 1);
-    $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic) . "\n🔋 Лимит: $percentUsed% из {$monthlyLimitGB}GB";
-} else {
-    $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic);
-}
+$totalGB = $totalServerTraffic / (1024**3);
+$percentUsed = round(($totalGB / $monthlyLimitGB) * 100, 1);
+$message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic) . "\n🔋 Лимит: $percentUsed% из {$monthlyLimitGB}GB";
 
 $postData = ['chat_id' => $chatId, 'text' => $message, 'parse_mode' => 'Markdown'];
 $ch = curl_init("https://api.telegram.org/bot$botToken/sendMessage");
