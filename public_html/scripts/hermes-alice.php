@@ -1,59 +1,39 @@
 <?php
-/**
- * Hermes Alice — мост между Яндекс.Диалогами (Алисой) и Home Assistant
- * 
- * Разместить на pashaman.dev/hermes-alice.php
- * 
- * Ожидаемый формат от Алисы:
- * POST /
- * {
- *   "request": { "command": "показать траты", "original_utterance": "попроси гермеса показать траты", "type": "SimpleUtterance" },
- *   "session": { "session_id": "...", "user_id": "...", "new": true },
- *   "version": "1.0"
- * }
- */
-
-// ⚙️ Настройки
-define('HA_WEBHOOK_URL', 'https://ha.pashaman.crazedns.ru/api/webhook/hermes_command');
-
-// Принимаем запрос от Алисы
+$url = 'https://alice.pashaman.crazedns.ru/alice';
 $input = json_decode(file_get_contents('php://input'), true);
+$command = trim($input['request']['command'] ?? '');
 
-if (!$input || !isset($input['request']['command'])) {
-    // Проверка доступности (GET-запрос от Яндекса при проверке навыка)
-    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        die(json_encode(['status' => 'ok']));
-    }
-    http_response_code(400);
-    die(json_encode([
-        'response' => ['text' => 'Неверный формат запроса', 'end_session' => true],
-        'version' => '1.0'
-    ]));
+if (!$command) {
+    echo json_encode(['response' => ['text' => 'Команда не распознана', 'end_session' => true], 'version' => '1.0']);
+    exit;
 }
 
-// Извлекаем команду
-$command = trim($input['request']['command']);
-
-// Отправляем команду в HA (асинхронно — не ждём ответа)
-$haPayload = json_encode(['command' => $command]);
-$ch = curl_init(HA_WEBHOOK_URL);
+$ch = curl_init($url);
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $haPayload,
+    CURLOPT_POSTFIELDS => json_encode(['command' => $command]),
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 5,           // 5 сек на отправку
-    CURLOPT_CONNECTTIMEOUT => 3,
+    CURLOPT_TIMEOUT => 4,
 ]);
-curl_exec($ch);
+$resp = curl_exec($ch);
+$httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-// Отвечаем Алисе
-header('Content-Type: application/json');
+if ($httpcode == 200 && $resp) {
+    $data = json_decode($resp, true);
+    $text = $data['text'] ?? '';
+} else {
+    $text = '';
+}
+
+if ($text) {
+    $alice_text = $text;
+} else {
+    $alice_text = 'Ответ будет отправлен в Telegram';
+}
+
 echo json_encode([
-    'response' => [
-        'text' => 'Передала гермесу',
-        'end_session' => true,
-    ],
+    'response' => ['text' => $alice_text, 'end_session' => true],
     'version' => '1.0'
 ]);
