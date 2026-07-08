@@ -30,7 +30,7 @@ if ($httpcode == 200 && $resp) {
 if ($text) {
     $alice_text = $text;
 } else {
-    $alice_text = 'Ответ будет отправлен в Telegram';
+    $alice_text = 'Передала Гермесу';
 }
 
 echo json_encode([
