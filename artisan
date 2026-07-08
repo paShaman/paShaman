@@ -4,6 +4,13 @@
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\ConsoleOutput;
 
+// 1. Сначала подключаем автозагрузчик (то, чего у тебя не хватало!)
+if (file_exists(__DIR__.'/bootstrap/cache/compiled.php')) {
+    require __DIR__.'/bootstrap/cache/compiled.php';
+}
+
+require __DIR__.'/vendor/autoload.php';
+
 /*
 |--------------------------------------------------------------------------
 | Create The Application

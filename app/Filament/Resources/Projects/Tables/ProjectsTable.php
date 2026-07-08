@@ -69,6 +69,7 @@ class ProjectsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->recordClasses(fn ($record) => $record->status === 'finish' ? 'table-row-accent bg-warning-50' : null)
             ->modifyQueryUsing(fn (Builder $query) => $query->with('authors'))
             ->defaultSort('id', 'desc')
             ->filters([
