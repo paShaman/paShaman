@@ -47,7 +47,7 @@ class ProjectController extends BaseController
 
         $project['tags'] = array_filter(explode(' ', $project['tags']));
 
-        return Inertia::render('SingleProject', [
+        return Inertia::render('Project', [
             'project' => $project,
         ]);
     }

@@ -6,12 +6,12 @@ import AppFooter from '@/Components/shared/AppFooter.vue';
 import BackToTop from '@/Components/shared/BackToTop.vue';
 
 const page = usePage();
-const isHome = computed(() => page.component === 'Home');
+const isProject = computed(() => page.component === 'Project');
 </script>
 
 <template>
-    <div class="bg-warm-bg">
-        <AppHeader :is-home="isHome" />
+    <div>
+        <AppHeader :is-project="isProject" />
 
         <main>
             <Transition name="page-fade" mode="out-in">

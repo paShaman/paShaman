@@ -45,7 +45,7 @@ html {
 body {
     overflow-x: hidden;
     font-family: var(--font-sans);
-    background-color: var(--color-warm-bg);
+    background: var(--color-warm-bg) url(/images/bg.svg) repeat-y top center / 100% auto;
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

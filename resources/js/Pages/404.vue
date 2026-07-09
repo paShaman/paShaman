@@ -12,7 +12,7 @@ defineOptions({ layout: AppLayout });
     <div class="container mx-auto flex flex-col items-center justify-center min-h-[70vh] text-center px-4 sm:px-6">
         <!-- Decorative blob -->
         <div
-            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] sm:w-[500px] aspect-square rounded-full bg-accent-terracotta/8 animate-blob pointer-events-none"
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-87.5 sm:w-125 aspect-square rounded-full bg-[#F7ECE6] animate-blob pointer-events-none"
             aria-hidden="true"
         />
 
