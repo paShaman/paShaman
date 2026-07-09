@@ -5,7 +5,7 @@ import { ChevronUp } from 'lucide-vue-next';
 const visible = ref(false);
 
 function onScroll() {
-    visible.value = window.scrollY > 500;
+    visible.value = window.scrollY > 400;
 }
 
 function scrollToTop() {
@@ -13,7 +13,7 @@ function scrollToTop() {
 }
 
 onMounted(() => {
-    window.addEventListener('scroll', onScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
 });
 
 onUnmounted(() => {
@@ -22,13 +22,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Transition name="fade">
+    <Transition name="backtotop">
         <button
-            v-if="visible"
-            @click="scrollToTop"
-            class="fixed right-6 bottom-6 p-3 bg-accent-terracotta hover:bg-accent-terracotta/90 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 z-50 cursor-pointer"
-            title="Наверх"
+            v-show="visible"
             aria-label="Наверх"
+            class="fixed bottom-6 right-6 z-50 flex items-center justify-center w-12 h-12 rounded-full bg-accent-terracotta text-white shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+            @click="scrollToTop"
         >
             <ChevronUp class="w-5 h-5" />
         </button>
@@ -36,12 +35,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.3s ease;
+.backtotop-enter-active,
+.backtotop-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
-.fade-enter-from,
-.fade-leave-to {
+.backtotop-enter-from,
+.backtotop-leave-to {
     opacity: 0;
+    transform: translateY(12px);
 }
 </style>

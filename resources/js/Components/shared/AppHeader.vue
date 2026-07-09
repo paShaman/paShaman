@@ -22,7 +22,7 @@ defineProps({
             <div class="flex justify-center">
                 <Link href="/" class="inline-block">
                     <span class="font-display text-4xl sm:text-5xl font-bold text-text-primary tracking-tight hover:text-accent-terracotta transition-colors duration-300">
-                        paShaman
+                        paShaman<span class="opacity-50">.dev</span>
                     </span>
                 </Link>
             </div>

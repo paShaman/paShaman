@@ -34,7 +34,7 @@ function format(num) {
                             :to="counters.projects"
                             :duration="1.2"
                             :format="format"
-                            class="font-sans font-bold text-3xl sm:text-4xl text-text-primary"
+                            class="font-display font-bold text-3xl sm:text-4xl text-text-primary"
                         />
                         <span class="block text-sm text-text-secondary mt-1">
                             {{ pluralize(counters.projects, ['Проект', 'Проекта', 'Проектов']) }}
@@ -50,7 +50,7 @@ function format(num) {
                             :to="counters.experience"
                             :duration="1"
                             :format="format"
-                            class="font-sans font-bold text-3xl sm:text-4xl text-text-primary"
+                            class="font-display font-bold text-3xl sm:text-4xl text-text-primary"
                         />
                         <span class="block text-sm text-text-secondary mt-1">
                             {{ pluralize(counters.experience, ['Год опыта', 'Года опыта', 'Лет опыта']) }}
@@ -66,7 +66,7 @@ function format(num) {
                             :to="counters.cups"
                             :duration="1.3"
                             :format="format"
-                            class="font-sans font-bold text-3xl sm:text-4xl text-text-primary"
+                            class="font-display font-bold text-3xl sm:text-4xl text-text-primary"
                         />
                         <span class="block text-sm text-text-secondary mt-1">
                             {{ pluralize(counters.cups, ['Чашка кофе', 'Чашки кофе', 'Чашек кофе']) }}
@@ -82,7 +82,7 @@ function format(num) {
                             :to="counters.countries"
                             :duration="1.1"
                             :format="format"
-                            class="font-sans font-bold text-3xl sm:text-4xl text-text-primary"
+                            class="font-display font-bold text-3xl sm:text-4xl text-text-primary"
                         />
                         <span class="block text-sm text-text-secondary mt-1">
                             {{ pluralize(counters.countries, ['Страна посещена', 'Страны посещено', 'Стран посещено']) }}
@@ -91,11 +91,5 @@ function format(num) {
                 </div>
             </div>
         </div>
-
-        <!-- Background blob behind floating card -->
-        <div
-            class="absolute top-0 right-0 w-64 h-64 rounded-full bg-accent-sage/8 animate-blob pointer-events-none -z-0"
-            aria-hidden="true"
-        />
     </div>
 </template>

@@ -5,7 +5,7 @@
     <section class="relative flex flex-col items-center justify-center text-center pt-12 sm:pt-16 pb-20 sm:pb-28">
         <!-- Background blob -->
         <div
-            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] sm:w-[700px] h-[500px] sm:h-[700px] rounded-full bg-accent-terracotta/10 animate-blob pointer-events-none"
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] sm:w-[700px] aspect-square rounded-full bg-accent-terracotta/10 animate-blob pointer-events-none"
             aria-hidden="true"
         />
 
