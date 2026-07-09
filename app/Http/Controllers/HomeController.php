@@ -34,8 +34,9 @@ class HomeController extends BaseController
         ];
 
         return Inertia::render('Home', [
-            'counters'   => $counters,
-            'showHidden' => $showHidden,
+            'counters'    => $counters,
+            'showHidden'  => $showHidden,
+            'initialTag'  => $request->query('tag', ''),
         ]);
     }
 

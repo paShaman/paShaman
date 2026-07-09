@@ -16,6 +16,10 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    initialTag: {
+        type: String,
+        default: '',
+    },
 });
 </script>
 
@@ -33,7 +37,7 @@ defineProps({
 
         <div class="container mx-auto">
             <!-- Projects -->
-            <ProjectsGrid />
+            <ProjectsGrid :initial-tag="initialTag" />
         </div>
     </div>
 </template>

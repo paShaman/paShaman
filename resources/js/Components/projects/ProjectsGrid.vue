@@ -4,6 +4,13 @@ import { Search } from '@lucide/vue';
 import ProjectsTags from './ProjectsTags.vue';
 import ProjectItem from './ProjectItem.vue';
 
+const props = defineProps({
+    initialTag: {
+        type: String,
+        default: '',
+    },
+});
+
 const projects = ref([]);
 const tags = ref([]);
 const searchQuery = ref('');
@@ -15,6 +22,7 @@ const hasMore = ref(false);
 const total = ref(0);
 const loading = ref(false);
 const initialLoading = ref(true);
+const initialTagApplied = ref(false);
 let observer = null;
 const sentinelRef = ref(null);
 
@@ -42,6 +50,10 @@ async function fetchProjects(reset = false) {
 
     if (selectedTags.value.length > 0) {
         params.set('tags', selectedTags.value.map(t => t.name).join(','));
+    } else if (page.value === 1 && props.initialTag && !initialTagApplied.value) {
+        // При самой первой загрузке добавляем initialTag в запрос
+        params.set('tags', props.initialTag);
+        initialTagApplied.value = true;
     }
 
     try {
@@ -154,6 +166,7 @@ onBeforeUnmount(() => {
                         :tags="tags"
                         :cnt="total"
                         :show="showTags"
+                        :initial-tag="props.initialTag"
                         @toggle="showTags = !showTags"
                         @select-tags="onSelectTags"
                     />

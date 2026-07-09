@@ -15,6 +15,10 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    initialTag: {
+        type: String,
+        default: '',
+    },
 });
 
 const emit = defineEmits(['select-tags', 'toggle']);
@@ -22,9 +26,20 @@ const emit = defineEmits(['select-tags', 'toggle']);
 // Локальное состояние выбранных тегов (по именам)
 const selectedTagNames = ref(new Set());
 
-// Сбрасываем выбранные теги при изменении списка тегов
-watch(() => props.tags, () => {
+// Сбрасываем при изменении списка тегов, но учитываем initialTag
+watch(() => props.tags, (newTags) => {
     selectedTagNames.value = new Set();
+    if (props.initialTag && newTags.some(t => t.name === props.initialTag)) {
+        selectedTagNames.value = new Set([props.initialTag]);
+    }
+});
+
+// Подхватываем initialTag при первом получении тегов
+watch(() => [props.tags, props.initialTag], ([newTags, newInitialTag]) => {
+    if (newInitialTag && newTags.length > 0 && selectedTagNames.value.size === 0 && newTags.some(t => t.name === newInitialTag)) {
+        selectedTagNames.value = new Set([newInitialTag]);
+        emitSelected();
+    }
 });
 
 // Вычисляем теги с флагом selected для шаблона
