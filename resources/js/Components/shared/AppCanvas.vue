@@ -10,9 +10,8 @@ let dots = [];
 let animationId = null;
 
 const mouse = { x: 0, y: 0 };
-const wide = 36;
-const high = wide / 2.2;
-const padding = 50;
+const spacing = 35;
+const padding = 20;
 
 function getAngle(obj1, obj2) {
     const dX = obj2.x - obj1.x;
@@ -70,18 +69,11 @@ function render() {
 
 function createDots() {
     dots = [];
-    for (let i = 0; i < wide; i++) {
-        const x = Math.floor(((cb.width - padding * 2) / (wide - 1)) * i + padding) * ratio;
+    const step = spacing * ratio;
 
-        for (let j = 0; j < high; j++) {
-            const y = Math.floor(((cb.height - padding * 2) / (high - 1)) * j + padding) * ratio;
-
-            dots.push({
-                x: x,
-                y: y,
-                ox: x,
-                oy: y,
-            });
+    for (let x = padding * ratio; x < cb.width * ratio - padding * ratio; x += step) {
+        for (let y = padding * ratio; y < cb.height * ratio - padding * ratio; y += step) {
+            dots.push({ x, y, ox: x, oy: y });
         }
     }
 }
@@ -89,13 +81,20 @@ function createDots() {
 function resize() {
     ctx.canvas.width = window.innerWidth * ratio;
     ctx.canvas.height = window.innerHeight * ratio;
+
     cb = canvasRef.value.getBoundingClientRect();
     createDots();
 }
 
+function updateBounds() {
+    cb = canvasRef.value.getBoundingClientRect();
+}
+
 function onMouseMove(e) {
-    mouse.x = e.pageX * ratio;
-    mouse.y = e.pageY * ratio;
+    // clientX/Y — относительно viewport (без скролла), rect.top/left компенсируют положение canvas
+    const rect = canvasRef.value.getBoundingClientRect();
+    mouse.x = (e.clientX - rect.left) * ratio;
+    mouse.y = (e.clientY - rect.top) * ratio;
 }
 
 function animate() {
@@ -107,13 +106,14 @@ onMounted(() => {
     const canvas = canvasRef.value;
     ctx = canvas.getContext('2d');
     ratio = window.devicePixelRatio || 1;
-    cb = canvas.getBoundingClientRect();
 
+    updateBounds();
     createDots();
     resize();
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('resize', resize);
+    window.addEventListener('scroll', updateBounds, { passive: true });
 
     animationId = requestAnimationFrame(animate);
 });
@@ -124,6 +124,7 @@ onUnmounted(() => {
     }
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('resize', resize);
+    window.removeEventListener('scroll', updateBounds);
 });
 </script>
 
