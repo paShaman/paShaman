@@ -55,7 +55,7 @@ class Project extends Model {
         $totalPages = (int) ceil($total / $perPage);
 
         $projects = $query
-            ->orderBy(DB::raw('STR_TO_DATE( `date`, "%m/%Y" )'), 'desc')
+            ->orderByRaw("SUBSTR(`date`, 4, 4) DESC, SUBSTR(`date`, 1, 2) DESC")
             ->orderBy('id', 'desc')
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
