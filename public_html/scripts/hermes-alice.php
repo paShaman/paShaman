@@ -11,7 +11,7 @@ if (!$command) {
 $ch = curl_init($url);
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode(['command' => $command]),
+    CURLOPT_POSTFIELDS => json_encode(['command' => $command, 'alice' => $input]),
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT => 4,
