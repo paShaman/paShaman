@@ -1,4 +1,5 @@
 <script setup>
+import { Head } from '@inertiajs/vue3';
 import AppBanner from '@/Components/shared/AppBanner.vue';
 import AboutCounter from '@/Components/about/AboutCounter.vue';
 import ProjectsGrid from '@/Components/projects/ProjectsGrid.vue';
@@ -19,10 +20,16 @@ defineProps({
         type: Object,
         default: () => ({}),
     },
+    showHidden: {
+        type: Boolean,
+        default: false,
+    },
 });
 </script>
 
 <template>
+    <Head title="paShaman — веб-разработка, дизайн и продвижение" />
+
     <div>
         <div class="container mx-auto">
             <!-- Banner -->

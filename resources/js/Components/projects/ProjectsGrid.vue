@@ -23,8 +23,8 @@ const filteredProjects = computed(() => {
     let result = props.projects;
 
     if (selectedTags.value.length > 0) {
-        const tagNames = selectedTags.value.map((t) => t.name);
-        result = result.filter((el) => el.tags.some((v) => tagNames.includes(v)));
+        const tagNames = selectedTags.value.map((t) => String(t.name));
+        result = result.filter((el) => el.tags.some((v) => tagNames.includes(String(v))));
     }
 
     if (searchProject.value) {

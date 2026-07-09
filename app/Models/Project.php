@@ -29,7 +29,7 @@ class Project extends Model {
     /**
      * получаем список
      */
-    public function getList()
+    public function getList(bool $showHidden = false)
     {
         $projects = self::where('active', '!=', 0)
             ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
@@ -41,7 +41,7 @@ class Project extends Model {
             $project->image = '/images/projects/' . $project->link .'/preview.jpg';
             $project->link = '/projects/'. $project->link;
 
-            if ($project->active == 2 && empty($_COOKIE['full'])) {
+            if ($project->active == 2 && !$showHidden) {
                 //create blurred image
 
                 $link = md5($project->link);
@@ -110,14 +110,14 @@ class Project extends Model {
      *
      * @param $project
      */
-    public function getProjectDetail($project)
+    public function getProjectDetail(string $projectLink, bool $showHidden = false)
     {
-        if (empty($project)) {
+        if (empty($projectLink)) {
             return false;
         }
 
-        $project = self::where('link', $project)
-            ->whereIn('active', (empty($_COOKIE['full']) ? [1] : [1,2]))
+        $project = self::where('link', $projectLink)
+            ->whereIn('active', $showHidden ? [1, 2] : [1])
             ->first()
         ;
 
@@ -137,7 +137,7 @@ class Project extends Model {
         }
 
         //prev next
-        $projects = self::whereIn('active', (empty($_COOKIE['full']) ? [1] : [1,2]))
+        $projects = self::whereIn('active', $showHidden ? [1, 2] : [1])
             ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
             ->orderBy('id', 'desc')
             ->get()

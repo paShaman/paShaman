@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Cookie;
 use Inertia\Inertia;
 
 class HomeController extends BaseController
@@ -12,11 +13,16 @@ class HomeController extends BaseController
     public function __invoke(Request $request)
     {
         // Режим full — показываем скрытые проекты (аналог ?full=true из референса)
-        if ($request->query('full') === 'true' || $request->route()->getName() === 'home.full') {
-            $_COOKIE['full'] = true;
+        $isFullRoute = $request->route()->getName() === 'home.full';
+        $cookieFull = $request->cookie('full');
+        $showHidden = $isFullRoute || $cookieFull;
+
+        // Устанавливаем куку full при заходе на /full
+        if ($isFullRoute) {
+            Cookie::queue('full', '1', 60*10); // 10 минут
         }
 
-        $projects = new Project()->getList();
+        $projects = new Project()->getList($showHidden);
 
         foreach ($projects as &$project) {
             $project['tags'] = explode(' ', $project['tags']);
@@ -43,9 +49,10 @@ class HomeController extends BaseController
         ];
 
         return Inertia::render('Home', [
-            'projects' => $projects,
-            'tags'     => $tags,
-            'counters' => $counters,
+            'projects'   => $projects,
+            'tags'       => $tags,
+            'counters'   => $counters,
+            'showHidden' => $showHidden,
         ]);
     }
 }

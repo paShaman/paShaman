@@ -1,4 +1,5 @@
 <script setup>
+import { ref, computed, watch } from 'vue';
 import { X, ChevronDown } from 'lucide-vue-next';
 
 const props = defineProps({
@@ -17,6 +18,27 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['select-tags', 'toggle']);
+
+// Локальное состояние выбранных тегов (по именам)
+const selectedTagNames = ref(new Set());
+
+// Сбрасываем выбранные теги при изменении списка тегов
+watch(() => props.tags, () => {
+    selectedTagNames.value = new Set();
+});
+
+// Вычисляем теги с флагом selected для шаблона
+const tagsWithState = computed(() =>
+    props.tags.map((tag) => ({
+        ...tag,
+        selected: selectedTagNames.value.has(tag.name),
+    }))
+);
+
+function emitSelected() {
+    const selected = props.tags.filter((tag) => selectedTagNames.value.has(tag.name));
+    emit('select-tags', selected);
+}
 
 function calcTagClass(tag) {
     if (tag.selected) {
@@ -38,17 +60,23 @@ function calcTagClass(tag) {
 }
 
 function toggleTag(tag) {
-    tag.selected = !tag.selected;
-    emit('select-tags', props.tags.filter((el) => el.selected));
+    const newSet = new Set(selectedTagNames.value);
+    if (newSet.has(tag.name)) {
+        newSet.delete(tag.name);
+    } else {
+        newSet.add(tag.name);
+    }
+    selectedTagNames.value = newSet;
+    emitSelected();
 }
 
 function selectAll() {
-    props.tags.forEach((t) => (t.selected = false));
+    selectedTagNames.value = new Set();
     emit('select-tags', []);
 }
 
 function isAllSelected() {
-    return props.tags.every((t) => !t.selected);
+    return selectedTagNames.value.size === 0;
 }
 </script>
 
@@ -81,7 +109,7 @@ function isAllSelected() {
             <div>
                 <div class="flex gap-2 flex-wrap justify-center">
                     <button
-                        v-for="tag in tags"
+                        v-for="tag in tagsWithState"
                         :key="tag.name"
                         @click="toggleTag(tag)"
                         class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-300 border cursor-pointer"

@@ -11,7 +11,8 @@ class ProjectController extends BaseController
 {
     public function show(Request $request, $slug)
     {
-        $projectData = new Project()->getProjectDetail($slug);
+        $showHidden = (bool) $request->cookie('full');
+        $projectData = new Project()->getProjectDetail($slug, $showHidden);
 
         if (empty($projectData)) {
             abort(404);
