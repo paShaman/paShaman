@@ -11,10 +11,8 @@ class AppServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function register()
+    public function register(): void
     {
-        if ($this->app->environment() == 'local') {
-
-        }
+        $this->app->bind('path.public', fn () => base_path('public_html'));
     }
 }

@@ -1,7 +1,5 @@
 /vendor/
 /.idea
-Homestead.json
-Homestead.yaml
 .env
 /public_html/images/projects/
 /public_html/images/blur/
@@ -9,3 +7,6 @@ Homestead.yaml
 /public_html/tree/
 /.skills/
 composer.phar
+package-lock.json
+/node_modules
+/public_html/build

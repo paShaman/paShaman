@@ -3,44 +3,46 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller as BaseController;
+use Inertia\Inertia;
 
-class ProjectController extends Controller
+class ProjectController extends BaseController
 {
-    /**
-     * Create a new controller instance.
-     *
-     * @return void
-     */
-    public function __construct()
+    public function show(Request $request, $slug)
     {
-        //
-    }
-
-    /**
-     * детальная страница проекта
-     *
-     * @param $project
-     * @return \Illuminate\View\View
-     */
-    public function project($project)
-    {
-        $this->title[] = 'Portfolio';
-        $this->page = 'project';
-
-        $projectData = (new Project())->getProjectDetail($project);
+        $projectData = new Project()->getProjectDetail($slug);
 
         if (empty($projectData)) {
-            throw new NotFoundHttpException();
+            abort(404);
         }
 
-        $this->title[] = $projectData['name'];
+        $currentVersion = false;
 
-        $classes = ['info', 'danger', 'success'];
+        if (count($projectData->versions) > 1) {
+            foreach ($projectData->versions as $version) {
+                if ($version['current'] === true) {
+                    $currentVersion = $version['version'];
+                }
+            }
+        }
 
-        $this->template['class'] = $classes[rand(0, count($classes) - 1)];
-        $this->template['project'] = $projectData;
+        $project = array_merge($projectData->toArray(), [
+            'authors'         => $projectData->authors,
+            'image_full'      => $projectData->image_full,
+            'prev'            => $projectData->prev,
+            'next'            => $projectData->next,
+            'works'           => $projectData->works,
+            'versions'        => array_reverse($projectData->versions),
+            'years'           => array_reverse($projectData->years),
+            'current_version' => $currentVersion,
+            'host'            => 'https://' . $request->getHost(),
+        ]);
 
-        return $this->render();
+        $project['tags'] = array_filter(explode(' ', $project['tags']));
+
+        return Inertia::render('SingleProject', [
+            'project' => $project,
+        ]);
     }
 }

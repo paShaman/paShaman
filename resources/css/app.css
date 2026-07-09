@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+@theme {
+    --color-primary-dark: #0f172a;
+    --color-primary-light: #f1f5f9;
+    --color-secondary-dark: #1e293b;
+    --color-secondary-light: #f8fafc;
+    --color-ternary-dark: #334155;
+    --color-ternary-light: #cbd5e1;
+}
+
+html {
+    scrollbar-gutter: stable;
+}
