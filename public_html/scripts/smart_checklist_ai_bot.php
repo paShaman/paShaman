@@ -649,6 +649,9 @@ class SmartChecklistAIBot
                 // Запускаем сессию
                 $this->MadelineProto->start();
 
+                // Быстрый прогрев базы диалогов для MadelineProto 8.7+
+                //$this->MadelineProto->getDialogIds();
+
                 // Принудительно импортируем чат в локальную базу сессии, чтобы избежать "Peer not found"
                 $this->MadelineProto->getInfo($this->chatId);
             }
