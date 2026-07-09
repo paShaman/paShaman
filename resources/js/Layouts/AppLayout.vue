@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import AppHeader from '@/Components/shared/AppHeader.vue';
 import AppFooter from '@/Components/shared/AppFooter.vue';
 import BackToTop from '@/Components/shared/BackToTop.vue';
+import AppCanvas from '@/Components/shared/AppCanvas.vue';
 
 const page = usePage();
 const isProject = computed(() => page.component === 'Project');
@@ -15,7 +16,7 @@ const isProject = computed(() => page.component === 'Project');
 
         <main>
             <Transition name="page-fade" mode="out-in">
-<div :key="page.url">
+                <div :key="page.url">
                     <slot />
                 </div>
             </Transition>
@@ -24,6 +25,8 @@ const isProject = computed(() => page.component === 'Project');
         <BackToTop />
 
         <AppFooter />
+
+<AppCanvas />
     </div>
 </template>
 
