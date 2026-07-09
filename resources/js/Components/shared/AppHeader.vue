@@ -1,16 +1,6 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
-import ThemeSwitcher from '@/Components/shared/ThemeSwitcher.vue';
-
-const props = defineProps({
-    theme: {
-        type: String,
-        default: 'light',
-    },
-});
-
-const emit = defineEmits(['themeChanged']);
 
 const gradientClass = ref('');
 
@@ -62,20 +52,6 @@ onMounted(() => {
                         <span class="text-4xl sm:text-5xl bg-gradient-to-r bg-clip-text text-transparent font-bold" :class="gradientClass" @click="calcGradientClass">paShaman</span>
                     </Link>
                 </div>
-
-                <ThemeSwitcher
-                    :theme="theme"
-                    @theme-changed="emit('themeChanged', $event)"
-                    class="block sm:hidden"
-                />
-            </div>
-
-            <div class="hidden sm:flex justify-between items-center">
-                <ThemeSwitcher
-                    :theme="theme"
-                    @theme-changed="emit('themeChanged', $event)"
-                    class="ml-8"
-                />
             </div>
         </div>
     </nav>

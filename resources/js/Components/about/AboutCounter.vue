@@ -1,5 +1,4 @@
 <script setup>
-import { ref, onMounted } from 'vue';
 import { Layout, Clock, Coffee, Globe } from 'lucide-vue-next';
 import AnimatedNumber from '@/Components/about/AnimatedNumber.vue';
 
@@ -21,64 +20,64 @@ function format(num) {
 </script>
 
 <template>
-    <div class="mt-10 sm:mt-20 bg-primary-light dark:bg-ternary-dark shadow-sm">
+    <div class="mt-10 sm:mt-20 bg-primary-light shadow-sm">
         <div class="font-normal container mx-auto py-12 md:py-20 flex sm:justify-between sm:items-center flex-wrap gap-y-12">
             <div class="w-1/2 md:w-auto md:flex-1">
                 <div class="flex items-center gap-2 mb-2 justify-center">
-                    <Layout class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark dark:text-ternary-light" />
+                    <Layout class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark" />
                     <AnimatedNumber
                         :to="counters.projects"
                         :duration="1.2"
                         :format="format"
-                        class="font-medium text-4xl text-secondary-dark dark:text-secondary-light"
+                        class="font-medium text-4xl text-secondary-dark"
                     />
                 </div>
-                <span class="block text-md text-ternary-dark dark:text-ternary-light text-center">
+                <span class="block text-md text-ternary-dark text-center">
                     {{ pluralize(counters.projects, ['Проект', 'Проекта', 'Проектов']) }}
                 </span>
             </div>
 
             <div class="w-1/2 md:w-auto md:flex-1">
                 <div class="flex items-center gap-2 mb-2 justify-center">
-                    <Clock class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark dark:text-ternary-light" />
+                    <Clock class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark" />
                     <AnimatedNumber
                         :to="counters.experience"
                         :duration="1"
                         :format="format"
-                        class="font-medium text-4xl text-secondary-dark dark:text-secondary-light"
+                        class="font-medium text-4xl text-secondary-dark"
                     />
                 </div>
-                <span class="block text-md text-ternary-dark dark:text-ternary-light text-center">
+                <span class="block text-md text-ternary-dark text-center">
                     {{ pluralize(counters.experience, ['Год опыта', 'Года опыта', 'Лет опыта']) }}
                 </span>
             </div>
 
             <div class="w-1/2 md:w-auto md:flex-1">
                 <div class="flex items-center gap-2 mb-2 justify-center">
-                    <Coffee class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark dark:text-ternary-light" />
+                    <Coffee class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark" />
                     <AnimatedNumber
                         :to="counters.cups"
                         :duration="1.3"
                         :format="format"
-                        class="font-medium text-4xl text-secondary-dark dark:text-secondary-light"
+                        class="font-medium text-4xl text-secondary-dark"
                     />
                 </div>
-                <span class="block text-md text-ternary-dark dark:text-ternary-light text-center">
+                <span class="block text-md text-ternary-dark text-center">
                     {{ pluralize(counters.cups, ['Чашка кофе', 'Чашки кофе', 'Чашек кофе']) }}
                 </span>
             </div>
 
             <div class="w-1/2 md:w-auto md:flex-1">
                 <div class="flex items-center gap-2 mb-2 justify-center">
-                    <Globe class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark dark:text-ternary-light" />
+                    <Globe class="w-5 sm:w-8 h-5 sm:h-8 text-ternary-dark" />
                     <AnimatedNumber
                         :to="counters.countries"
                         :duration="1.1"
                         :format="format"
-                        class="font-medium text-4xl text-secondary-dark dark:text-secondary-light"
+                        class="font-medium text-4xl text-secondary-dark"
                     />
                 </div>
-                <span class="block text-md text-ternary-dark dark:text-ternary-light text-center">
+                <span class="block text-md text-ternary-dark text-center">
                     {{ pluralize(counters.countries, ['Страна посещена', 'Страны посещено', 'Стран посещено']) }}
                 </span>
             </div>

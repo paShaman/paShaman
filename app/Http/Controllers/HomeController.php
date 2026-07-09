@@ -34,12 +34,12 @@ class HomeController extends BaseController
         }
 
         // Счётчики
-        $startYear = 2006;
+        $startYear = config('site.startYear', 2006);
         $counters = [
             'projects'   => Project::where('active', '!=', 0)->count(),
             'experience' => date('Y') - $startYear,
             'cups'       => (int)(((date('Y') - $startYear) * 365 * 100 + date('z') * rand(100, 200)) / 100),
-            'countries'  => 27,
+            'countries'  => config('site.countries', 27),
         ];
 
         return Inertia::render('Home', [

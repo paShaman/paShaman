@@ -12,10 +12,10 @@ defineOptions({ layout: AppLayout });
         <h1 class="text-8xl sm:text-9xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
             404
         </h1>
-        <p class="text-2xl sm:text-3xl font-semibold text-ternary-dark dark:text-primary-light mt-4 mb-8">
+        <p class="text-2xl sm:text-3xl font-semibold text-ternary-dark mt-4 mb-8">
             Страница не найдена
         </p>
-        <p class="text-gray-400 dark:text-gray-500 mb-8 max-w-md">
+        <p class="text-gray-400 mb-8 max-w-md">
             Запрашиваемая страница не существует или была перемещена.
         </p>
         <Link

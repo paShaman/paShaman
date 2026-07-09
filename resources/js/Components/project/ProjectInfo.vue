@@ -57,8 +57,8 @@ onMounted(() => {
                 </a>
             </Fancybox>
 
-            <div v-else class="flex items-center justify-center w-full h-48 bg-gray-300 rounded dark:bg-gray-700 animate-pulse">
-                <svg class="w-10 h-10 text-gray-200 dark:text-gray-600" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 18">
+            <div v-else class="flex items-center justify-center w-full h-48 bg-gray-300 rounded animate-pulse">
+                <svg class="w-10 h-10 text-gray-200" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 18">
                     <path d="M18 0H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2Zm-5.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm4.376 10.481A1 1 0 0 1 16 15H4a1 1 0 0 1-.895-1.447l3.5-7A1 1 0 0 1 7.468 6a.965.965 0 0 1 .9.5l2.775 4.757 1.546-1.887a1 1 0 0 1 1.618.1l2.541 4a1 1 0 0 1 .028 1.011Z"/>
                 </svg>
             </div>
@@ -68,19 +68,19 @@ onMounted(() => {
         <div class="w-full md:w-1/3 text-left mt-10 md:mt-0">
             <!-- Skeleton loader -->
             <div v-if="!project.image" class="w-full animate-pulse">
-                <div class="h-2.5 bg-gray-200 rounded-full dark:bg-gray-700 w-48 mb-4"></div>
-                <div class="h-2 bg-gray-200 rounded-full dark:bg-gray-700 max-w-[480px] mb-2.5"></div>
-                <div class="h-2 bg-gray-200 rounded-full dark:bg-gray-700 mb-2.5"></div>
-                <div class="h-2 bg-gray-200 rounded-full dark:bg-gray-700 max-w-[440px] mb-2.5"></div>
-                <div class="h-2 bg-gray-200 rounded-full dark:bg-gray-700 max-w-[460px] mb-2.5"></div>
-                <div class="h-2 bg-gray-200 rounded-full dark:bg-gray-700 max-w-[360px]"></div>
+                <div class="h-2.5 bg-gray-200 rounded-full w-48 mb-4"></div>
+                <div class="h-2 bg-gray-200 rounded-full max-w-[480px] mb-2.5"></div>
+                <div class="h-2 bg-gray-200 rounded-full mb-2.5"></div>
+                <div class="h-2 bg-gray-200 rounded-full max-w-[440px] mb-2.5"></div>
+                <div class="h-2 bg-gray-200 rounded-full max-w-[460px] mb-2.5"></div>
+                <div class="h-2 bg-gray-200 rounded-full max-w-[360px]"></div>
             </div>
 
             <template v-if="project.image">
                 <!-- Authors -->
                 <div class="mb-7">
                     <ul class="leading-loose grid gap-3">
-                        <li v-for="author in project.authors" :key="author.id" class="font-normal text-ternary-dark dark:text-ternary-light flex items-center gap-5">
+                        <li v-for="author in project.authors" :key="author.id" class="font-normal text-ternary-dark flex items-center gap-5">
                             <img :src="project.host + author.image" class="w-16 rounded-full" alt="" />
                             <div>
                                 <span v-if="!author.site">{{ author.name }}</span>
@@ -95,21 +95,21 @@ onMounted(() => {
 
                 <!-- Description -->
                 <div class="mb-7" v-if="project.info">
-                    <p class="font-medium text-2xl text-ternary-dark dark:text-ternary-light mb-2">Описание</p>
-                    <p class="font-normal text-primary-dark dark:text-ternary-light">
+                    <p class="font-medium text-2xl text-ternary-dark mb-2">Описание</p>
+                    <p class="font-normal text-primary-dark">
                         {{ project.info }}
                     </p>
                 </div>
 
                 <!-- Tags -->
                 <div class="mb-7">
-                    <p class="font-medium text-2xl text-ternary-dark dark:text-ternary-light mb-2">Теги</p>
-                    <div class="font-normal text-primary-dark dark:text-ternary-light flex gap-1 flex-wrap">
+                    <p class="font-medium text-2xl text-ternary-dark mb-2">Теги</p>
+                    <div class="font-normal text-primary-dark flex gap-1 flex-wrap">
                         <Link
                             v-for="tag in project.tags"
                             :key="tag"
                             :href="`/?tag=${tag}`"
-                            class="inline-block rounded-md px-2.5 border-2 dark:border-white/20 hover:border-gray-400 cursor-pointer"
+                            class="inline-block rounded-md px-2.5 border-2 hover:border-gray-400 cursor-pointer"
                         >
                             {{ tag }}
                         </Link>
@@ -118,7 +118,7 @@ onMounted(() => {
 
                 <!-- Versions -->
                 <div class="mb-7" v-if="project.versions && project.versions.length > 1">
-                    <p class="font-medium text-2xl text-ternary-dark dark:text-ternary-light mb-2">Версии</p>
+                    <p class="font-medium text-2xl text-ternary-dark mb-2">Версии</p>
                     <div class="flex flex-wrap gap-2">
                         <Link
                             v-for="version in project.versions"
@@ -134,7 +134,7 @@ onMounted(() => {
 
                 <!-- Years -->
                 <div class="mb-7" v-if="project.years && project.years.length > 1">
-                    <p class="font-medium text-2xl text-ternary-dark dark:text-ternary-light mb-2">Года</p>
+                    <p class="font-medium text-2xl text-ternary-dark mb-2">Года</p>
                     <div class="flex flex-wrap gap-2">
                         <Link
                             v-for="year in project.years"

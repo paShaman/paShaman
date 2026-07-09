@@ -53,7 +53,7 @@ onMounted(() => {
 <template>
     <section class="flex flex-col sm:justify-between items-center sm:flex-row mt-12 sm:mt-10">
         <div class="w-full text-left">
-            <h1 class="font-semibold text-3xl md:text-3xl xl:text-4xl text-center sm:text-left text-ternary-dark dark:text-primary-light">
+            <h1 class="font-semibold text-3xl md:text-3xl xl:text-4xl text-center sm:text-left text-ternary-dark">
                 Павел Никитин
             </h1>
             <p class="font-medium mt-2 text-lg sm:text-xl xl:text-2xl text-center sm:text-left leading-snug text-gray-400">
