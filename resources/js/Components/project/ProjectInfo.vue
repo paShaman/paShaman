@@ -18,7 +18,7 @@ defineProps({
                 <a :href="project.host + (project.image_full || project.image)" data-fancybox>
                     <img
                         :src="project.host + project.image"
-                        class="rounded-2xl sm:rounded-3xl cursor-pointer shadow-card hover:shadow-card-hover transition-shadow duration-300"
+                        class="rounded-2xl sm:rounded-3xl cursor-pointer shadow-card hover:shadow-card-hover transition-shadow duration-300 w-full"
                         alt=""
                         loading="lazy"
                     />
@@ -61,16 +61,8 @@ defineProps({
                     </ul>
                 </div>
 
-                <!-- Description -->
-                <div class="mb-8" v-if="project.info">
-                    <p class="font-display text-xl text-text-primary mb-3">Описание</p>
-                    <p class="text-sm text-text-secondary leading-relaxed">
-                        {{ project.info }}
-                    </p>
-                </div>
-
                 <!-- Tags -->
-                <div class="mb-8">
+                <div class="mb-8" v-if="project.tags && project.tags.length">
                     <p class="font-display text-xl text-text-primary mb-3">Теги</p>
                     <div class="flex gap-1.5 flex-wrap">
                         <Link
@@ -82,6 +74,14 @@ defineProps({
                             {{ tag }}
                         </Link>
                     </div>
+                </div>
+
+                <!-- Description -->
+                <div class="mb-8" v-if="project.info">
+                    <p class="font-display text-xl text-text-primary mb-3">Описание</p>
+                    <p class="text-sm text-text-secondary leading-relaxed">
+                        {{ project.info }}
+                    </p>
                 </div>
 
                 <!-- Versions -->

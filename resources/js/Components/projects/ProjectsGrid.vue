@@ -17,6 +17,7 @@ const props = defineProps({
 
 const searchProject = ref('');
 const selectedTags = ref([]);
+const showTags = ref(false);
 
 const filteredProjects = computed(() => {
     let result = props.projects;
@@ -72,7 +73,13 @@ function selectTags(tags) {
 
                 <!-- Tags -->
                 <div class="flex justify-center">
-                    <ProjectsTags :tags="tags" :cnt="props.projects.length" @select-tags="selectTags" />
+                    <ProjectsTags
+                        :tags="tags"
+                        :cnt="props.projects.length"
+                        :show="showTags"
+                        @toggle="showTags = !showTags"
+                        @select-tags="selectTags"
+                    />
                 </div>
             </div>
 

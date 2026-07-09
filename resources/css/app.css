@@ -39,11 +39,12 @@
  * Global base styles
  */
 html {
-    scrollbar-gutter: stable;
     scroll-behavior: smooth;
+    overflow-x: hidden;
 }
 
 body {
+    overflow-x: hidden;
     font-family: var(--font-sans);
     background-color: var(--color-warm-bg);
     color: var(--color-text-primary);

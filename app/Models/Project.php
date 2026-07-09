@@ -160,8 +160,26 @@ class Project extends Model {
             }
         }
 
-        $project->prev = '/projects/' . $prev;
-        $project->next = '/projects/' . $next;
+        // Fetch names for prev/next
+        $prevName = '';
+        $nextName = '';
+        for ($i = 0; $i < count($projects); $i++) {
+            if ($projects[$i]['link'] === $prev) {
+                $prevName = $projects[$i]['name'];
+            }
+            if ($projects[$i]['link'] === $next) {
+                $nextName = $projects[$i]['name'];
+            }
+        }
+
+        $project->prev = [
+            'link' => '/projects/' . $prev,
+            'name' => $prevName,
+        ];
+        $project->next = [
+            'link' => '/projects/' . $next,
+            'name' => $nextName,
+        ];
         $works = [];
 
         //check work

@@ -20,7 +20,7 @@ defineProps({
         <div class="overflow-hidden">
             <img
                 :src="project.image"
-                class="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500"
+                class="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
                 alt=""
                 loading="lazy"
             />
@@ -55,7 +55,7 @@ defineProps({
         <div class="overflow-hidden">
             <img
                 :src="project.image"
-                class="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500"
+                class="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
                 alt=""
                 loading="lazy"
             />
