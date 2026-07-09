@@ -1,4 +1,6 @@
 <script setup>
+import { X } from 'lucide-vue-next';
+
 const props = defineProps({
     tags: {
         type: Array,
@@ -12,25 +14,6 @@ const props = defineProps({
 
 const emit = defineEmits(['select-tags']);
 
-function calcTagClass(tag) {
-    if (tag.selected) {
-        return 'bg-rose-600 text-rose-200 border-rose-900';
-    }
-    if (tag.count >= 100) {
-        return 'bg-violet-300 text-violet-700 hover:border-violet-700 border-violet-400';
-    }
-    if (tag.count >= 30) {
-        return 'bg-emerald-300 text-emerald-700 hover:border-emerald-700 border-emerald-400';
-    }
-    if (tag.count >= 10) {
-        return 'bg-amber-300 text-amber-700 hover:border-amber-700 border-amber-400';
-    }
-    if (tag.count >= 5) {
-        return 'bg-cyan-200 text-cyan-600 hover:border-cyan-600 border-cyan-300';
-    }
-    return 'bg-gray-100 text-gray-500 hover:border-gray-500 border-gray-200';
-}
-
 function toggleTag(tag) {
     tag.selected = !tag.selected;
     emit('select-tags', props.tags.filter((el) => el.selected));
@@ -40,24 +23,39 @@ function selectAll() {
     props.tags.forEach((t) => (t.selected = false));
     emit('select-tags', []);
 }
+
+function isAllSelected() {
+    return props.tags.every((t) => !t.selected);
+}
 </script>
 
 <template>
-    <div class="flex gap-2 flex-wrap">
-        <span
-            class="inline-block rounded-md px-2.5 cursor-pointer transition-all border-2 duration-300 bg-white hover:border-gray-500"
+    <div class="flex gap-2 flex-wrap items-center">
+        <!-- All button -->
+        <button
             @click="selectAll()"
+            class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-300 border cursor-pointer"
+            :class="isAllSelected()
+                ? 'bg-accent-terracotta text-white border-accent-terracotta'
+                : 'bg-warm-surface text-text-secondary border-border-default hover:border-accent-terracotta hover:text-accent-terracotta'"
         >
-            Все - <b>{{ cnt }}</b>
-        </span>
-        <div v-for="tag in tags" :key="tag.name">
-            <span
-                class="inline-block rounded-md px-2.5 cursor-pointer transition-all border-2 duration-300"
-                :class="calcTagClass(tag)"
-                @click="toggleTag(tag)"
-            >
-                {{ tag.name }} - <b>{{ tag.count }}</b>
-            </span>
-        </div>
+            <span>Все</span>
+            <span class="tabular-nums opacity-70">{{ cnt }}</span>
+        </button>
+
+        <!-- Tag pills -->
+        <button
+            v-for="tag in tags"
+            :key="tag.name"
+            @click="toggleTag(tag)"
+            class="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-300 border cursor-pointer"
+            :class="tag.selected
+                ? 'bg-accent-terracotta text-white border-accent-terracotta'
+                : 'bg-warm-surface text-text-secondary border-border-default hover:border-accent-sage hover:text-accent-sage'"
+        >
+            <span>{{ tag.name }}</span>
+            <span class="tabular-nums opacity-70">{{ tag.count }}</span>
+            <X v-if="tag.selected" class="w-3 h-3 shrink-0" />
+        </button>
     </div>
 </template>

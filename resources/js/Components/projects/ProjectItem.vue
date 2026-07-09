@@ -10,58 +10,73 @@ defineProps({
 </script>
 
 <template>
+    <!-- Active project -->
     <Link
         v-if="project.link !== '#'"
         :href="project.link"
-        class="rounded-xl shadow-lg hover:shadow-xl mb-10 sm:mb-0 bg-secondary-light block"
+        class="group block rounded-2xl sm:rounded-3xl overflow-hidden bg-warm-surface shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300"
         aria-label="Single Project"
     >
-        <div>
+        <div class="overflow-hidden">
             <img
                 :src="project.image"
-                class="rounded-t-xl border-none aspect-square object-cover"
+                class="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500"
                 alt=""
+                loading="lazy"
             />
         </div>
-        <div class="px-4 py-6">
-            <div class="flex items-center justify-between mb-2 gap-3">
-                <div class="text-xl text-ternary-dark font-semibold flex-1 text-left text-nowrap overflow-ellipsis overflow-hidden">
+        <div class="px-5 py-5">
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <h3 class="text-lg font-semibold text-text-primary flex-1 text-left truncate">
                     {{ project.name }}
-                </div>
-                <div class="font-semibold text-gray-500 shrink-0">
+                </h3>
+                <span class="text-sm text-text-muted shrink-0">
                     {{ project.date }}
-                </div>
+                </span>
             </div>
-            <div class="font-medium text-gray-400 text-nowrap overflow-ellipsis overflow-hidden w-full">
-                {{ project.tags.join(' ') }}
+            <div class="flex gap-1.5 flex-wrap">
+                <span
+                    v-for="tag in project.tags"
+                    :key="tag"
+                    class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium bg-accent-terracotta-light/30 text-text-secondary"
+                >
+                    {{ tag }}
+                </span>
             </div>
         </div>
     </Link>
 
-    <!-- Скрытый проект (режим full=false) -->
+    <!-- Hidden project (link === '#') -->
     <span
         v-else
-        class="rounded-xl shadow-lg hover:shadow-xl mb-10 sm:mb-0 bg-secondary-light block"
+        class="group block rounded-2xl sm:rounded-3xl overflow-hidden bg-warm-surface shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300"
         aria-label="Hidden Project"
     >
-        <div>
+        <div class="overflow-hidden">
             <img
                 :src="project.image"
-                class="rounded-t-xl border-none aspect-square object-cover"
+                class="w-full aspect-[4/3] object-cover group-hover:scale-105 transition-transform duration-500"
                 alt=""
+                loading="lazy"
             />
         </div>
-        <div class="px-4 py-6">
-            <div class="flex items-center justify-between mb-2 gap-3">
-                <div class="text-xl text-ternary-dark font-semibold flex-1 text-left text-nowrap overflow-ellipsis overflow-hidden">
+        <div class="px-5 py-5">
+            <div class="flex items-center justify-between gap-3 mb-2">
+                <h3 class="text-lg font-semibold text-text-primary flex-1 text-left truncate">
                     {{ project.name }}
-                </div>
-                <div class="font-semibold text-gray-500 shrink-0">
+                </h3>
+                <span class="text-sm text-text-muted shrink-0">
                     {{ project.date }}
-                </div>
+                </span>
             </div>
-            <div class="font-medium text-gray-400 text-nowrap overflow-ellipsis overflow-hidden w-full">
-                {{ project.tags.join(' ') }}
+            <div class="flex gap-1.5 flex-wrap">
+                <span
+                    v-for="tag in project.tags"
+                    :key="tag"
+                    class="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium bg-accent-terracotta-light/30 text-text-secondary"
+                >
+                    {{ tag }}
+                </span>
             </div>
         </div>
     </span>

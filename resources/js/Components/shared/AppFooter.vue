@@ -12,30 +12,36 @@ function iconComponent(icon) {
 </script>
 
 <template>
-    <div class="container mx-auto">
-        <div class="pt-20 sm:pt-30 pb-8 mt-20 border-t-2 border-primary-light">
-            <!-- Footer social links -->
-            <div class="flex flex-col justify-center items-center mb-12 sm:mb-20">
-                <p class="font-semibold text-3xl sm:text-4xl text-primary-dark mb-5">
-                    Социальные сети
-                </p>
-                <ul class="flex gap-4 sm:gap-8">
+    <footer class="relative">
+        <!-- Wave divider -->
+        <div class="wave-divider" aria-hidden="true">
+            <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
+                <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,26.09,214.34,3V0H0V27.35A600.21,600.21,0,0,0,321.39,56.44Z" fill="#ffffff"/>
+            </svg>
+        </div>
+
+        <!-- Footer content -->
+        <div class="bg-warm-surface pt-14 pb-8">
+            <div class="container mx-auto px-4 sm:px-6">
+                <!-- Social icons -->
+                <div class="flex justify-center gap-4 sm:gap-5 mb-10">
                     <a
                         v-for="social in socials"
                         :key="social.id"
                         :href="social.url"
                         target="_blank"
-                        class="text-gray-400 hover:text-indigo-500 cursor-pointer rounded-lg bg-gray-50 hover:bg-gray-100 shadow-sm p-4 duration-500"
+                        class="flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-warm-bg text-text-muted hover:bg-accent-terracotta hover:text-white transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-1 cursor-pointer"
+                        :title="social.icon"
                     >
-                        <component :is="iconComponent(social.icon)" class="w-5 sm:w-8 h-5 sm:h-8" />
+                        <component :is="iconComponent(social.icon)" class="w-5 sm:w-6 h-5 sm:h-6" />
                     </a>
-                </ul>
-            </div>
+                </div>
 
-            <!-- Footer copyright -->
-            <div class="text-center text-gray-500 text-sm">
-                &copy; {{ new Date().getFullYear() }} paShaman. Все права защищены.
+                <!-- Copyright -->
+                <div class="text-center text-text-muted text-sm">
+                    &copy; {{ new Date().getFullYear() }} paShaman. Все права защищены.
+                </div>
             </div>
         </div>
-    </div>
+    </footer>
 </template>

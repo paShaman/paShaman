@@ -5,7 +5,7 @@ import BackToTop from '@/Components/shared/BackToTop.vue';
 </script>
 
 <template>
-    <div class="pt-0.5 min-h-screen bg-secondary-light">
+    <div class="min-h-screen bg-warm-bg">
         <AppHeader />
 
         <main>

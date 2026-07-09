@@ -11,27 +11,29 @@ defineProps({
 
 <template>
     <div>
-        <p class="text-left text-3xl sm:text-4xl font-bold text-primary-dark mt-14 sm:mt-20 mb-7">
+        <!-- Project name -->
+        <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary mt-10 sm:mt-16 mb-6">
             <span v-if="project.name">{{ project.name }}</span>
-            <div v-else class="h-4 bg-gray-200 rounded-full w-48 mb-4"></div>
-        </p>
+            <div v-else class="h-5 bg-border-default rounded-full w-48 mb-4 animate-pulse"></div>
+        </h1>
 
-        <div class="flex gap-4 sm:gap-10 flex-wrap" v-if="project.date">
-            <div class="flex items-center">
-                <Clock class="w-4 h-4 text-ternary-dark" />
-                <span class="font-medium ml-2 text-primary-dark">{{ project.date }}</span>
+        <!-- Meta pills -->
+        <div class="flex gap-3 flex-wrap" v-if="project.date">
+            <div class="inline-flex items-center gap-2 rounded-full px-3.5 py-2 bg-warm-surface border border-border-default text-sm text-text-secondary">
+                <Clock class="w-3.5 h-3.5 text-accent-terracotta" />
+                <span>{{ project.date }}</span>
             </div>
-            <div class="flex items-center" v-if="project.site">
-                <Link class="w-4 h-4 text-ternary-dark" />
+            <div class="inline-flex items-center gap-2 rounded-full px-3.5 py-2 bg-warm-surface border border-border-default text-sm text-text-secondary" v-if="project.site">
+                <Link class="w-3.5 h-3.5 text-accent-sage" />
                 <a
                     :href="project.site"
                     target="_blank"
-                    class="font-medium ml-2 text-primary-dark hover:underline cursor-pointer"
+                    class="hover:text-accent-terracotta transition-colors"
                 >{{ project.site }}</a>
             </div>
-            <div class="flex items-center" v-if="project.current_version">
-                <Tag class="w-4 h-4 text-ternary-dark shrink-0" />
-                <span class="font-medium ml-2 text-primary-dark">Версия {{ project.current_version }}</span>
+            <div class="inline-flex items-center gap-2 rounded-full px-3.5 py-2 bg-warm-surface border border-border-default text-sm text-text-secondary" v-if="project.current_version">
+                <Tag class="w-3.5 h-3.5 text-accent-amber" />
+                <span>Версия {{ project.current_version }}</span>
             </div>
         </div>
     </div>

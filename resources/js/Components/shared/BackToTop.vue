@@ -26,9 +26,9 @@ onUnmounted(() => {
         <button
             v-if="visible"
             @click="scrollToTop"
-            class="fixed right-8 bottom-5 p-2 bg-indigo-500 hover:bg-indigo-600 text-white transition duration-500 ease-in-out transform hover:-translate-y-1 hover:scale-110 shadow-lg z-50"
-            style="border-radius: 50%; font-size: 22px; line-height: 22px;"
+            class="fixed right-6 bottom-6 p-3 bg-accent-terracotta hover:bg-accent-terracotta/90 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 z-50 cursor-pointer"
             title="Наверх"
+            aria-label="Наверх"
         >
             <ChevronUp class="w-5 h-5" />
         </button>
