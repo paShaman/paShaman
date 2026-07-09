@@ -39,7 +39,6 @@
  * Global base styles
  */
 html {
-    scroll-behavior: smooth;
     overflow-x: hidden;
 }
 

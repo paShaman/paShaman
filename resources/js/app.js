@@ -15,8 +15,4 @@ createInertiaApp({
     progress: {
         color: '#e07a5f',
     },
-    scrollBehavior() {
-        // Всегда сбрасываем скролл при навигации
-        return [0, 0];
-    },
 });

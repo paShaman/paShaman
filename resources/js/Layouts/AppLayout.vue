@@ -10,7 +10,7 @@ const isHome = computed(() => page.component === 'Home');
 </script>
 
 <template>
-    <div class="min-h-screen bg-warm-bg">
+    <div class="bg-warm-bg">
         <AppHeader :is-home="isHome" />
 
         <main>
