@@ -1,11 +1,19 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+
+defineProps({
+    isHome: {
+        type: Boolean,
+        default: false,
+    },
+});
 </script>
 
 <template>
     <header class="relative py-8 sm:py-10">
-        <!-- Background blob -->
+        <!-- Background blob — only on detail pages -->
         <div
+            v-if="!isHome"
             class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-4/5 w-[350px] sm:w-[600px] aspect-square rounded-full bg-accent-terracotta/10 animate-blob pointer-events-none"
             aria-hidden="true"
         />
