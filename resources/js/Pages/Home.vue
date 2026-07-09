@@ -8,14 +8,6 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 defineOptions({ layout: AppLayout });
 
 defineProps({
-    projects: {
-        type: Array,
-        default: () => [],
-    },
-    tags: {
-        type: Array,
-        default: () => [],
-    },
     counters: {
         type: Object,
         default: () => ({}),
@@ -41,7 +33,7 @@ defineProps({
 
         <div class="container mx-auto">
             <!-- Projects -->
-            <ProjectsGrid :projects="projects" :tags="tags" />
+            <ProjectsGrid />
         </div>
     </div>
 </template>

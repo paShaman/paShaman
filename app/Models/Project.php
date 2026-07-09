@@ -27,13 +27,38 @@ class Project extends Model {
     }
 
     /**
-     * получаем список
+     * получаем список (с пагинацией, поиском и фильтрацией)
      */
-    public function getList(bool $showHidden = false)
+    public function getList(bool $showHidden = false, int $page = 1, int $perPage = 12, string $search = '', array $tags = []): array
     {
-        $projects = self::where('active', '!=', 0)
-            ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
+        $query = self::where('active', '!=', 0);
+
+        // Фильтр по тегам
+        if (!empty($tags)) {
+            $query->where(function ($q) use ($tags) {
+                foreach ($tags as $tag) {
+                    $q->where('tags', 'LIKE', '%' . $tag . '%');
+                }
+            });
+        }
+
+        // Поиск
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'LIKE', '%' . $search . '%')
+                  ->orWhere('link', 'LIKE', '%' . $search . '%')
+                  ->orWhere('tags', 'LIKE', '%' . $search . '%');
+            });
+        }
+
+        $total = $query->count();
+        $totalPages = (int) ceil($total / $perPage);
+
+        $projects = $query
+            ->orderBy(DB::raw('STR_TO_DATE( `date`, "%m/%Y" )'), 'desc')
             ->orderBy('id', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
             ->get()
         ;
 
@@ -68,7 +93,13 @@ class Project extends Model {
             }
         }
 
-        return $projects->toArray();
+        return [
+            'projects'   => $projects->toArray(),
+            'page'       => $page,
+            'totalPages' => $totalPages,
+            'hasMore'    => $page < $totalPages,
+            'total'      => $total,
+        ];
     }
 
     /**
@@ -138,7 +169,7 @@ class Project extends Model {
 
         //prev next
         $projects = self::whereIn('active', $showHidden ? [1, 2] : [1])
-            ->orderBy(DB::raw('STR_TO_DATE( date, "%m/%Y" )'), 'desc')
+            ->orderByRaw('STR_TO_DATE(`date`, "%m/%Y") DESC')
             ->orderBy('id', 'desc')
             ->get()
             ->toArray()
