@@ -169,7 +169,7 @@ class Project extends Model {
 
         //prev next
         $projects = self::whereIn('active', $showHidden ? [1, 2] : [1])
-            ->orderByRaw('STR_TO_DATE(`date`, "%m/%Y") DESC')
+            ->orderByRaw("SUBSTR(`date`, 4, 4) DESC, SUBSTR(`date`, 1, 2) DESC")
             ->orderBy('id', 'desc')
             ->get()
             ->toArray()
