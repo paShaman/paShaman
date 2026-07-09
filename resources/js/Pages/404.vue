@@ -1,5 +1,6 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import { ArrowLeft } from '@lucide/vue';
 import AppLayout from '@/Layouts/AppLayout.vue';
 
 defineOptions({ layout: AppLayout });
@@ -8,21 +9,34 @@ defineOptions({ layout: AppLayout });
 <template>
     <Head title="404 — Страница не найдена" />
 
-    <div class="container mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <h1 class="text-8xl sm:text-9xl font-bold bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-            404
-        </h1>
-        <p class="text-2xl sm:text-3xl font-semibold text-ternary-dark mt-4 mb-8">
-            Страница не найдена
-        </p>
-        <p class="text-gray-400 mb-8 max-w-md">
-            Запрашиваемая страница не существует или была перемещена.
-        </p>
-        <Link
-            href="/"
-            class="font-medium flex items-center px-6 py-3 rounded-lg shadow-lg hover:shadow-xl bg-indigo-500 hover:bg-indigo-600 text-white duration-300 cursor-pointer"
-        >
-            На главную
-        </Link>
+    <div class="container mx-auto flex flex-col items-center justify-center min-h-[70vh] text-center px-4 sm:px-6">
+        <!-- Decorative blob -->
+        <div
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] sm:w-[500px] aspect-square rounded-full bg-accent-terracotta/8 animate-blob pointer-events-none"
+            aria-hidden="true"
+        />
+
+        <div class="relative z-10">
+            <!-- 404 heading -->
+            <h1 class="font-display text-[8rem] sm:text-[10rem] leading-none font-bold text-accent-terracotta/20 select-none">
+                404
+            </h1>
+
+            <p class="font-display text-2xl sm:text-3xl font-bold text-text-primary mt-2 mb-3">
+                Страница не найдена
+            </p>
+
+            <p class="text-text-muted mb-10 max-w-md text-base leading-relaxed">
+                Запрашиваемая страница не существует или была перемещена.
+            </p>
+
+            <Link
+                href="/"
+                class="group inline-flex items-center gap-2.5 rounded-2xl bg-accent-terracotta text-white px-6 py-3.5 font-medium shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-300 cursor-pointer"
+            >
+                <ArrowLeft class="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+                На главную
+            </Link>
+        </div>
     </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
+import { ArrowLeft, ArrowRight } from '@lucide/vue';
 
 defineProps({
     prev: {

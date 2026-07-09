@@ -18,6 +18,11 @@ class ProjectController extends BaseController
             abort(404);
         }
 
+        // Если проект скрытый (active=2) а куки full нет — 404
+        if ($projectData->active == 2 && !$showHidden) {
+            abort(404);
+        }
+
         $currentVersion = false;
 
         if (count($projectData->versions) > 1) {

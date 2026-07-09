@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { X, ChevronDown } from 'lucide-vue-next';
+import { X, ChevronDown } from '@lucide/vue';
 
 const props = defineProps({
     tags: {

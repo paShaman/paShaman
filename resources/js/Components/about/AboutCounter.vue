@@ -1,5 +1,5 @@
 <script setup>
-import { Layout, Clock, Coffee, Globe } from 'lucide-vue-next';
+import { Layout, Clock, Coffee, Globe } from '@lucide/vue';
 import AnimatedNumber from '@/Components/about/AnimatedNumber.vue';
 
 defineProps({

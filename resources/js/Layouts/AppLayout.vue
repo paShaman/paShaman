@@ -14,7 +14,11 @@ const isHome = computed(() => page.component === 'Home');
         <AppHeader :is-home="isHome" />
 
         <main>
-            <slot />
+            <Transition name="page-fade" mode="out-in">
+<div :key="page.url">
+                    <slot />
+                </div>
+            </Transition>
         </main>
 
         <BackToTop />
@@ -22,3 +26,14 @@ const isHome = computed(() => page.component === 'Home');
         <AppFooter />
     </div>
 </template>
+
+<style scoped>
+.page-fade-enter-active,
+.page-fade-leave-active {
+    transition: opacity 0.25s ease;
+}
+.page-fade-enter-from,
+.page-fade-leave-to {
+    opacity: 0;
+}
+</style>

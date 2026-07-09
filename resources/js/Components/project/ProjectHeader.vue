@@ -1,5 +1,5 @@
 <script setup>
-import { Clock, Globe, Tag } from 'lucide-vue-next';
+import { Clock, Globe, Tag } from '@lucide/vue';
 import { Link } from '@inertiajs/vue3';
 
 defineProps({

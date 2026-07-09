@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Search } from 'lucide-vue-next';
+import { Search } from '@lucide/vue';
 import ProjectsTags from './ProjectsTags.vue';
 import ProjectItem from './ProjectItem.vue';
 

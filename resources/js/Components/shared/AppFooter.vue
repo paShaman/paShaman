@@ -1,12 +1,12 @@
 <script setup>
 import { usePage } from '@inertiajs/vue3';
-import { Globe, Linkedin, Link, Send } from 'lucide-vue-next';
+import { Globe, ExternalLink, Link, Send } from '@lucide/vue';
 import { computed } from 'vue';
 
 const socials = computed(() => usePage().props.site?.social || []);
 
 function iconComponent(icon) {
-    const icons = { globe: Globe, linkedin: Linkedin, link: Link, send: Send };
+    const icons = { globe: Globe, linkedin: ExternalLink, link: Link, send: Send };
     return icons[icon] || Link;
 }
 </script>
