@@ -35,12 +35,12 @@ curl_setopt_array($ch, [
     CURLOPT_POSTFIELDS => json_encode(['command' => $command, 'alice' => $input]),
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
     CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_TIMEOUT_MS => 300,   // 0.3 сек — только чтобы отправить
+    CURLOPT_TIMEOUT => 1,
 ]);
 $resp = curl_exec($ch);
 
 // Сразу отвечаем Алисе
 echo json_encode([
-    'response' => ['text' => 'Передала Гермесу', 'end_session' => true],
+    'response' => ['text' => 'Передал Гермесу', 'end_session' => true],
     'version' => '1.0'
 ], JSON_UNESCAPED_UNICODE);
