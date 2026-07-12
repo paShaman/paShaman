@@ -34,22 +34,13 @@ curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => json_encode(['command' => $command, 'alice' => $input]),
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 4,
+    CURLOPT_RETURNTRANSFER => false,
+    CURLOPT_TIMEOUT_MS => 300,   // 0.3 сек — только чтобы отправить
 ]);
 $resp = curl_exec($ch);
-$httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
 
-$text = '';
-if ($httpcode == 200 && $resp) {
-    $data = json_decode($resp, true);
-    $text = is_array($data) ? ($data['text'] ?? '') : '';
-}
-
-$alice_text = $text !== '' ? $text : 'Передала Гермесу';
-
+// Сразу отвечаем Алисе
 echo json_encode([
-    'response' => ['text' => $alice_text, 'tts' => $alice_text, 'end_session' => true],
+    'response' => ['text' => 'Передала Гермесу', 'end_session' => true],
     'version' => '1.0'
 ], JSON_UNESCAPED_UNICODE);
