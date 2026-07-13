@@ -175,6 +175,11 @@ class SmartChecklistAIBot
         // ------------------------------------------------------------
         $this->sendEarlyResponseAndContinue();
 
+        // fastcgi_finish_request() НЕ сбрасывает max_execution_time — таймер продолжает
+        // идти с начала скрипта. Без этого PHP может убить процесс по таймауту
+        // прямо посреди работы MadelineProto.
+        @set_time_limit(0);
+
         // Запускаем основную тяжелую логику в фоне
         try {
             $result = $this->processRequest();
@@ -627,6 +632,60 @@ class SmartChecklistAIBot
     // ОТПРАВКА В TELEGRAM
     // ============================================================
 
+    /**
+     * Удаляет зависшие lock/ipc-socket файлы MadelineProto, оставшиеся от аварийно
+     * завершившегося IPC-воркера. Не трогает файлы самой сессии/авторизации —
+     * только служебные .lock/.sock файлы, которые пересоздаются автоматически.
+     * Файл считается "зомби", если не менялся дольше $staleAfterSeconds —
+     * это защищает от удаления лока живого, просто медленного, процесса.
+     */
+    private function cleanStaleMadelineLocks(string $sessionDir, int $staleAfterSeconds = 60): void
+    {
+        if (!is_dir($sessionDir)) {
+            return;
+        }
+
+        // Точные имена служебных IPC/lock-файлов MadelineProto (не session-данные!).
+        // Эти файлы пересоздаются автоматически при следующем старте.
+        // НИКОГДА не трогаем safe.php и lightState.php — там реальные данные авторизации сессии.
+        $candidates = [
+            'ipc',
+            'callback.ipc',
+            'ipcState.php',
+            'lock',
+            'lightState.php.lock',
+            'safe.php.lock',
+        ];
+
+        $now = time();
+        $removed = [];
+
+        foreach ($candidates as $name) {
+            $file = $sessionDir . '/' . $name;
+            if (!file_exists($file)) {
+                continue;
+            }
+            $mtime = @filemtime($file);
+            if ($mtime !== false && ($now - $mtime) > $staleAfterSeconds) {
+                if (@unlink($file)) {
+                    $removed[] = $name;
+                }
+            }
+        }
+
+        if (!empty($removed) && $this->logTgErrors) {
+            file_put_contents(
+                'tg_api_errors.log',
+                sprintf(
+                    "%s | MadelineProto removed stale ipc/lock files: %s\n",
+                    date('Y-m-d H:i:s'),
+                    implode(', ', $removed)
+                ),
+                FILE_APPEND
+            );
+        }
+    }
+
     /** Отправляет/редактирует нативный чек-лист через MadelineProto (для групп, от своего имени) */
     private function sendFromMyself(array $entries, ?int $replyToMessageId = null, ?int $authorId = null): bool
     {
@@ -644,16 +703,37 @@ class SmartChecklistAIBot
 
                 $settings->getLogger()->setLevel(\danog\MadelineProto\Logger::LEVEL_ERROR);
 
+                // Чистим зависшие lock/socket файлы от упавшего IPC-воркера,
+                // чтобы start() не завис навсегда, ожидая мёртвый процесс
+                $this->cleanStaleMadelineLocks('session_' . $sessionUserId);
+
                 $this->MadelineProto = new API('session_' . $sessionUserId, $settings);
 
                 // Запускаем сессию
                 $this->MadelineProto->start();
 
-                // Быстрый прогрев базы диалогов для MadelineProto 8.7+
-                //$this->MadelineProto->getDialogIds();
+                // Получаем инфо о чате. Если peer ещё не закэширован в локальной базе
+                // сессии (новый чат / новая группа) — getInfo() бросает исключение
+                // "This peer is not present in the internal peer database".
+                // В этом случае прогреваем полную базу диалогов и пробуем резолв ещё раз.
+                try {
+                    $this->MadelineProto->getInfo($this->chatId);
+                } catch (\Throwable $e) {
+                    if ($this->logTgErrors) {
+                        file_put_contents(
+                            'tg_api_errors.log',
+                            sprintf(
+                                "%s | MadelineProto getInfo(%s) failed: %s — прогреваю getDialogIds()\n",
+                                date('Y-m-d H:i:s'),
+                                $this->chatId,
+                                $e->getMessage()
+                            ),
+                            FILE_APPEND
+                        );
+                    }
 
-                // Принудительно импортируем чат в локальную базу сессии, чтобы избежать "Peer not found"
-                $this->MadelineProto->getInfo($this->chatId);
+                    $this->MadelineProto->getDialogIds();
+                }
             }
 
             // Форматируем элементы под спецификацию TodoItem и textWithEntities
