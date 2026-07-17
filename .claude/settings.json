@@ -1,24 +1,20 @@
 {
   "hooks": {
-    "PreToolUse": [
+    "PreToolUse": [],
+    "UserPromptSubmit": [
       {
-        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\nikit\\.local\\bin\\graphify.EXE hook-guard search"
-          }
-        ]
-      },
-      {
-        "matcher": "Read|Glob",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Users\\nikit\\.local\\bin\\graphify.EXE hook-guard read"
+            "command": "codegraph prompt-hook"
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__codegraph__*"
     ]
   }
 }
