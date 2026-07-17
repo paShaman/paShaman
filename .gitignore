@@ -12,8 +12,9 @@ package-lock.json
 /node_modules
 /public_html/build
 /composer.lock
-/graphify-out/
-/.claude/
-AGENTS.md
-/.codegraph/
-/.mcp.json
+.claude
+.codegraph
+.mcp.json
+.clinerules
+/AGENTS.md
+/CLAUDE.md
