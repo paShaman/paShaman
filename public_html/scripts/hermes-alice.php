@@ -35,7 +35,7 @@ curl_setopt_array($ch, [
     CURLOPT_POSTFIELDS => json_encode(['command' => $command, 'alice' => $input]),
     CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
     CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_TIMEOUT => 1,
+    CURLOPT_TIMEOUT => 2,
 ]);
 $resp = curl_exec($ch);
 
