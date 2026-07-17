@@ -142,6 +142,8 @@ class SmartChecklistAIBot
             return 'forbidden';
         }
 
+        if ($this->text !== null && str_starts_with($this->text, '/ask'))   { $this->handleAsk(); return 'ok'; }
+
         if ($this->isGroup && !$this->groupsEnabled) {
             return 'groups_disabled';
         }
@@ -224,6 +226,33 @@ class SmartChecklistAIBot
     private function handleTgId(): void
     {
         $this->sendTelegramMessage("🆔 {$this->userId}; 👤 @{$this->username}");
+    }
+
+    /** Обработчик команды /ask <текст> — прямой запрос в DeepSeek, ответ отправляется в чат */
+    private function handleAsk(): void
+    {
+        $askText = trim(mb_substr($this->text, mb_strlen('/ask')));
+
+        if ($askText === '') {
+            return;
+        }
+
+        $totalStart = microtime(true);
+
+        $this->sendTelegramMessage("⏳ Спрашиваю DeepSeek\\.\\.\\.", isStatusMessage: true);
+
+        $answer = $this->askDeepSeekDirect($askText);
+
+        if (mb_strlen($answer) > 30000) {
+            $answer = mb_substr($answer, 0, 30000) . '…';
+        }
+
+        $sent = $this->sendRichMessage($answer);
+
+        $totalTime = round(microtime(true) - $totalStart, 2);
+        $timeStr = str_replace(".", "\\.", (string)$totalTime);
+
+        $this->editStatusMessage($sent ? "✅ Готово за `{$timeStr}с`" : "⚠️ Ошибка отправки ответа");
     }
 
     // ============================================================
@@ -555,21 +584,38 @@ class SmartChecklistAIBot
     /** Отправляет промпт в DeepSeek API и возвращает структурированный список задач */
     private function askDeepSeek(): string
     {
+        return $this->callDeepSeek([
+            [
+                'role' => 'system',
+                'content' => "Ты — утилита для структурирования задач. Твоя цель — извлечь список дел из хаотичного текста. Правила:\n1. Одна задача — одна строка.\n2. Никаких дефисов, звездочек, цифр и галочек в начале строки.\n3. Никакого вводного текста, пояснений или Markdown форматирования.\n4. Только сухой текст действий.",
+            ],
+            [
+                'role' => 'user',
+                'content' => $this->prompt,
+            ],
+        ]);
+    }
+
+    /** Отправляет произвольный текст напрямую в DeepSeek (команда /ask) и возвращает ответ как есть */
+    private function askDeepSeekDirect(string $text): string
+    {
+        return $this->callDeepSeek([
+            [
+                'role' => 'user',
+                'content' => $text,
+            ],
+        ]);
+    }
+
+    /** Общий вызов DeepSeek API с заданными messages: логирование, usage-статистика, обработка ошибок */
+    private function callDeepSeek(array $messages): string
+    {
         $startApi = microtime(true);
 
         $url = 'https://api.deepseek.com/chat/completions';
         $payload = [
             'model' => $this->deepseekModel,
-            'messages' => [
-                [
-                    'role' => 'system',
-                    'content' => "Ты — утилита для структурирования задач. Твоя цель — извлечь список дел из хаотичного текста. Правила:\n1. Одна задача — одна строка.\n2. Никаких дефисов, звездочек, цифр и галочек в начале строки.\n3. Никакого вводного текста, пояснений или Markdown форматирования.\n4. Только сухой текст действий.",
-                ],
-                [
-                    'role' => 'user',
-                    'content' => $this->prompt,
-                ],
-            ],
+            'messages' => $messages,
             'temperature' => 0.2,
             'stream' => false,
         ];
@@ -854,6 +900,40 @@ class SmartChecklistAIBot
         }
 
         $this->sendCurl($url, $payload, $isStatusMessage);
+    }
+
+    /**
+     * Отправляет rich message (см. https://core.telegram.org/bots/api#rich-message-formatting-options) —
+     * нативно поддерживает markdown-разметку DeepSeek (заголовки, списки, таблицы, --- и т\.д\.) без ручного
+     * экранирования под MarkdownV2/HTML. При ошибке — фолбэк на обычное текстовое сообщение.
+     */
+    private function sendRichMessage(string $content): bool
+    {
+        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendRichMessage';
+        $payload = [
+            'chat_id' => $this->chatId,
+            'rich_message' => ['markdown' => $content],
+        ];
+
+        if ($this->businessConnectionId !== '' && $this->isBusiness) {
+            $payload['business_connection_id'] = $this->businessConnectionId;
+        }
+
+        if ($this->sendCurl($url, $payload)) {
+            return true;
+        }
+
+        $fallbackUrl = 'https://api.telegram.org/bot' . $this->tgToken . '/sendMessage';
+        $fallbackPayload = [
+            'chat_id' => $this->chatId,
+            'text' => $content,
+        ];
+
+        if ($this->businessConnectionId !== '' && $this->isBusiness) {
+            $fallbackPayload['business_connection_id'] = $this->businessConnectionId;
+        }
+
+        return $this->sendCurl($fallbackUrl, $fallbackPayload);
     }
 
     /** Универсальный cURL-метод для отправки запросов к Telegram Bot API */
