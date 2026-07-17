@@ -11,3 +11,4 @@ composer.phar
 package-lock.json
 /node_modules
 /public_html/build
+/composer.lock
