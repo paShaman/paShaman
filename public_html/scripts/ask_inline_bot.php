@@ -91,33 +91,29 @@ class DeepSeekInlineBot
     {
         $answer = $this->askDeepSeekDirect($this->queryText);
 
-        if (mb_strlen($answer) > 4000) {
-            $answer = mb_substr($answer, 0, 4000) . '…';
-        }
+        // Убираем из ответа звёздочки, подчёркивания, бэктики и решётки заголовков
+        $cleanDescription = preg_replace('/[\*_`#]/', '', $answer);
+        $cleanDescription = trim(preg_replace('/\s+/', ' ', $cleanDescription));
 
-        // Безопасно экранируем текст для HTML
         $safeQuery = htmlspecialchars($this->queryText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
-        // Переводим маркдаун жирный от DeepSeek (если есть) в HTML, а остальное экранируем.
-        // Если DeepSeek возвращает сложную разметку, лучше просто сделать htmlspecialchars на весь ответ,
-        // либо сделать базовую замену **текст** на <b>текст</b>.
         $safeAnswer = htmlspecialchars($answer, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $safeAnswer = preg_replace('/(\*\*|__)(.*?)\1/', '<b>$2</b>', $safeAnswer);
 
-        // Убираем из ответа звёздочки, подчёркивания, бэктики и решётки заголовков
-        $cleanDescription = preg_replace('/[\*_`#]/', '', $answer);
-
-        // На всякий случай схлопнем лишние пробелы, если они образовались
-        $cleanDescription = trim(preg_replace('/\s+/', ' ', $cleanDescription));
+        $messagePrefix = "<b>Вопрос:</b> {$safeQuery}\n\n<b>Ответ:</b>\n";
+        $maxAnswerLen = 4096 - mb_strlen($messagePrefix, 'UTF-8') - 3;
+        if (mb_strlen($safeAnswer, 'UTF-8') > $maxAnswerLen) {
+            $safeAnswer = mb_substr($safeAnswer, 0, $maxAnswerLen, 'UTF-8') . '…';
+        }
 
         $results = [
             [
                 'type' => 'article',
                 'id' => uniqid(more_entropy: true),
                 'title' => 'Ответ от DeepSeek',
-                'description' => mb_substr($cleanDescription, 0, 100) . '...',
+                'description' => mb_substr($cleanDescription, 0, 100, 'UTF-8') . '...',
                 'input_message_content' => [
-                    'message_text' => "<b>Вопрос:</b> {$safeQuery}\n\n<b>Ответ:</b>\n{$safeAnswer}",
+                    'message_text' => $messagePrefix . $safeAnswer,
                     'parse_mode' => 'HTML',
                 ]
             ]
@@ -131,8 +127,8 @@ class DeepSeekInlineBot
      */
     private function answerSimple(string $title, string $text): void
     {
-        // Безопасно экранируем текст для HTML
-        $safeQuery = htmlspecialchars($this->queryText, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $safeQuery = htmlspecialchars($this->queryText ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $safeText = htmlspecialchars($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
         $results = [
             [
@@ -141,12 +137,12 @@ class DeepSeekInlineBot
                 'title' => $title,
                 'description' => $text,
                 'input_message_content' => [
-                    'message_text' => "<b>Вопрос:</b> {$safeQuery}\n\n<b>Ошибка:</b>\n{$text}",
+                    'message_text' => "<b>Вопрос:</b> {$safeQuery}\n\n<b>Ошибка:</b>\n{$safeText}",
                     'parse_mode' => 'HTML',
                 ]
             ]
         ];
-        $this->sendInlineAnswer($results);
+        $this->sendInlineAnswer($results, isFallback: true);
     }
 
     private function askDeepSeekDirect(string $text): string
@@ -167,6 +163,7 @@ class DeepSeekInlineBot
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload, JSON_UNESCAPED_UNICODE));
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
@@ -185,7 +182,7 @@ class DeepSeekInlineBot
         return $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.";
     }
 
-    private function sendInlineAnswer(array $results): void
+    private function sendInlineAnswer(array $results, bool $isFallback = false): void
     {
         $url = 'https://api.telegram.org/bot' . $this->tgToken . '/answerInlineQuery';
         $payload = [
@@ -196,6 +193,7 @@ class DeepSeekInlineBot
 
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
@@ -203,12 +201,17 @@ class DeepSeekInlineBot
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
 
+        $logDir = __DIR__ . '/logs';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+
         $hasError = false;
 
         if ($curlError) {
             $hasError = true;
             file_put_contents(
-                'ask_errors.log',
+                $logDir . '/ask_errors.log',
                 sprintf("%s | URL: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, $curlError, print_r($payload, true)),
                 FILE_APPEND
             );
@@ -219,14 +222,14 @@ class DeepSeekInlineBot
             if (isset($resArr['ok']) && $resArr['ok'] === false) {
                 $hasError = true;
                 file_put_contents(
-                    'tg_api_errors.log',
+                    $logDir . '/tg_api_errors.log',
                     sprintf("%s | URL: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, $response, print_r($payload, true)),
                     FILE_APPEND
                 );
             }
         }
 
-        if ($hasError) {
+        if ($hasError && !$isFallback) {
             $this->answerSimple('Ошибка', 'Сократите вопрос или попробуйте позже');
         }
     }
