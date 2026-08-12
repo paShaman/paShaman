@@ -10,7 +10,7 @@ let dots = [];
 let animationId = null;
 
 const mouse = { x: 0, y: 0 };
-const spacing = 35;
+let spacing = 35;
 const padding = 20;
 
 function getAngle(obj1, obj2) {
@@ -102,10 +102,26 @@ function animate() {
     animationId = requestAnimationFrame(animate);
 }
 
+function onVisibilityChange() {
+    if (document.hidden) {
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+    } else if (!animationId) {
+        animationId = requestAnimationFrame(animate);
+    }
+}
+
 onMounted(() => {
     const canvas = canvasRef.value;
     ctx = canvas.getContext('2d');
     ratio = window.devicePixelRatio || 1;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (window.matchMedia('(pointer: coarse)').matches) {
+        spacing = 60;
+    }
 
     updateBounds();
     createDots();
@@ -114,8 +130,13 @@ onMounted(() => {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('resize', resize);
     window.addEventListener('scroll', updateBounds, { passive: true });
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
-    animationId = requestAnimationFrame(animate);
+    if (reducedMotion) {
+        render();
+    } else {
+        animationId = requestAnimationFrame(animate);
+    }
 });
 
 onUnmounted(() => {
@@ -125,6 +146,7 @@ onUnmounted(() => {
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('resize', resize);
     window.removeEventListener('scroll', updateBounds);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 </script>
 

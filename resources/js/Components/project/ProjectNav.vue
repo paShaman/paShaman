@@ -15,7 +15,7 @@ defineProps({
 </script>
 
 <template>
-    <div class="flex justify-between gap-4 mt-12 sm:mt-16 mb-8">
+    <div class="flex justify-between gap-4 mt-12 sm:mt-16 mb-8" v-reveal="{ delay: 160 }">
         <Link
             v-if="prev"
             :href="prev.link"

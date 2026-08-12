@@ -35,15 +35,27 @@
     --font-display: 'Playfair Display', Georgia, serif;
 }
 
+@layer base {
+    h1, h2, h3, h4, h5, h6 {
+        text-wrap: balance;
+    }
+
+    p {
+        text-wrap: pretty;
+    }
+}
+
 /*
  * Global base styles
  */
 html {
-    overflow-x: hidden;
+    overflow-x: clip;
+    overflow-anchor: none;
 }
 
 body {
-    overflow-x: hidden;
+    overflow-x: clip;
+    overflow-anchor: none;
     font-family: var(--font-sans);
     background: var(--color-warm-bg);
     color: var(--color-text-primary);
@@ -79,6 +91,21 @@ body {
     background: var(--color-text-muted);
 }
 
+/* --- Lenis (smooth scroll) --- */
+html.lenis,
+html.lenis body {
+    height: auto;
+}
+.lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+    overflow: hidden;
+}
+
 /* Blob animations */
 @keyframes blob-breathe {
     0%, 100% { transform: scale(1) rotate(0deg); }
@@ -105,6 +132,13 @@ body {
     animation: fade-up 0.6s ease-out forwards;
 }
 
+/* Staggered hero entrance (inline-block words / block sections) */
+.hero-word,
+.hero-stagger {
+    opacity: 0;
+    animation: fade-up 0.6s ease-out var(--hero-delay, 0ms) forwards;
+}
+
 /* Wave divider */
 .wave-divider {
     position: relative;
@@ -117,4 +151,47 @@ body {
     display: block;
     width: calc(100% + 1.3px);
     height: 60px;
+}
+
+/* Scroll reveal (driven by v-reveal directive) */
+.reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+        opacity 0.6s ease var(--reveal-delay, 0ms),
+        transform 0.6s ease var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+}
+.reveal.is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-loading {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+.skeleton-shimmer {
+    background: linear-gradient(90deg, var(--color-border-subtle) 25%, #f6f1ea 37%, var(--color-border-subtle) 63%);
+    background-size: 400% 100%;
+    animation: skeleton-loading 1.4s ease infinite;
+}
+
+/* Reduce motion — kill all animation/transition */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
 }

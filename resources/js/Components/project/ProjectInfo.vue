@@ -11,7 +11,7 @@ defineProps({
 </script>
 
 <template>
-    <div class="block md:flex gap-0 sm:gap-10 mt-10 sm:mt-14">
+    <div class="block md:flex gap-0 sm:gap-10 mt-10 sm:mt-14" v-reveal="{ delay: 80 }">
         <!-- Left: project image -->
         <div class="w-full md:w-2/3 text-left">
             <Fancybox v-if="project.image">

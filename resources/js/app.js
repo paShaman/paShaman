@@ -1,5 +1,7 @@
 import { createApp, h } from 'vue';
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
+import { initLenis, getLenis } from './composables/useLenis';
+import reveal from './directives/reveal';
 import '../css/app.css';
 
 createInertiaApp({
@@ -10,9 +12,22 @@ createInertiaApp({
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)
+            .directive('reveal', reveal)
             .mount(el);
+
+        initLenis();
     },
     progress: {
         color: '#e07a5f',
     },
+});
+
+router.on('navigate', () => {
+    const lenis = getLenis();
+    if (!lenis) return;
+
+    // Inertia уже сбросил скролл (обычная навигация) или восстановил
+    // сохранённую позицию (back/forward). Синхронизируем Lenis с реальной позицией,
+    // иначе его внутренний таргет вернёт скролл на старое место.
+    lenis.scrollTo(window.scrollY, { immediate: true });
 });

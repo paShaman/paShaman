@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { ChevronUp } from '@lucide/vue';
+import { lenisScrollTo } from '@/composables/useLenis';
 
 const visible = ref(false);
 
@@ -9,7 +10,7 @@ function onScroll() {
 }
 
 function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    lenisScrollTo(0);
 }
 
 onMounted(() => {

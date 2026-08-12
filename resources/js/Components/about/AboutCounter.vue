@@ -20,7 +20,7 @@ function format(num) {
 </script>
 
 <template>
-    <div class="relative py-6 sm:py-0">
+    <div class="relative py-6 sm:py-0" v-reveal>
         <!-- Floating card -->
         <div class="container mx-auto px-4 sm:px-6">
             <div class="relative z-10 -mt-10 sm:-mt-16 bg-warm-surface shadow-float rounded-2xl sm:rounded-3xl px-4 py-10 sm:px-12 sm:py-14">

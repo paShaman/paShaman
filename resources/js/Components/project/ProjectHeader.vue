@@ -11,7 +11,7 @@ defineProps({
 </script>
 
 <template>
-    <div>
+    <div v-reveal>
         <!-- Project name -->
         <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-text-primary mb-4">
             <span v-if="project.name">{{ project.name }}</span>

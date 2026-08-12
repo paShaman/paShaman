@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Search } from '@lucide/vue';
 import ProjectsTags from './ProjectsTags.vue';
 import ProjectItem from './ProjectItem.vue';
+import ProjectSkeleton from './ProjectSkeleton.vue';
 
 const props = defineProps({
     initialTag: {
@@ -135,10 +136,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <section class="pt-16 sm:pt-24 pb-12 sm:pb-20">
+    <section id="projects" class="pt-16 sm:pt-24 pb-12 sm:pb-20 scroll-mt-24">
         <div class="container mx-auto px-4 sm:px-6">
             <!-- Section header -->
-            <div class="text-center mb-10 sm:mb-14">
+            <div class="text-center mb-10 sm:mb-14" v-reveal>
                 <h2 class="font-display text-3xl sm:text-5xl font-bold text-text-primary mb-2">
                     Проекты
                 </h2>
@@ -148,7 +149,7 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Search & Tags -->
-            <div class="mb-8 space-y-4">
+            <div class="mb-8 space-y-4" v-reveal="{ delay: 80 }">
                 <!-- Search -->
                 <div class="relative max-w-md mx-auto">
                     <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
@@ -174,9 +175,8 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Loading state (initial) -->
-            <div v-if="initialLoading" class="text-center py-16">
-                <div class="inline-block w-8 h-8 border-3 border-accent-terracotta/30 border-t-accent-terracotta rounded-full animate-spin"></div>
-                <p class="text-text-muted mt-4">Загрузка проектов...</p>
+            <div v-if="initialLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                <ProjectSkeleton v-for="i in 6" :key="`sk-${i}`" />
             </div>
 
             <!-- Empty state -->
@@ -189,19 +189,16 @@ onBeforeUnmount(() => {
             <template v-else>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                     <ProjectItem
-                        v-for="project in projects"
+                        v-for="(project, index) in projects"
                         :key="project.id"
                         :project="project"
+                        v-reveal="{ delay: (index % 3) * 90 }"
                     />
+                    <ProjectSkeleton v-for="i in (loading ? 3 : 0)" :key="`load-${i}`" />
                 </div>
 
-                <!-- Loading more indicator -->
-                <div v-if="hasMore" class="text-center py-8">
-                    <div
-                        v-if="loading"
-                        class="inline-block w-6 h-6 border-3 border-accent-terracotta/30 border-t-accent-terracotta rounded-full animate-spin"
-                    ></div>
-                </div>
+                <!-- Loading more spacer -->
+                <div v-if="hasMore" class="h-8"></div>
             </template>
 
             <!-- Sentinel для Intersection Observer -->
