@@ -1,5 +1,7 @@
 <script setup>
+import { onMounted, onBeforeUnmount } from 'vue';
 import { Head } from '@inertiajs/vue3';
+import { lenisScrollTo } from '@/composables/useLenis';
 import AppBanner from '@/Components/shared/AppBanner.vue';
 import AboutCounter from '@/Components/about/AboutCounter.vue';
 import ProjectsGrid from '@/Components/projects/ProjectsGrid.vue';
@@ -7,7 +9,7 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 
 defineOptions({ layout: AppLayout });
 
-defineProps({
+const props = defineProps({
     counters: {
         type: Object,
         default: () => ({}),
@@ -20,6 +22,21 @@ defineProps({
         type: String,
         default: '',
     },
+});
+
+let scrollTimer = null;
+
+onMounted(() => {
+    if (!props.initialTag) return;
+
+    // Ждём navigate-синхронизацию Lenis в app.js, затем скроллим к блоку проектов
+    scrollTimer = setTimeout(() => {
+        lenisScrollTo('#projects', { offset: -96 });
+    }, 100);
+});
+
+onBeforeUnmount(() => {
+    if (scrollTimer) clearTimeout(scrollTimer);
 });
 </script>
 

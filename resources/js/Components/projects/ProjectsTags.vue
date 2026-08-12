@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { X, ChevronDown } from '@lucide/vue';
+import AnimatedNumber from '@/Components/about/AnimatedNumber.vue';
 
 const props = defineProps({
     tags: {
@@ -107,7 +108,7 @@ function isAllSelected() {
                     : 'bg-warm-surface text-text-secondary border-border-default hover:border-accent-terracotta hover:text-accent-terracotta'"
             >
                 <span>Все</span>
-                <span class="tabular-nums opacity-70">{{ cnt }}</span>
+                <span class="tabular-nums opacity-70"><AnimatedNumber :to="cnt" :duration="0.8" /></span>
             </button>
 
             <button

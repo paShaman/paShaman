@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 const props = defineProps({
     to: {
@@ -17,11 +17,13 @@ const props = defineProps({
 });
 
 const current = ref(0);
+let rafId = null;
 
-onMounted(() => {
+function animateTo(to) {
+    if (rafId) cancelAnimationFrame(rafId);
+
+    const from = current.value;
     const startTime = performance.now();
-    const from = 0;
-    const to = props.to;
     const duration = props.duration * 1000;
 
     function step(time) {
@@ -31,11 +33,25 @@ onMounted(() => {
         current.value = Math.round(from + (to - from) * progress);
 
         if (progress < 1) {
-            requestAnimationFrame(step);
+            rafId = requestAnimationFrame(step);
+        } else {
+            rafId = null;
         }
     }
 
-    requestAnimationFrame(step);
+    rafId = requestAnimationFrame(step);
+}
+
+watch(() => props.to, (to) => {
+    animateTo(to);
+});
+
+onMounted(() => {
+    animateTo(props.to);
+});
+
+onBeforeUnmount(() => {
+    if (rafId) cancelAnimationFrame(rafId);
 });
 </script>
 

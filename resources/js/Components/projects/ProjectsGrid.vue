@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Search } from '@lucide/vue';
+import AnimatedNumber from '@/Components/about/AnimatedNumber.vue';
 import ProjectsTags from './ProjectsTags.vue';
 import ProjectItem from './ProjectItem.vue';
 import ProjectSkeleton from './ProjectSkeleton.vue';
@@ -144,7 +145,8 @@ onBeforeUnmount(() => {
                     Проекты
                 </h2>
                 <p class="text-text-muted text-sm sm:text-base">
-                    {{ total }} {{ total === 1 ? 'проект' : (total >= 2 && total <= 4 ? 'проекта' : 'проектов') }}
+                    <AnimatedNumber :to="total" :duration="0.8" />
+                    {{ total === 1 ? 'проект' : (total >= 2 && total <= 4 ? 'проекта' : 'проектов') }}
                 </p>
             </div>
 
