@@ -31,3 +31,12 @@ router.on('navigate', () => {
     // иначе его внутренний таргет вернёт скролл на старое место.
     lenis.scrollTo(window.scrollY, { immediate: true });
 });
+
+// После обновления страницы браузер восстанавливает позицию скролла асинхронно —
+// уже после инициализации Lenis. Синхронизируем таргет, чтобы Lenis не считал
+// скролл нулевым и не «уводил» страницу вверх при первом же скролле.
+window.addEventListener('load', () => {
+    const lenis = getLenis();
+    if (!lenis) return;
+    lenis.scrollTo(window.scrollY, { immediate: true });
+});
