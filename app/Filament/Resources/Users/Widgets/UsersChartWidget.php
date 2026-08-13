@@ -63,12 +63,6 @@ class UsersChartWidget extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Проекты за год',
-                    'data' => $projects,
-                    'backgroundColor' => '#3b82f6',
-                    'borderRadius' => 4,
-                ],
-                [
                     'label' => 'Клиентов за год',
                     'type' => 'line',
                     'data' => $clients,
@@ -76,6 +70,12 @@ class UsersChartWidget extends ChartWidget
                     'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
                     'tension' => 0.3,
                     'fill' => true,
+                ],
+                [
+                    'label' => 'Проекты за год',
+                    'data' => $projects,
+                    'backgroundColor' => '#3b82f6',
+                    'borderRadius' => 4,
                 ],
             ],
             'labels' => $labels,
