@@ -27,6 +27,9 @@ class UsersTable
                     ->searchable(),
                 TextColumn::make('nick')
                     ->searchable(),
+                TextColumn::make('projects_count')
+                    ->label('Проекты')
+                    ->counts('projects'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
