@@ -14,6 +14,18 @@ class EditMoney extends EditRecord
 {
     protected static string $resource = MoneyResource::class;
 
+    protected function getSaveFormAction(): Action
+    {
+        return parent::getSaveFormAction()
+            ->icon(Heroicon::OutlinedCheck);
+    }
+
+    protected function getCancelFormAction(): Action
+    {
+        return parent::getCancelFormAction()
+            ->icon(Heroicon::OutlinedXMark);
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -49,7 +61,8 @@ class EditMoney extends EditRecord
                         ->success()
                         ->send();
                 }),
-            DeleteAction::make(),
+            DeleteAction::make()
+                ->icon(Heroicon::OutlinedTrash),
         ];
     }
 }
