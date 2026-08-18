@@ -40,6 +40,7 @@ final class GloProTrackerBot
 
     private ?string $tgToken = null;
     private ?string $logPrefix = null;
+    private bool $logTgUpdates = false;
 
     public function __construct()
     {
@@ -212,7 +213,7 @@ final class GloProTrackerBot
 
         $updates = $data['result'] ?? [];
 
-        if ($updates !== []) {
+        if ($updates !== [] && $this->logTgUpdates) {
             $this->log('TG getUpdates: апдейтов ' . count($updates) . "\n"
                 . $this->truncate(json_encode($updates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 2000));
         }
