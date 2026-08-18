@@ -35,6 +35,9 @@ final class GloProTrackerBot
 {
     private const ATOM_NS = 'http://www.w3.org/2005/Atom';
 
+    /** Лимит символов для rich message (sendMessage — 4096). */
+    private const RICH_MAX = 32768;
+
     private ?string $tgToken = null;
     private ?string $logPrefix = null;
 
@@ -262,25 +265,25 @@ final class GloProTrackerBot
 
     private function cmdHelp(): string
     {
-        return "Привет! Я слежу за задачами в Redmine и присылаю изменения.\n\n"
+        return "<b>Привет! Я слежу за задачами в Redmine и присылаю изменения.</b>\n\n"
             . "1. Открой нужный фильтр задач в Redmine и скопируй ссылку «Atom» (issues.atom) целиком, с key=...\n"
-            . "2. Пришли её командой:\n/setkey <ссылка>\n\n"
+            . "2. Пришли её командой:\n<code>/setkey &lt;ссылка&gt;</code>\n\n"
             . "Дальше я сам буду проверять задачи и сообщать о новых, смене статуса и обновлениях.\n\n"
-            . "Команды: /status — статус, /test — текущие задачи, /stop — отключить, /chatid — ID чата.";
+            . "Команды: <code>/status</code> — статус, <code>/test</code> — текущие задачи, <code>/stop</code> — отключить, <code>/chatid</code> — ID чата.";
     }
 
     private function cmdSetKey(string $chatId, string $name, string $username, string $arg): string
     {
         $url = $this->normalizeUrl($arg);
         if ($url === '' || !preg_match('#^https?://#i', $url)) {
-            return "Пришли ссылку целиком:\n/setkey https://cp.glopro.ru/issues.atom?...&key=...\n\n"
-                . "Скопируй её из Redmine (кнопка «Atom» внизу списка задач).";
+            return "<b>Пришли ссылку целиком:</b>\n<code>/setkey https://cp.glopro.ru/issues.atom?...&amp;key=...</code>\n\n"
+                . 'Скопируй её из Redmine (кнопка «Atom» внизу списка задач).';
         }
 
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
-            return 'Не удалось получить задачи по этой ссылке: ' . $e->getMessage() . "\n\n"
+            return 'Не удалось получить задачи по этой ссылке: ' . $this->esc($e->getMessage()) . "\n\n"
                 . 'Проверь, что ссылка скопирована целиком (с key=...). '
                 . 'Если Redmine временно недоступен — попробуй ещё раз через пару минут.';
         }
@@ -300,8 +303,8 @@ final class GloProTrackerBot
         // Сохраняем текущее состояние, чтобы первый cron не прислал все задачи как новые.
         $this->saveState($this->stateFile($chatId), $issues);
 
-        return 'Готово! Ключ принят, задач в выдаче: ' . count($issues) . ".\n\n"
-            . 'Теперь я буду сообщать об изменениях. Проверить подписку: /status';
+        return "<b>Готово!</b> Ключ принят, задач в выдаче: " . count($issues) . ".\n\n"
+            . 'Теперь я буду сообщать об изменениях. Проверить подписку: <code>/status</code>';
     }
 
     private function cmdStatus(string $chatId): string
@@ -320,8 +323,11 @@ final class GloProTrackerBot
             $lastCheck = (new DateTimeImmutable($savedAt))->format('d.m.Y H:i');
         }
 
-        return "Статус:\n• Redmine: {$host}\n• Подписка: активна\n• Последняя проверка: {$lastCheck}\n\n"
-            . "Команды: /test — текущие задачи, /stop — отключить.";
+        return "<b>Статус:</b>\n"
+            . '• Redmine: <code>' . $this->esc($host) . "</code>\n"
+            . "• Подписка: активна\n"
+            . "• Последняя проверка: {$lastCheck}\n\n"
+            . "Команды: <code>/test</code> — текущие задачи, <code>/stop</code> — отключить.";
     }
 
     private function cmdStop(string $chatId): string
@@ -341,7 +347,7 @@ final class GloProTrackerBot
             @unlink($stateFile);
         }
 
-        return $removed ? 'Подписка отключена. Чтобы вернуться — /setkey <ссылка>.' : 'Ты и так не был подписан.';
+        return $removed ? 'Подписка отключена. Чтобы вернуться — <code>/setkey &lt;ссылка&gt;</code>.' : 'Ты и так не был подписан.';
     }
 
     private function cmdTest(string $chatId): string
@@ -349,13 +355,13 @@ final class GloProTrackerBot
         $users = $this->loadUsers();
         $url = trim((string)($users[$chatId]['atom_url'] ?? ''));
         if ($url === '') {
-            return 'Сначала зарегистрируйся: /setkey <ссылка issues.atom>.';
+            return 'Сначала зарегистрируйся: <code>/setkey &lt;ссылка issues.atom&gt;</code>.';
         }
 
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
-            return 'Ошибка: ' . $e->getMessage();
+            return 'Ошибка: ' . $this->esc($e->getMessage());
         }
 
         return $this->buildSummary($issues, parse_url($url, PHP_URL_HOST) ?: 'Redmine');
@@ -515,7 +521,7 @@ final class GloProTrackerBot
     private function buildSummary(array $issues, string $host): string
     {
         $count = count($issues);
-        $lines = ["Redmine: {$host}", "Задач в выдаче: {$count}"];
+        $lines = ['<b>Redmine:</b> ' . $this->esc($host), "Задач в выдаче: {$count}"];
 
         if ($count === 0) {
             return implode("\n", $lines) . "\n";
@@ -524,22 +530,16 @@ final class GloProTrackerBot
         $lines[] = '';
         foreach ($issues as $i => $issue) {
             $num = $i + 1;
-            $id = $issue['id'] ? '#' . $issue['id'] : '—';
-            $tracker = $issue['tracker'] !== '' ? ' · ' . $issue['tracker'] : '';
-            $status = $issue['status'] !== '' ? ' · ' . $issue['status'] : '';
-            $project = $issue['project'] !== '' ? ' · ' . $issue['project'] : '';
+            $id = $issue['id'] ? '<b>#' . $issue['id'] . '</b>' : '—';
+            $tracker = $issue['tracker'] !== '' ? ' · ' . $this->esc($issue['tracker']) : '';
+            $status = $issue['status'] !== '' ? ' · <i>' . $this->esc($issue['status']) . '</i>' : '';
+            $project = $issue['project'] !== '' ? ' · ' . $this->esc($issue['project']) : '';
 
             $lines[] = "{$num}. {$id}{$tracker}{$status}{$project}";
-            $lines[] = '   ' . $issue['subject'];
-            $lines[] = '   Обновлена: ' . $issue['updated']['text'] . ($issue['url'] !== '' ? ' · ' . $issue['url'] : '');
+            $lines[] = '   <h6>' . $this->esc($issue['subject']) . '</h6>';
+            $lines[] = '   <small>Обновлена: ' . $issue['updated']['text'] . ($issue['url'] !== '' ? ' · ' . $this->link($issue['url']) : '') . '</small>';
             $lines[] = '';
         }
-
-        /*
-1. #35541 · В препрод
-   Улучшение #35541 (В препрод): Автозаполнение реквизитов компании в GP.Market
-   Обновлена: 20.07.2026 07:47 · https://cp.glopro.ru/issues/35541
-         */
 
         return implode("\n", $lines);
     }
@@ -663,7 +663,7 @@ final class GloProTrackerBot
                 continue;
             }
             $lines[] = '';
-            $lines[] = $label;
+            $lines[] = '<b>' . $label . '</b>';
             foreach ($groups[$type] as $change) {
                 $lines[] = '• ' . $this->formatChange($change);
             }
@@ -678,23 +678,24 @@ final class GloProTrackerBot
     private function formatChange(array $change): string
     {
         $issue = $change['issue'];
-        $id = $issue['id'] ? '#' . $issue['id'] : '—';
-        $tracker = $issue['tracker'] !== '' ? ' · ' . $issue['tracker'] : '';
-        $status = $issue['status'] !== '' ? ' · ' . $issue['status'] : '';
+        $id = $issue['id'] ? '<b>#' . $issue['id'] . '</b>' : '—';
+        $tracker = $issue['tracker'] !== '' ? ' · ' . $this->esc($issue['tracker']) : '';
+        $status = $issue['status'] !== '' ? ' · <i>' . $this->esc($issue['status']) . '</i>' : '';
 
-        $line = "{$id}{$tracker}{$status} — {$issue['subject']}";
+        $lines = ["{$id}{$tracker}{$status}"];
+        $lines[] = '   <h6>' . $this->esc($issue['subject']) . '</h6>';
 
         if ($change['type'] === 'status') {
-            $line .= " (было: {$change['old_status']})";
+            $lines[] = '   <small>(было: ' . $this->esc((string)$change['old_status']) . ')</small>';
         } elseif ($change['type'] === 'updated' && $issue['updated']['text'] !== '') {
-            $line .= ' (обновлена ' . $issue['updated']['text'] . ')';
+            $lines[] = '   <small>(обновлена ' . $issue['updated']['text'] . ')</small>';
         }
 
         if ($issue['url'] !== '') {
-            $line .= "\n  " . $issue['url'];
+            $lines[] = '   ' . $this->link($issue['url']);
         }
 
-        return $line;
+        return implode("\n", $lines);
     }
 
     // ---------------------------------------------------------------------
@@ -766,30 +767,84 @@ final class GloProTrackerBot
     // Telegram
     // ---------------------------------------------------------------------
 
-    private function sendTelegram(int|string $chatId, string $text): bool
+    /**
+     * Отправляет HTML-сообщение. Rich message целиком (лимит 32768), без разбивки;
+     * при неудаче — фолбек на sendMessage с разбивкой по 4096.
+     */
+    private function sendTelegram(int|string $chatId, string $html): bool
     {
-        $allOk = true;
-        foreach ($this->splitMessage($text) as $chunk) {
-            if (!$this->sendTelegramChunk($chatId, $chunk)) {
-                $allOk = false;
-            }
+        if (mb_strlen($html) <= self::RICH_MAX && $this->sendRichMessage($chatId, $html)) {
+            return true;
         }
+
+        $fallback = $this->richToSendMessageHtml($html);
+
+        $allOk = true;
+        foreach ($this->splitMessage($fallback) as $chunk) {
+            if ($this->sendMessage($chatId, $chunk, 'HTML')) {
+                continue;
+            }
+            if ($this->sendMessage($chatId, html_entity_decode(strip_tags($chunk)), null)) {
+                continue;
+            }
+            $allOk = false;
+        }
+
         return $allOk;
     }
 
-    private function sendTelegramChunk(int|string $chatId, string $text): bool
+    /**
+     * Отправляет rich message (Telegram Bot API sendRichMessage).
+     * Позволяет использовать в HTML details/summary/таблицы.
+     */
+    private function sendRichMessage(int|string $chatId, string $html): bool
     {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendMessage';
-        $payload = [
-            'chat_id' => $chatId,
-            'text' => $text,
-            'disable_web_page_preview' => true,
+        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendRichMessage';
+
+        $postFields = [
+            'chat_id'      => $chatId,
+            // В rich HTML переносы строк схлопываются, поэтому \n -> <br>.
+            'rich_message' => json_encode(['html' => str_replace("\n", '<br>', $html)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $postFields,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if ($response === false || $httpCode >= 400) {
+            return false;
+        }
+
+        $result = json_decode((string)$response, true);
+        return isset($result['ok']) && $result['ok'] === true;
+    }
+
+    /**
+     * Отправляет обычное сообщение (sendMessage) с optional parse_mode.
+     */
+    private function sendMessage(int|string $chatId, string $text, ?string $parseMode = null): bool
+    {
+        $payload = [
+            'chat_id' => $chatId,
+            'text' => $text,
+            'disable_web_page_preview' => true,
+        ];
+        if ($parseMode !== null) {
+            $payload['parse_mode'] = $parseMode;
+        }
+
+        $ch = curl_init('https://api.telegram.org/bot' . $this->tgToken . '/sendMessage');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
@@ -801,8 +856,27 @@ final class GloProTrackerBot
             return false;
         }
 
-        $res = json_decode((string)$response, true);
-        return isset($res['ok']) && $res['ok'] === true;
+        $result = json_decode((string)$response, true);
+        return isset($result['ok']) && $result['ok'] === true;
+    }
+
+    /**
+     * Убирает из rich HTML теги, непонятные sendMessage parse_mode=HTML
+     * (details/summary/p/таблицы), оставляя b/i/code/a/pre.
+     */
+    private function richToSendMessageHtml(string $html): string
+    {
+        $patterns = [
+            '#</?(?:details|summary|p|table|thead|tbody|tr|div|h6)>#' => "\n",
+            '#<br\s*/?>#' => "\n",
+            '#</?small>#' => '',
+            '#<(td|th)[^>]*>#' => ' ',
+            '#</(td|th)>#' => ' ',
+        ];
+
+        $html = (string)preg_replace(array_keys($patterns), array_values($patterns), $html);
+
+        return trim($html);
     }
 
     /**
@@ -918,6 +992,18 @@ final class GloProTrackerBot
     private function out(string $text): void
     {
         echo $text;
+    }
+
+    private function esc(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    private function link(string $url): string
+    {
+        $label = preg_replace('#^https?://#i', '', $url);
+
+        return '<a href="' . $this->esc($url) . '">' . $this->esc((string)$label) . '</a>';
     }
 }
 
