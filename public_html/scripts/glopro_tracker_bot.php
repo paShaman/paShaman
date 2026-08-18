@@ -30,6 +30,9 @@ include __DIR__ . '/_env.php';
  * Конфигурация (getenv):
  *   GLOPRO_TG_TOKEN — токен Telegram-бота
  *   GLOPRO_TZ       — часовой пояс (по умолчанию Europe/Moscow)
+ *
+ * cron
+ *   powershell -Command "while ($true) { php glopro_tracker_bot.php; Start-Sleep -Seconds 300 }"
  */
 final class GloProTrackerBot
 {
