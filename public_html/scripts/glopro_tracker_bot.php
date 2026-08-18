@@ -33,25 +33,39 @@ include __DIR__ . '/_env.php';
  */
 final class GloProTrackerBot
 {
+    /** Пространство имён Atom-фида Redmine. */
     private const ATOM_NS = 'http://www.w3.org/2005/Atom';
 
-    /** Лимит символов для rich message (sendMessage — 4096). */
+    /** Лимит символов для rich message (sendRichMessage). */
     private const RICH_MAX = 32768;
+    /** Лимит символов для обычного sendMessage. */
     private const TEXT_MAX = 4096;
 
+    /** Токен Telegram-бота из окружения (GLOPRO_TG_TOKEN). */
     private ?string $tgToken = null;
+    /** Префикс имени файла лога (glopro_cron / glopro_listen). */
     private ?string $logPrefix = null;
+    /** Флаг: логировать сырые апдейты getUpdates (для отладки). */
     private bool $logTgUpdates = false;
 
     public function __construct()
     {
+        // Токен берём из окружения; если не задан — остаётся null (нужен только в --listen).
         $this->tgToken = trim((string)getenv('GLOPRO_TG_TOKEN')) ?: null;
 
+        // Часовой пояс по умолчанию — Europe/Moscow, переопределяется GLOPRO_TZ.
         date_default_timezone_set(trim((string)getenv('GLOPRO_TZ')) ?: 'Europe/Moscow');
 
         $this->ensureLogsDir();
     }
 
+    /**
+     * Точка входа: диспетчер режимов запуска по аргументам командной строки.
+     *
+     * --listen — long-polling (интерактивный режим, слушает команды в Telegram).
+     * --users  — вывод реестра зарегистрированных пользователей.
+     * (без флагов) — cron: проверка задач для всех пользователей.
+     */
     public function run(array $argv): int
     {
         if (in_array('--listen', $argv, true)) {
@@ -73,6 +87,7 @@ final class GloProTrackerBot
     {
         $this->logPrefix = 'glopro_cron';
 
+        // Нет ни одного зарегистрированного пользователя — делать нечего.
         $users = $this->loadUsers();
         if ($users === []) {
             $this->log('Нет зарегистрированных пользователей — нечего проверять.');
@@ -81,6 +96,7 @@ final class GloProTrackerBot
 
         $this->log('Запуск cron: пользователей ' . count($users));
 
+        // Проверяем задачи и шлём уведомления каждому пользователю отдельно.
         foreach ($users as $chatId => $user) {
             $this->processUser($chatId, $user);
         }
@@ -90,6 +106,9 @@ final class GloProTrackerBot
     }
 
     /**
+     * Обрабатывает одного пользователя: скачивает его фид, сравнивает с прошлым
+     * состоянием и при наличии изменений отправляет уведомление в Telegram.
+     *
      * @param array<string, mixed> $user
      */
     private function processUser(string $chatId, array $user): void
@@ -100,13 +119,16 @@ final class GloProTrackerBot
             return;
         }
 
+        // Скачиваем актуальный список задач по ссылке пользователя.
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
+            // Redmine недоступен или вернул ошибку — пропускаем, не трогая состояние.
             $this->log("❌ Пользователь {$chatId}: " . $e->getMessage());
             return;
         }
 
+        // Сравниваем новое состояние с сохранённым и сразу обновляем файл состояния.
         $stateFile = $this->stateFile($chatId);
         $changes = $this->diffIssues($this->loadState($stateFile), $issues);
         $this->saveState($stateFile, $issues);
@@ -116,6 +138,7 @@ final class GloProTrackerBot
             return;
         }
 
+        // Формируем HTML-сообщение об изменениях и отправляем в чат пользователя.
         $message = $this->buildChangesMessage($changes, parse_url($url, PHP_URL_HOST) ?: 'Redmine');
         $ok = $this->sendTelegram($chatId, $message);
         $this->log(($ok ? '✅' : '❌') . " Пользователь {$chatId}: изменений " . count($changes) . ($ok ? '' : ' (ошибка отправки)') . '.');
@@ -127,6 +150,7 @@ final class GloProTrackerBot
 
     private function listen(): int
     {
+        // Режим --listen требует токен (в cron-режиме он не нужен).
         if ($this->tgToken === null || $this->tgToken === '') {
             $this->out("Ошибка: не задан GLOPRO_TG_TOKEN.\n");
             return 2;
@@ -135,29 +159,36 @@ final class GloProTrackerBot
         $this->logPrefix = 'glopro_listen';
         $offsetFile = __DIR__ . '/logs/glopro.offset';
 
+        // Продолжаем с последнего обработанного update_id (чтобы не потерять апдейты).
         $lastUpdateId = $this->readOffset($offsetFile);
         $this->log("🚀 Long-polling запущен, offset={$lastUpdateId}");
 
+        // Бесконечный цикл long-polling: блокирующий getUpdates с длинным таймаутом.
         while (true) {
             try {
+                // offset+1 — запрашиваем только новые апдейты.
                 $updates = $this->getUpdates($lastUpdateId + 1);
                 if ($updates === null) {
+                    // Сетевой сбой или ошибка API — ждём и пробуем снова.
                     sleep(5);
                     continue;
                 }
 
                 foreach ($updates as $update) {
+                    // Фиксируем offset ДО обработки, чтобы при сбое апдейт не пришёл повторно.
                     $updateId = $update['update_id'] ?? null;
                     if ($updateId !== null) {
                         $lastUpdateId = (int)$updateId;
                         $this->saveOffset($offsetFile, $lastUpdateId);
                     }
 
+                    // Нас интересуют только сообщения (allowed_updates = ["message"]).
                     if (isset($update['message'])) {
                         $this->handleMessage($update['message']);
                     }
                 }
             } catch (\Throwable $e) {
+                // Любая непредвиденная ошибка не должна ронять процесс — логируем и ждём.
                 $this->log('Исключение: ' . $e->getMessage());
                 sleep(5);
             }
@@ -171,6 +202,7 @@ final class GloProTrackerBot
      */
     private function getUpdates(int $offset): ?array
     {
+        // Long polling: timeout=50 — сервер держит соединение до 50 сек, пока не появятся апдейты.
         $params = [
             'offset' => $offset,
             'timeout' => 50,
@@ -181,13 +213,14 @@ final class GloProTrackerBot
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 60,
+            CURLOPT_TIMEOUT => 60,   // чуть больше, чем timeout long-polling
             CURLOPT_CONNECTTIMEOUT => 15,
         ]);
         $response = curl_exec($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
 
+        // Проблемы на уровне соединения — вернём null (вызывающий подождёт и повторит).
         if ($error) {
             $this->log('⚠️ cURL ошибка: ' . $error);
             return null;
@@ -199,6 +232,8 @@ final class GloProTrackerBot
 
         $data = json_decode((string)$response, true);
         if (!$data || !($data['ok'] ?? false)) {
+            // Фатальные ошибки API: неверный токен (401) или конфликт (409 — уже работает
+            // другой экземпляр бота) — продолжать бессмысленно, завершаем процесс.
             $code = $data['error_code'] ?? 0;
             if ($code === 401) {
                 $this->log('❌ Неверный GLOPRO_TG_TOKEN');
@@ -214,6 +249,7 @@ final class GloProTrackerBot
 
         $updates = $data['result'] ?? [];
 
+        // Отладочный лог сырых апдейтов (включается вызовом setLogTgUpdates или вручную).
         if ($updates !== [] && $this->logTgUpdates) {
             $this->log('TG getUpdates: апдейтов ' . count($updates) . "\n"
                 . $this->truncate(json_encode($updates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 2000));
@@ -223,6 +259,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Разбирает сообщение от пользователя и отвечает на команду.
+     *
      * @param array<string, mixed> $message
      */
     private function handleMessage(array $message): void
@@ -232,10 +270,12 @@ final class GloProTrackerBot
         $fromId = $from['id'] ?? null;
         $text = trim((string)($message['text'] ?? ''));
 
+        // Пустые сообщения (например, media без текста) пропускаем.
         if ($text === '' || $chatId === null) {
             return;
         }
 
+        // Разделяем команду и аргумент: "/setkey https://... " -> ["/setkey", "https://..."].
         $parts = preg_split('/\s+/', $text, 2);
         $rawCommand = $parts[0] ?? '';
         $arg = isset($parts[1]) ? trim($parts[1]) : '';
@@ -243,12 +283,14 @@ final class GloProTrackerBot
         // Отрезаем @botname, если команда пришла в группе.
         $command = explode('@', $rawCommand, 2)[0];
 
+        // Собираем имя пользователя для реестра (first_name + last_name, либо @username).
         $name = trim((string)($from['first_name'] ?? ''));
         if (isset($from['last_name'])) {
             $name = trim($name . ' ' . (string)$from['last_name']);
         }
         $username = (string)($from['username'] ?? '');
 
+        // Диспетчер команд. match не знает команды — вернёт null, и мы просто молчим.
         $reply = match ($command) {
             '/start', '/help' => $this->cmdHelp(),
             '/chatid', '/id' => "Chat ID: {$chatId}",
@@ -263,6 +305,7 @@ final class GloProTrackerBot
             return;
         }
 
+        // Отправляем ответ и пишем в лог факт команды (с хостом Redmine для /setkey).
         $ok = $this->sendTelegram($chatId, $reply);
 
         $extra = '';
@@ -289,6 +332,7 @@ final class GloProTrackerBot
                 . 'Скопируй её из Redmine (кнопка «Atom» внизу списка задач).';
         }
 
+        // Проверяем ссылку «живым» запросом: если фид не грузится — не регистрируем.
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
@@ -297,6 +341,7 @@ final class GloProTrackerBot
                 . 'Если Redmine временно недоступен — попробуй ещё раз через пару минут.';
         }
 
+        // Сохраняем пользователя в реестр под блокировкой (защита от гонок с cron).
         $this->withUserLock(function () use ($chatId, $name, $username, $url) {
             $users = $this->loadUsers();
             $users[$chatId] = [
@@ -326,6 +371,7 @@ final class GloProTrackerBot
         $url = (string)($users[$chatId]['atom_url'] ?? '');
         $host = parse_url($url, PHP_URL_HOST) ?: '—';
 
+        // Показываем время последней успешной проверки из файла состояния.
         $savedAt = $this->loadStateSavedAt($this->stateFile($chatId));
         $lastCheck = '—';
         if ($savedAt !== null) {
@@ -341,6 +387,7 @@ final class GloProTrackerBot
 
     private function cmdStop(string $chatId): string
     {
+        // Удаляем пользователя из реестра под блокировкой.
         $removed = false;
         $this->withUserLock(function () use ($chatId, &$removed) {
             $users = $this->loadUsers();
@@ -351,6 +398,8 @@ final class GloProTrackerBot
             }
         });
 
+        // Заодно удаляем файл состояния, чтобы при повторной подписке cron
+        // не прислал все текущие задачи как «новые».
         $stateFile = $this->stateFile($chatId);
         if (is_file($stateFile)) {
             @unlink($stateFile);
@@ -367,6 +416,7 @@ final class GloProTrackerBot
             return 'Сначала зарегистрируйся: <code>/setkey &lt;ссылка issues.atom&gt;</code>.';
         }
 
+        // По команде /test показываем актуальный список задач, не трогая сохранённое состояние.
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
@@ -384,6 +434,7 @@ final class GloProTrackerBot
             return 0;
         }
 
+        // Таблица: chat_id | имя | хост Redmine.
         $this->out('Зарегистрировано пользователей: ' . count($users) . "\n");
         foreach ($users as $chatId => $user) {
             $host = parse_url((string)($user['atom_url'] ?? ''), PHP_URL_HOST) ?: '—';
@@ -408,6 +459,8 @@ final class GloProTrackerBot
     {
         $xml = $this->fetchUrl($url);
 
+        // Парсим Atom-фид как XML. LIBXML_NONET запрещает сетевые подгрузки DTD,
+        // libxml_use_internal_errors — подавляет warnings при мусорном XML.
         $dom = new DOMDocument();
         $prev = libxml_use_internal_errors(true);
         $loaded = $dom->loadXML($xml, LIBXML_NONET);
@@ -421,6 +474,7 @@ final class GloProTrackerBot
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('atom', self::ATOM_NS);
 
+        // Каждый <atom:entry> — одна задача.
         $issues = [];
         foreach ($xpath->query('//atom:entry') as $entry) {
             if ($entry instanceof DOMElement) {
@@ -432,13 +486,17 @@ final class GloProTrackerBot
     }
 
     /**
+     * Извлекает из одного <atom:entry> все поля задачи.
+     *
      * @return array<string, mixed>
      */
     private function parseEntry(DOMElement $entry, DOMXPath $xpath): array
     {
+        // Заголовок задачи, ссылка на неё, дата обновления, автор и описание.
         $title = trim($xpath->evaluate('string(atom:title)', $entry));
         $link = trim($xpath->evaluate('string(atom:link[@rel="alternate"]/@href)', $entry));
         if ($link === '') {
+            // Запасной вариант: берём первую ссылку без указания rel.
             $link = trim($xpath->evaluate('string(atom:link/@href)', $entry));
         }
         $updated = trim($xpath->evaluate('string(atom:updated)', $entry));
@@ -468,6 +526,7 @@ final class GloProTrackerBot
      */
     private function parseTitle(string $title): array
     {
+        // Основной формат Redmine: "Проект - Трекер #123 (Статус): Тема".
         if (preg_match('/^(?P<project>.+?)\s+-\s+(?P<tracker>.+?)\s+#(?P<id>\d+)\s+\((?P<status>[^)]+)\):\s*(?P<subject>.*)$/su', $title, $m)) {
             return [
                 'id'      => (int)$m['id'],
@@ -509,6 +568,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Приводит ISO-дату из фида к массиву: unix-время и форматированный текст.
+     *
      * @return array{unix: int, text: string}
      */
     private function parseDate(string $iso): array
@@ -525,6 +586,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Собирает «краткое» сообщение для /test: заголовок, счётчик и таблица задач.
+     *
      * @param array<int, array<string, mixed>> $issues
      */
     private function buildSummary(array $issues, string $host): string
@@ -556,11 +619,13 @@ final class GloProTrackerBot
 
         foreach ($issues as $issue) {
             $id = $issue['id'];
+            // Номер задачи делаем ссылкой на саму задачу в Redmine (если ссылка есть).
             $number = $id && $issue['url'] !== ''
                 ? '<a href="' . $this->esc($issue['url']) . '"><b>' . $id . '</b></a>'
                 : ($id ? '<b>' . $id . '</b>' : '—');
 
             $status = $issue['status'] !== '' ? '<i>' . $this->esc($issue['status']) . '</i>' : '—';
+            // Для сменивших статус задач приписываем прежний статус мелким текстом.
             if (isset($oldStatuses[$id]) && $oldStatuses[$id] !== '') {
                 $status .= ' <br><small>(было: ' . $this->esc($oldStatuses[$id]) . ')</small>';
             }
@@ -596,10 +661,14 @@ final class GloProTrackerBot
             return [];
         }
 
+        // Файл состояния: {"saved_at": ..., "issues": [...]}.
         $data = json_decode($raw, true);
         return is_array($data['issues'] ?? null) ? $data['issues'] : [];
     }
 
+    /**
+     * Возвращает время последней успешной проверки из файла состояния (для /status).
+     */
     private function loadStateSavedAt(string $file): ?string
     {
         if (!is_file($file)) {
@@ -616,6 +685,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Сохраняет состояние задач пользователя вместе с меткой времени.
+     *
      * @param array<int, array<string, mixed>> $issues
      */
     private function saveState(string $file, array $issues): void
@@ -630,12 +701,19 @@ final class GloProTrackerBot
     /**
      * Сравнивает прошлое и текущее состояние, возвращает список изменений.
      *
+     * Логика:
+     * - задачи, которых не было раньше — type=new;
+     * - сменился статус — type=status (со старым статусом);
+     * - статус тот же, но updated новее — type=updated;
+     * - задачи, пропавшие из выдачи — type=removed.
+     *
      * @param array<int, array<string, mixed>> $prev
      * @param array<int, array<string, mixed>> $cur
      * @return array<int, array{type: string, issue: array<string, mixed>, old_status?: string}>
      */
     private function diffIssues(array $prev, array $cur): array
     {
+        // Индексируем оба списка по id задачи для быстрого поиска.
         $prevById = [];
         foreach ($prev as $issue) {
             $prevById[(int)$issue['id']] = $issue;
@@ -651,6 +729,7 @@ final class GloProTrackerBot
             $id = (int)$issue['id'];
 
             if (!isset($prevById[$id])) {
+                // Раньше задачи не было — она новая.
                 $changes[] = ['type' => 'new', 'issue' => $issue];
                 continue;
             }
@@ -659,12 +738,14 @@ final class GloProTrackerBot
             if ($old['status'] !== $issue['status']) {
                 $changes[] = ['type' => 'status', 'issue' => $issue, 'old_status' => (string)$old['status']];
             } elseif (($issue['updated']['unix'] ?? 0) > ($old['updated']['unix'] ?? 0)) {
+                // Статус не менялся, но задача была обновлена (комментарий, поля и т.п.).
                 $changes[] = ['type' => 'updated', 'issue' => $issue, 'old_status' => (string)$old['status']];
             }
         }
 
         foreach ($prevById as $id => $old) {
             if (!isset($curById[$id])) {
+                // Задача пропала из выдачи (например, изменён фильтр).
                 $changes[] = ['type' => 'removed', 'issue' => $old];
             }
         }
@@ -673,6 +754,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Группирует изменения по типу и собирает итоговое HTML-сообщение.
+     *
      * @param array<int, array{type: string, issue: array<string, mixed>, old_status?: string}> $changes
      */
     private function buildChangesMessage(array $changes, string $host): string
@@ -680,6 +763,7 @@ final class GloProTrackerBot
         $count = count($changes);
         $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "🛠️ Изменений: {$count}"];
 
+        // Сгруппируем изменения по типу: new / status / updated.
         $groups = [];
         foreach ($changes as $change) {
             $groups[$change['type']][] = $change;
@@ -691,6 +775,7 @@ final class GloProTrackerBot
             'updated' => '📝 Обновлены',
         ];
 
+        // Каждую группу выводим отдельным блоком со своей таблицей.
         foreach ($labels as $type => $label) {
             if (empty($groups[$type])) {
                 continue;
@@ -717,17 +802,21 @@ final class GloProTrackerBot
     // Пользователи (реестр)
     // ---------------------------------------------------------------------
 
+    /** Путь к реестру пользователей. */
     private function usersFile(): string
     {
         return __DIR__ . '/logs/glopro_users.json';
     }
 
+    /** Путь к файлу состояния задач конкретного пользователя. */
     private function stateFile(string $chatId): string
     {
         return __DIR__ . '/logs/glopro_state_' . $chatId . '.json';
     }
 
     /**
+     * Загружает реестр пользователей (chat_id => данные пользователя).
+     *
      * @return array<string, array<string, mixed>>
      */
     private function loadUsers(): array
@@ -747,6 +836,8 @@ final class GloProTrackerBot
     }
 
     /**
+     * Сохраняет реестр пользователей на диск.
+     *
      * @param array<string, array<string, mixed>> $users
      */
     private function saveUsers(array $users): void
@@ -768,11 +859,13 @@ final class GloProTrackerBot
      */
     private function withUserLock(callable $fn)
     {
+        // Открываем файл блокировки (создаётся при необходимости) и берём LOCK_EX.
         $handle = fopen(__DIR__ . '/logs/glopro_users.lock', 'c');
         flock($handle, LOCK_EX);
         try {
             return $fn();
         } finally {
+            // finally гарантирует снятие блокировки даже при исключении внутри $fn.
             flock($handle, LOCK_UN);
             fclose($handle);
         }
@@ -788,17 +881,21 @@ final class GloProTrackerBot
      */
     private function sendTelegram(int|string $chatId, string $html): bool
     {
+        // Пробуем rich message: поддерживает таблицы/details и вмещает до 32768 символов.
         if (mb_strlen($html) <= self::RICH_MAX && $this->sendRichMessage($chatId, $html)) {
             return true;
         }
 
+        // Rich message не прошёл (ошибка API, слишком длинное) — конвертируем в обычный HTML.
         $fallback = $this->richToSendMessageHtml($html);
 
         $allOk = true;
         foreach ($this->splitMessage($fallback) as $chunk) {
+            // Сначала с parse_mode=HTML.
             if ($this->sendMessage($chatId, $chunk, 'HTML')) {
                 continue;
             }
+            // Если HTML не принят (кривой тег) — отправляем как plain text.
             if ($this->sendMessage($chatId, html_entity_decode(strip_tags($chunk)), null)) {
                 continue;
             }
@@ -849,7 +946,7 @@ final class GloProTrackerBot
         $payload = [
             'chat_id' => $chatId,
             'text' => $text,
-            'disable_web_page_preview' => true,
+            'disable_web_page_preview' => true, // не разворачиваем превью ссылок в сообщении
         ];
         if ($parseMode !== null) {
             $payload['parse_mode'] = $parseMode;
@@ -881,6 +978,7 @@ final class GloProTrackerBot
      */
     private function richToSendMessageHtml(string $html): string
     {
+        // Блочные теги заменяем на перенос строки, ячейки таблиц — на пробелы.
         $patterns = [
             '#</?(?:details|summary|p|table|thead|tbody|tr|div|h6)>#' => "\n",
             '#<br\s*/?>#' => "\n",
@@ -894,6 +992,9 @@ final class GloProTrackerBot
         return trim($html);
     }
 
+    /**
+     * Обрезает текст для логов, добавляя счётчик скрытых символов.
+     */
     private function truncate(string $text, int $max = 500): string
     {
         $text = trim($text);
@@ -906,6 +1007,7 @@ final class GloProTrackerBot
 
     /**
      * Режет сообщение на куски не больше 4096 символов (лимит Telegram).
+     * Разрез старается делать по границе строк, чтобы не рвать HTML-теги.
      *
      * @return string[]
      */
@@ -918,6 +1020,7 @@ final class GloProTrackerBot
         $chunks = [];
         $current = '';
         foreach (explode("\n", $text) as $line) {
+            // Строка не влезает в текущий кусок — закрываем кусок и начинаем новый.
             if (mb_strlen($current) + mb_strlen($line) + 1 > 4096) {
                 if ($current !== '') {
                     $chunks[] = $current;
@@ -938,16 +1041,20 @@ final class GloProTrackerBot
     // Утилиты
     // ---------------------------------------------------------------------
 
+    /**
+     * Скачивает URL через cURL и возвращает тело ответа.
+     * Кидает RuntimeException при сетевой ошибке или HTTP != 200.
+     */
     private function fetchUrl(string $url): string
     {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_FOLLOWLOCATION => true, // редиректы Redmine
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            CURLOPT_ENCODING => '',
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', // имитируем браузер
+            CURLOPT_ENCODING => '', // автоматическое сжатие (gzip)
             CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4, // Принудительно IPv4
             CURLOPT_SSL_VERIFYPEER => true,
         ]);
@@ -978,24 +1085,35 @@ final class GloProTrackerBot
     private function normalizeUrl(string $url): string
     {
         $url = trim($url);
+        // Telegram может вставить перевод строки при переносе ссылки — склеиваем.
         $url = preg_replace('/\s+/', '', $url);
 
+        // Каждый символ вне диапазона ASCII кодируем как %XX (для корректного HTTP-запроса).
         return (string)preg_replace_callback('/[^\x20-\x7E]/u', static function (array $m): string {
             return rawurlencode($m[0]);
         }, $url);
     }
 
+    /**
+     * Читает сохранённый offset long-polling (последний обработанный update_id).
+     */
     private function readOffset(string $file): int
     {
         $saved = trim((string)@file_get_contents($file));
         return $saved !== '' && ctype_digit($saved) ? (int)$saved : 0;
     }
 
+    /**
+     * Сохраняет offset long-polling на диск.
+     */
     private function saveOffset(string $file, int $offset): void
     {
         file_put_contents($file, (string)$offset, LOCK_EX);
     }
 
+    /**
+     * Гарантирует наличие каталога логов.
+     */
     private function ensureLogsDir(): void
     {
         $dir = __DIR__ . '/logs';
@@ -1004,6 +1122,10 @@ final class GloProTrackerBot
         }
     }
 
+    /**
+     * Пишет строку в stdout и в дневной файл лога (glopro_<prefix>_<дата>.log),
+     * если задан logPrefix.
+     */
     private function log(string $msg): void
     {
         $line = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $msg);
@@ -1014,11 +1136,13 @@ final class GloProTrackerBot
         }
     }
 
+    /** Печать в stdout без доп. форматирования (для режимов --users и т.п.). */
     private function out(string $text): void
     {
         echo $text;
     }
 
+    /** HTML-экранирование текста (защита от битых тегов в сообщениях от Telegram). */
     private function esc(string $text): string
     {
         return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
