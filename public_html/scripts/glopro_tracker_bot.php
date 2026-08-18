@@ -18,7 +18,7 @@ include __DIR__ . '/_env.php';
  *   /start, /help            — подсказка
  *   /setkey <ссылка>         — зарегистрировать свой issues.atom (с key=...), alias /key
  *   /status                  — статус подписки
- *   /test                    — текущие задачи
+ *   /issues                  — текущие задачи
  *   /stop, /unsub            — отключить уведомления
  *   /chatid, /id             — показать ID чата
  *
@@ -297,7 +297,7 @@ final class GloProTrackerBot
             '/setkey', '/key' => $this->cmdSetKey((string)$chatId, $name, $username, $arg),
             '/status' => $this->cmdStatus((string)$chatId),
             '/stop', '/unsub' => $this->cmdStop((string)$chatId),
-            '/test' => $this->cmdTest((string)$chatId),
+            '/issues' => $this->cmdIssues((string)$chatId),
             default => null,
         };
 
@@ -321,7 +321,7 @@ final class GloProTrackerBot
             . "1. Открой нужный фильтр задач в Redmine и скопируй ссылку «Atom» (issues.atom) целиком, с key=...\n"
             . "2. Пришли её командой:\n<code>/setkey &lt;ссылка&gt;</code>\n\n"
             . "Дальше я сам буду проверять задачи и сообщать о новых, смене статуса и обновлениях.\n\n"
-            . "Команды: <code>/status</code> — статус, <code>/test</code> — текущие задачи, <code>/stop</code> — отключить, <code>/chatid</code> — ID чата.";
+            . "Команды: <code>/status</code> — статус, <code>/issues</code> — текущие задачи, <code>/stop</code> — отключить, <code>/chatid</code> — ID чата.";
     }
 
     private function cmdSetKey(string $chatId, string $name, string $username, string $arg): string
@@ -382,7 +382,7 @@ final class GloProTrackerBot
             . '• Redmine: <code>' . $this->esc($host) . "</code>\n"
             . "• Подписка: активна\n"
             . "• Последняя проверка: {$lastCheck}\n\n"
-            . "Команды: <code>/test</code> — текущие задачи, <code>/stop</code> — отключить.";
+            . "Команды: <code>/issues</code> — текущие задачи, <code>/stop</code> — отключить.";
     }
 
     private function cmdStop(string $chatId): string
@@ -408,7 +408,7 @@ final class GloProTrackerBot
         return $removed ? 'Подписка отключена. Чтобы вернуться — <code>/setkey &lt;ссылка&gt;</code>.' : 'Ты и так не был подписан.';
     }
 
-    private function cmdTest(string $chatId): string
+    private function cmdIssues(string $chatId): string
     {
         $users = $this->loadUsers();
         $url = trim((string)($users[$chatId]['atom_url'] ?? ''));
@@ -416,7 +416,7 @@ final class GloProTrackerBot
             return 'Сначала зарегистрируйся: <code>/setkey &lt;ссылка issues.atom&gt;</code>.';
         }
 
-        // По команде /test показываем актуальный список задач, не трогая сохранённое состояние.
+        // По команде /issues показываем актуальный список задач, не трогая сохранённое состояние.
         try {
             $issues = $this->fetchIssues($url);
         } catch (RuntimeException $e) {
@@ -586,7 +586,7 @@ final class GloProTrackerBot
     }
 
     /**
-     * Собирает «краткое» сообщение для /test: заголовок, счётчик и таблица задач.
+     * Собирает «краткое» сообщение для /issues: заголовок, счётчик и таблица задач.
      *
      * @param array<int, array<string, mixed>> $issues
      */
