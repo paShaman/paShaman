@@ -288,10 +288,10 @@ final class GloProTrackerBot
         $this->withUserLock(function () use ($chatId, $name, $username, $url) {
             $users = $this->loadUsers();
             $users[$chatId] = [
-                'chat_id' => $chatId,
-                'name' => $name,
-                'username' => $username,
-                'atom_url' => $url,
+                'chat_id'    => $chatId,
+                'name'       => $name,
+                'username'   => $username,
+                'atom_url'   => $url,
                 'created_at' => date('c'),
             ];
             $this->saveUsers($users);
@@ -433,20 +433,21 @@ final class GloProTrackerBot
         $parsed = $this->parseTitle($title);
 
         return [
-            'id' => $parsed['id'],
-            'project' => $parsed['project'],
-            'tracker' => $parsed['tracker'],
-            'status' => $parsed['status'],
-            'subject' => $parsed['subject'],
-            'url' => $link,
-            'updated' => $this->parseDate($updated),
-            'author' => $author,
+            'id'          => $parsed['id'],
+            'project'     => $parsed['project'],
+            'tracker'     => $parsed['tracker'],
+            'status'      => $parsed['status'],
+            'subject'     => $parsed['subject'],
+            'url'         => $link,
+            'updated'     => $this->parseDate($updated),
+            'author'      => $author,
             'description' => $description,
         ];
     }
 
     /**
-     * Разбирает заголовок задачи вида "Project - Tracker #123 (Status): Subject".
+     * Разбирает заголовок задачи вида "Project - Tracker #123 (Status): Subject"
+     * или без проекта: "Tracker #123 (Status): Subject".
      *
      * @return array{id: int, project: string, tracker: string, status: string, subject: string}
      */
@@ -454,10 +455,21 @@ final class GloProTrackerBot
     {
         if (preg_match('/^(?P<project>.+?)\s+-\s+(?P<tracker>.+?)\s+#(?P<id>\d+)\s+\((?P<status>[^)]+)\):\s*(?P<subject>.*)$/su', $title, $m)) {
             return [
-                'id' => (int)$m['id'],
+                'id'      => (int)$m['id'],
                 'project' => trim($m['project']),
                 'tracker' => trim($m['tracker']),
-                'status' => trim($m['status']),
+                'status'  => trim($m['status']),
+                'subject' => trim($m['subject']),
+            ];
+        }
+
+        // Без префикса проекта: "Tracker #123 (Status): Subject" — трекер встаёт на место проекта.
+        if (preg_match('/^(?P<tracker>.+?)\s+#(?P<id>\d+)\s+\((?P<status>[^)]+)\):\s*(?P<subject>.*)$/su', $title, $m)) {
+            return [
+                'id'      => (int)$m['id'],
+                'project' => '',
+                'tracker' => trim($m['tracker']),
+                'status'  => trim($m['status']),
                 'subject' => trim($m['subject']),
             ];
         }
@@ -473,10 +485,10 @@ final class GloProTrackerBot
         }
 
         return [
-            'id' => $id,
+            'id'      => $id,
             'project' => '',
             'tracker' => '',
-            'status' => $status,
+            'status'  => $status,
             'subject' => $title,
         ];
     }
@@ -522,6 +534,12 @@ final class GloProTrackerBot
             $lines[] = '   Обновлена: ' . $issue['updated']['text'] . ($issue['url'] !== '' ? ' · ' . $issue['url'] : '');
             $lines[] = '';
         }
+
+        /*
+1. #35541 · В препрод
+   Улучшение #35541 (В препрод): Автозаполнение реквизитов компании в GP.Market
+   Обновлена: 20.07.2026 07:47 · https://cp.glopro.ru/issues/35541
+         */
 
         return implode("\n", $lines);
     }
