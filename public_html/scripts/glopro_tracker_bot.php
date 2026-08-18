@@ -82,7 +82,7 @@ final class GloProTrackerBot
         $this->log('Запуск cron: пользователей ' . count($users));
 
         foreach ($users as $chatId => $user) {
-            $this->processUser((string)$chatId, $user);
+            $this->processUser($chatId, $user);
         }
 
         $this->log('Cron завершён.');
@@ -116,7 +116,7 @@ final class GloProTrackerBot
             return;
         }
 
-        $message = $this->buildChangesMessage($changes, count($issues));
+        $message = $this->buildChangesMessage($changes, parse_url($url, PHP_URL_HOST) ?: 'Redmine');
         $ok = $this->sendTelegram($chatId, $message);
         $this->log(($ok ? '✅' : '❌') . " Пользователь {$chatId}: изменений " . count($changes) . ($ok ? '' : ' (ошибка отправки)') . '.');
     }
@@ -530,22 +530,40 @@ final class GloProTrackerBot
     private function buildSummary(array $issues, string $host): string
     {
         $count = count($issues);
-        $lines = ['<b>Redmine:</b> ' . $this->esc($host), "Задач в выдаче: {$count}"];
+        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "📋 Задач в выдаче: {$count}"];
 
         if ($count === 0) {
             return implode("\n", $lines) . "\n";
         }
 
         $lines[] = '';
-        $lines[] = '<table bordered>';
-        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>Обновлена</th></tr>';
+        $lines = array_merge($lines, $this->buildTable($issues));
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Строит HTML-таблицу задач: Номер | Статус | Тема | Обновлено.
+     *
+     * @param array<int, array<string, mixed>> $issues
+     * @param array<int, string> $oldStatuses id => прежний статус (для «было:»)
+     * @return string[]
+     */
+    private function buildTable(array $issues, array $oldStatuses = []): array
+    {
+        $lines = ['<table bordered>'];
+        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>Обновлено</th></tr>';
 
         foreach ($issues as $issue) {
             $id = $issue['id'];
             $number = $id && $issue['url'] !== ''
                 ? '<a href="' . $this->esc($issue['url']) . '"><b>' . $id . '</b></a>'
                 : ($id ? '<b>' . $id . '</b>' : '—');
+
             $status = $issue['status'] !== '' ? '<i>' . $this->esc($issue['status']) . '</i>' : '—';
+            if (isset($oldStatuses[$id]) && $oldStatuses[$id] !== '') {
+                $status .= ' <br><small>(было: ' . $this->esc($oldStatuses[$id]) . ')</small>';
+            }
 
             $lines[] = '<tr>';
             $lines[] = '  <td>' . $number . '</td>';
@@ -557,7 +575,7 @@ final class GloProTrackerBot
 
         $lines[] = '</table>';
 
-        return implode("\n", $lines);
+        return $lines;
     }
 
     // ---------------------------------------------------------------------
@@ -657,10 +675,10 @@ final class GloProTrackerBot
     /**
      * @param array<int, array{type: string, issue: array<string, mixed>, old_status?: string}> $changes
      */
-    private function buildChangesMessage(array $changes, int $total): string
+    private function buildChangesMessage(array $changes, string $host): string
     {
         $count = count($changes);
-        $lines = ["🔄 Redmine: изменений {$count}, всего задач {$total}"];
+        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "🛠️ Изменений: {$count}"];
 
         $groups = [];
         foreach ($changes as $change) {
@@ -668,47 +686,28 @@ final class GloProTrackerBot
         }
 
         $labels = [
-            'new' => '🆕 Новые задачи:',
-            'status' => '🔁 Сменили статус:',
-            'updated' => '📝 Обновлены:',
-            'removed' => '🚫 Вышли из фильтра:',
+            'new'     => '🆕 Новые задачи',
+            'status'  => '🔁 Сменили статус',
+            'updated' => '📝 Обновлены',
         ];
 
         foreach ($labels as $type => $label) {
             if (empty($groups[$type])) {
                 continue;
             }
+
+            $issues = [];
+            $oldStatuses = [];
+            foreach ($groups[$type] as $change) {
+                $issues[] = $change['issue'];
+                if ($type === 'status') {
+                    $oldStatuses[(int)$change['issue']['id']] = (string)$change['old_status'];
+                }
+            }
+
             $lines[] = '';
             $lines[] = '<b>' . $label . '</b>';
-            foreach ($groups[$type] as $change) {
-                $lines[] = '• ' . $this->formatChange($change);
-            }
-        }
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * @param array{type: string, issue: array<string, mixed>, old_status?: string} $change
-     */
-    private function formatChange(array $change): string
-    {
-        $issue = $change['issue'];
-        $id = $issue['id'] ? '<b>#' . $issue['id'] . '</b>' : '—';
-        $tracker = $issue['tracker'] !== '' ? ' · ' . $this->esc($issue['tracker']) : '';
-        $status = $issue['status'] !== '' ? ' · <i>' . $this->esc($issue['status']) . '</i>' : '';
-
-        $lines = ["{$id}{$tracker}{$status}"];
-        $lines[] = '   <h6>' . $this->esc($issue['subject']) . '</h6>';
-
-        if ($change['type'] === 'status') {
-            $lines[] = '   <small>(было: ' . $this->esc((string)$change['old_status']) . ')</small>';
-        } elseif ($change['type'] === 'updated' && $issue['updated']['text'] !== '') {
-            $lines[] = '   <small>(обновлена ' . $issue['updated']['text'] . ')</small>';
-        }
-
-        if ($issue['url'] !== '') {
-            $lines[] = '   ' . $this->link($issue['url']);
+            $lines = array_merge($lines, $this->buildTable($issues, $oldStatuses));
         }
 
         return implode("\n", $lines);
@@ -1023,13 +1022,6 @@ final class GloProTrackerBot
     private function esc(string $text): string
     {
         return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
-
-    private function link(string $url): string
-    {
-        $label = preg_replace('#^https?://#i', '', $url);
-
-        return '<a href="' . $this->esc($url) . '">' . $this->esc((string)$label) . '</a>';
     }
 }
 
