@@ -210,7 +210,14 @@ final class GloProTrackerBot
             return null;
         }
 
-        return $data['result'] ?? [];
+        $updates = $data['result'] ?? [];
+
+        if ($updates !== []) {
+            $this->log('TG getUpdates: апдейтов ' . count($updates) . "\n"
+                . $this->truncate(json_encode($updates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 2000));
+        }
+
+        return $updates;
     }
 
     /**
@@ -528,18 +535,25 @@ final class GloProTrackerBot
         }
 
         $lines[] = '';
-        foreach ($issues as $i => $issue) {
-            $num = $i + 1;
-            $id = $issue['id'] ? '<b>#' . $issue['id'] . '</b>' : '—';
-            $tracker = $issue['tracker'] !== '' ? ' · ' . $this->esc($issue['tracker']) : '';
-            $status = $issue['status'] !== '' ? ' · <i>' . $this->esc($issue['status']) . '</i>' : '';
-            $project = $issue['project'] !== '' ? ' · ' . $this->esc($issue['project']) : '';
+        $lines[] = '<table bordered>';
+        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>Обновлена</th></tr>';
 
-            $lines[] = "{$num}. {$id}{$tracker}{$status}{$project}";
-            $lines[] = '   <h6>' . $this->esc($issue['subject']) . '</h6>';
-            $lines[] = '   <small>Обновлена: ' . $issue['updated']['text'] . ($issue['url'] !== '' ? ' · ' . $this->link($issue['url']) : '') . '</small>';
-            $lines[] = '';
+        foreach ($issues as $issue) {
+            $id = $issue['id'];
+            $number = $id && $issue['url'] !== ''
+                ? '<a href="' . $this->esc($issue['url']) . '"><b>' . $id . '</b></a>'
+                : ($id ? '<b>' . $id . '</b>' : '—');
+            $status = $issue['status'] !== '' ? '<i>' . $this->esc($issue['status']) . '</i>' : '—';
+
+            $lines[] = '<tr>';
+            $lines[] = '  <td>' . $number . '</td>';
+            $lines[] = '  <td>' . $status . '</td>';
+            $lines[] = '  <td>' . $this->esc($issue['subject']) . '</td>';
+            $lines[] = '  <td>' . $issue['updated']['text'] . '</td>';
+            $lines[] = '</tr>';
         }
+
+        $lines[] = '</table>';
 
         return implode("\n", $lines);
     }
@@ -877,6 +891,16 @@ final class GloProTrackerBot
         $html = (string)preg_replace(array_keys($patterns), array_values($patterns), $html);
 
         return trim($html);
+    }
+
+    private function truncate(string $text, int $max = 500): string
+    {
+        $text = trim($text);
+        if (mb_strlen($text) <= $max) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, $max) . '… (+' . (mb_strlen($text) - $max) . ' симв.)';
     }
 
     /**
