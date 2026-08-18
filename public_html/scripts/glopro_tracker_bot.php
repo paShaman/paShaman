@@ -37,6 +37,7 @@ final class GloProTrackerBot
 
     /** Лимит символов для rich message (sendMessage — 4096). */
     private const RICH_MAX = 32768;
+    private const TEXT_MAX = 4096;
 
     private ?string $tgToken = null;
     private ?string $logPrefix = null;
@@ -911,7 +912,7 @@ final class GloProTrackerBot
      */
     private function splitMessage(string $text): array
     {
-        if (mb_strlen($text) <= 4096) {
+        if (mb_strlen($text) <= self::TEXT_MAX) {
             return [$text];
         }
 
