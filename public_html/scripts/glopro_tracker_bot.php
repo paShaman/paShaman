@@ -749,7 +749,7 @@ final class GloProTrackerBot
         foreach ($prevById as $id => $old) {
             if (!isset($curById[$id])) {
                 // Задача пропала из выдачи (например, изменён фильтр).
-                $changes[] = ['type' => 'removed', 'issue' => $old];
+                //$changes[] = ['type' => 'removed', 'issue' => $old];
             }
         }
 
