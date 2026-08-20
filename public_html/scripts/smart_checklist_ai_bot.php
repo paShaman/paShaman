@@ -483,7 +483,7 @@ class SmartChecklistAIBot
         if (!empty($this->voiceFileId)) {
             $transcribed = $this->getVoiceTranscription($this->voiceFileId);
             if (empty($transcribed)) {
-                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение");
+                $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение: STT-сервисы недоступны\\. Попробуй ещё раз или отправь текст");
                 return [false, '__VOICE_ERROR__'];
             }
 
@@ -523,7 +523,7 @@ class SmartChecklistAIBot
 
         $transcription = $this->getVoiceTranscription($this->replyToVoiceFileId);
         if (empty($transcription)) {
-            $this->editStatusMessage("⚠️ Не удалось распознать аудиосообщение");
+            $this->sendTelegramMessage("⚠️ Не удалось распознать аудиосообщение: STT-сервисы недоступны\\. Попробуй ещё раз или отправь текст");
             return null;
         }
 
