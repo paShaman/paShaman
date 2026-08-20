@@ -34,6 +34,8 @@ class SmartChecklistAIBot
     private string $openRouterKey;
     private string $deepseekKey;
     private string $deepseekModel;
+    private string $cfAccountId;
+    private string $cfApiToken;
     private ?API $MadelineProto = null;
 
     // Список дополнительных разрешенных Telegram ID (белый список)
@@ -46,7 +48,7 @@ class SmartChecklistAIBot
     // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
     private bool $logTg;
     private bool $logDeepseek;
-    private bool $logOpenRouter;
+    private bool $logStt;
     private bool $logTgErrors;
     private bool $logUserRequests;
     private bool $logBotStatus;
@@ -91,10 +93,12 @@ class SmartChecklistAIBot
         $this->openRouterKey = (string)getenv('OPENROUTER_KEY');
         $this->deepseekKey = (string)getenv('DEEPSEEK_KEY');
         $this->deepseekModel = (string)getenv('DEEPSEEK_MODEL');
+        $this->cfAccountId = (string)getenv('CLOUDFLARE_ACCOUNT_ID');
+        $this->cfApiToken = (string)getenv('CLOUDFLARE_API_TOKEN');
 
         $this->logTg = getenv('LOG_TG') === 'true';
         $this->logDeepseek = getenv('LOG_DEEPSEEK') === 'true';
-        $this->logOpenRouter = getenv('LOG_OPENROUTER') === 'true';
+        $this->logStt = getenv('LOG_STT') === 'true';
         $this->logTgErrors = getenv('LOG_TG_ERRORS') === 'true';
         $this->logUserRequests = getenv('LOG_USER_REQUESTS') === 'true';
         $this->logBotStatus = getenv('LOG_BOT_STATUS') === 'true';
@@ -1021,45 +1025,32 @@ class SmartChecklistAIBot
     // ТРАНСКРИБАЦИЯ ГОЛОСОВЫХ
     // ============================================================
 
-    /** Получает URL голосового файла из Telegram и передаёт на транскрибацию в OpenRouter Whisper */
+    /** Получает голосовое из Telegram и распознаёт речь: сначала Cloudflare Workers AI, при ошибке — OpenRouter */
     private function getVoiceTranscription(string $fileId): ?string
     {
         $voiceFileUrl = $this->getTelegramFileUrl($fileId);
         if (empty($voiceFileUrl)) {
             return null;
         }
-        return $this->transcribeWithOpenRouter($voiceFileUrl);
-    }
 
-    /** Получает прямую ссылку на файл из Telegram по file_id */
-    private function getTelegramFileUrl(string $fileId): ?string
-    {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/getFile?file_id=' . urlencode($fileId);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        $response = curl_exec($ch);
-
-        if (!$response) {
+        $audioData = $this->downloadAudioFile($voiceFileUrl);
+        if (empty($audioData)) {
             return null;
         }
 
-        $data = json_decode($response, true);
-        if (!($data['ok'] ?? false) || empty($data['result']['file_path'])) {
-            return null;
+        if ($this->cfAccountId !== '' && $this->cfApiToken !== '') {
+            $cfText = $this->transcribeWithCloudflare($audioData);
+            if ($cfText !== null) {
+                return $cfText;
+            }
         }
 
-        return 'https://api.telegram.org/file/bot' . $this->tgToken . '/' . $data['result']['file_path'];
+        return $this->transcribeWithOpenRouter($audioData);
     }
 
-    /** Скачивает аудио, кодирует в base64 и отправляет в OpenRouter Whisper для распознавания речи */
-    private function transcribeWithOpenRouter(string $audioUrl): ?string
+    /** Скачивает аудиофайл с прямого URL Telegram в память */
+    private function downloadAudioFile(string $audioUrl): ?string
     {
-        $startApi = microtime(true);
-
-        // 1. Скачиваем аудиофайл напрямую в память
         $ch = curl_init($audioUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
@@ -1067,26 +1058,99 @@ class SmartChecklistAIBot
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
 
         $audioData = curl_exec($ch);
-        $httpCodeDownload = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        if ($httpCodeDownload !== 200 || empty($audioData)) {
-            if ($this->logOpenRouter) {
+        if ($httpCode !== 200 || empty($audioData)) {
+            if ($this->logStt) {
                 file_put_contents(
-                    'openrouter_debug.log',
-                    sprintf("[%s] Ошибка скачивания файла из TG: HTTP %d\n", date('Y-m-d H:i:s'), $httpCodeDownload),
+                    'stt_debug.log',
+                    sprintf("[%s] Ошибка скачивания файла из TG: HTTP %d\n", date('Y-m-d H:i:s'), $httpCode),
                     FILE_APPEND
                 );
             }
             return null;
         }
 
-        // 2. Определяем расширение файла через MIME-тип из буфера памяти
+        return $audioData;
+    }
+
+    /** Распознаёт речь через Cloudflare Workers AI (@cf/openai/whisper-large-v3-turbo), тело запроса — JSON с base64 аудио */
+    private function transcribeWithCloudflare(string $audioData): ?string
+    {
+        $startApi = microtime(true);
+
+        $url = 'https://api.cloudflare.com/client/v4/accounts/' . $this->cfAccountId . '/ai/run/@cf/openai/whisper-large-v3-turbo';
+
+        $payload = json_encode([
+            'audio' => base64_encode($audioData),
+            'language' => 'ru',
+        ]);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $this->cfApiToken,
+            'Content-Type: application/json',
+        ]);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($this->logStt) {
+            $logMsg = sprintf(
+                "=== %s ===\n>>> TO CLOUDFLARE WORKERS AI WHISPER: файл голосовое (%d bytes)\n<<< FROM CLOUDFLARE [HTTP %d]: %s\n\n",
+                date('Y-m-d H:i:s'),
+                strlen($audioData),
+                $httpCode,
+                $response ?: 'Ошибка cURL: ' . $curlError
+            );
+            file_put_contents('stt_debug.log', $logMsg, FILE_APPEND);
+        }
+
+        if ($curlError || $httpCode !== 200 || !$response) {
+            return null;
+        }
+
+        $result = json_decode($response, true);
+        if (empty($result['success']) || empty($result['result']['text'])) {
+            return null;
+        }
+
+        $transcriptionText = trim($result['result']['text']);
+
+        if ($this->logUserRequests) {
+            $duration = round(microtime(true) - $startApi, 2);
+            $log = sprintf(
+                "[%s] User: @%s | Transcription (Cloudflare) | Duration: %.2fs\n",
+                date('Y-m-d H:i:s'),
+                $this->username,
+                $duration
+            );
+            file_put_contents('user_requests.log', $log, FILE_APPEND);
+        }
+
+        return $transcriptionText;
+    }
+
+    /** Кодирует аудио в base64 и отправляет в OpenRouter Whisper для распознавания речи (фолбэк, если Cloudflare недоступен) */
+    private function transcribeWithOpenRouter(string $audioData): ?string
+    {
+        $startApi = microtime(true);
+
+        // 1. Определяем расширение файла через MIME-тип из буфера памяти
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->buffer($audioData);
 
         $ext = (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) ? 'mp3' : 'ogg';
 
-        // 3. Кодируем в Base64 для API OpenRouter
+        // 2. Кодируем в Base64 для API OpenRouter
         $base64Audio = base64_encode($audioData);
 
         $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
@@ -1099,7 +1163,7 @@ class SmartChecklistAIBot
             ],
         ];
 
-        // 4. Отправляем запрос в OpenRouter
+        // 3. Отправляем запрос в OpenRouter
         $ch = curl_init($apiUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);
@@ -1116,7 +1180,7 @@ class SmartChecklistAIBot
         $httpCodeApi = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         // Логирование дебага OpenRouter
-        if ($this->logOpenRouter) {
+        if ($this->logStt) {
             $logMsg = sprintf(
                 "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
                 date('Y-m-d H:i:s'),
@@ -1124,7 +1188,7 @@ class SmartChecklistAIBot
                 $httpCodeApi,
                 $response ?: 'Ошибка cURL: ' . $curlError
             );
-            file_put_contents('openrouter_debug.log', $logMsg, FILE_APPEND);
+            file_put_contents('stt_debug.log', $logMsg, FILE_APPEND);
         }
 
         if ($curlError || $httpCodeApi !== 200 || !$response) {
@@ -1150,6 +1214,29 @@ class SmartChecklistAIBot
         }
 
         return $transcriptionText;
+    }
+
+    /** Получает прямую ссылку на файл из Telegram по file_id */
+    private function getTelegramFileUrl(string $fileId): ?string
+    {
+        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/getFile?file_id=' . urlencode($fileId);
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        $response = curl_exec($ch);
+
+        if (!$response) {
+            return null;
+        }
+
+        $data = json_decode($response, true);
+        if (!($data['ok'] ?? false) || empty($data['result']['file_path'])) {
+            return null;
+        }
+
+        return 'https://api.telegram.org/file/bot' . $this->tgToken . '/' . $data['result']['file_path'];
     }
 }
 
