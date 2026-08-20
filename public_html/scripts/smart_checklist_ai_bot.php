@@ -225,7 +225,17 @@ class SmartChecklistAIBot
     /** Обработчик команды /tgid — показывает Telegram ID и username пользователя */
     private function handleTgId(): void
     {
-        $this->sendTelegramMessage("🆔 {$this->userId}; 👤 @{$this->username}");
+        $this->sendTelegramMessage("🆔 {$this->userId}; 👤 " . $this->escapeMarkdownV2('@' . $this->username));
+    }
+
+    /** Экранирует спецсимволы MarkdownV2 для безопасной отправки пользовательских строк */
+    private function escapeMarkdownV2(string $text): string
+    {
+        return str_replace(
+            ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'],
+            ['\\\\', '\\_', '\\*', '\\[', '\\]', '\\(', '\\)', '\\~', '\\`', '\\>', '\\#', '\\+', '\\-', '\\=', '\\|', '\\{', '\\}', '\\.', '\\!'],
+            $text
+        );
     }
 
     /** Обработчик команды /ask <текст> — прямой запрос в DeepSeek, ответ отправляется в чат */
