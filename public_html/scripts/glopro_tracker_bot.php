@@ -367,7 +367,7 @@ final class GloProTrackerBot
         $message = "<b>Готово!</b> Ключ принят, задач в выдаче: " . count($issues) . '.';
         if ($filters !== []) {
             $message .= "\n\n🔎 Фильтры:\n"
-                . implode("\n", array_map(fn(string $f): string => '  • ' . $this->esc($f), $filters));
+                . implode("\n", array_map(fn(string $f): string => '  • ' . $f, $filters));
         }
         $message .= "\n\nТеперь я буду сообщать об изменениях. Проверить подписку: <code>/status</code>";
 
@@ -406,7 +406,7 @@ final class GloProTrackerBot
             $lines[] = '';
             $lines[] = '🔎 Фильтры (' . count($filters) . '):';
             foreach ($filters as $filter) {
-                $lines[] = '  • ' . $this->esc($filter);
+                $lines[] = '  • ' . $filter;
             }
         }
 
@@ -646,13 +646,13 @@ final class GloProTrackerBot
             'fixed_version_id' => 'Версия',
             'subject'          => 'Тема',
             'watcher_id'       => 'Наблюдатель',
-            'last_updated_by'  => 'Обновил',
+            'last_updated_by'  => 'Последний обновивший',
         ];
 
         // Операторы фильтра и их текст. Пустая строка — значение перечисляется как есть.
         $ops = [
             '='  => '',
-            '!'  => 'не ',
+            '!'  => '',
             'o'  => 'открытые',
             'c'  => 'закрытые',
             '*'  => 'любые',
@@ -712,7 +712,7 @@ final class GloProTrackerBot
                 if ($value === '') {
                     continue;
                 }
-                $pretty[] = $valueNames[$value] ?? ($field === 'status_id' ? ($statusNames[$value] ?? $value) : $value);
+                $pretty[] = $this->esc($valueNames[$value] ?? ($field === 'status_id' ? ($statusNames[$value] ?? $value) : $value));
             }
 
             $label = $labels[$field];
@@ -722,7 +722,12 @@ final class GloProTrackerBot
             if (in_array($op, ['o', 'c', '*', '!*', 't', 'y', 'w', 'lw', 'm'], true)) {
                 $filters[] = $label . ': ' . $opText;
             } elseif ($pretty !== []) {
-                $filters[] = $label . ': ' . $opText . implode(', ', $pretty);
+                // Отрицание выделяем явно: «Статус: НЕ (значения)».
+                if ($op === '!') {
+                    $filters[] = $label . ' (<b>НЕ</b>): ' . implode(', ', $pretty);
+                } else {
+                    $filters[] = $label . ': ' . $opText . implode(', ', $pretty);
+                }
             }
         }
 
@@ -739,15 +744,27 @@ final class GloProTrackerBot
                 if ($v === '') {
                     continue;
                 }
+
+                // Отрицание в классическом формате: status_id=!5.
+                $negated = false;
+                if ($v[0] === '!') {
+                    $negated = true;
+                    $v = trim(substr($v, 1));
+                    if ($v === '') {
+                        continue;
+                    }
+                }
+
                 if ($v === 'open') {
-                    $pretty[] = 'открытые';
+                    $pretty[] = ($negated ? '<b>НЕ</b> ' : '') . 'открытые';
                     continue;
                 }
                 if ($v === 'closed') {
-                    $pretty[] = 'закрытые';
+                    $pretty[] = ($negated ? '<b>НЕ</b> ' : '') . 'закрытые';
                     continue;
                 }
-                $pretty[] = $valueNames[$v] ?? ($key === 'status_id' ? ($statusNames[$v] ?? $v) : $v);
+                $name = $valueNames[$v] ?? ($key === 'status_id' ? ($statusNames[$v] ?? $v) : $v);
+                $pretty[] = ($negated ? '<b>НЕ</b> ' : '') . $this->esc($name);
             }
 
             if ($pretty !== []) {
