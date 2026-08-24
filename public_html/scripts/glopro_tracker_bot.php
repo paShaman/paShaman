@@ -296,7 +296,7 @@ final class GloProTrackerBot
         // Диспетчер команд. match не знает команды — вернёт null, и мы просто молчим.
         $reply = match ($command) {
             '/start', '/help' => $this->cmdHelp(),
-            '/chatid', '/id' => "Chat ID: {$chatId}",
+            '/chatid', '/id' => "🆔: {$chatId}",
             '/setkey', '/key' => $this->cmdSetKey((string)$chatId, $name, $username, $arg),
             '/status' => $this->cmdStatus((string)$chatId),
             '/stop', '/unsub' => $this->cmdStop((string)$chatId),
@@ -344,14 +344,18 @@ final class GloProTrackerBot
                 . 'Если Redmine временно недоступен — попробуй ещё раз через пару минут.';
         }
 
+        // Разбираем фильтры из ссылки, чтобы показывать их в /status.
+        $filters = $this->parseAtomFilters($url);
+
         // Сохраняем пользователя в реестр под блокировкой (защита от гонок с cron).
-        $this->withUserLock(function () use ($chatId, $name, $username, $url) {
+        $this->withUserLock(function () use ($chatId, $name, $username, $url, $filters) {
             $users = $this->loadUsers();
             $users[$chatId] = [
                 'chat_id'    => $chatId,
                 'name'       => $name,
                 'username'   => $username,
                 'atom_url'   => $url,
+                'filters'    => $filters,
                 'created_at' => date('c'),
             ];
             $this->saveUsers($users);
@@ -360,15 +364,21 @@ final class GloProTrackerBot
         // Сохраняем текущее состояние, чтобы первый cron не прислал все задачи как новые.
         $this->saveState($this->stateFile($chatId), $issues);
 
-        return "<b>Готово!</b> Ключ принят, задач в выдаче: " . count($issues) . ".\n\n"
-            . 'Теперь я буду сообщать об изменениях. Проверить подписку: <code>/status</code>';
+        $message = "<b>Готово!</b> Ключ принят, задач в выдаче: " . count($issues) . '.';
+        if ($filters !== []) {
+            $message .= "\n\n🔎 Фильтры:\n"
+                . implode("\n", array_map(fn(string $f): string => '  • ' . $this->esc($f), $filters));
+        }
+        $message .= "\n\nТеперь я буду сообщать об изменениях. Проверить подписку: <code>/status</code>";
+
+        return $message;
     }
 
     private function cmdStatus(string $chatId): string
     {
         $users = $this->loadUsers();
         if (!isset($users[$chatId])) {
-            return "Ты ещё не зарегистрирован.\n\nОтправь /setkey <ссылка issues.atom>, чтобы начать получать уведомления.";
+            return "❌ Ты ещё не зарегистрирован.\n\nОтправь /setkey <ссылка issues.atom>, чтобы начать получать уведомления.";
         }
 
         $url = (string)($users[$chatId]['atom_url'] ?? '');
@@ -381,11 +391,29 @@ final class GloProTrackerBot
             $lastCheck = (new DateTimeImmutable($savedAt))->format('d.m.Y H:i');
         }
 
-        return "<b>Статус:</b>\n"
-            . '• Redmine: <code>' . $this->esc($host) . "</code>\n"
-            . "• Подписка: активна\n"
-            . "• Последняя проверка: {$lastCheck}\n\n"
-            . "Команды: <code>/issues</code> — текущие задачи, <code>/stop</code> — отключить.";
+        // Фильтры сохраняются при /setkey; для старых записей разбираем URL на лету.
+        $filters = (array)($users[$chatId]['filters'] ?? []);
+        if ($filters === []) {
+            $filters = $this->parseAtomFilters($url);
+        }
+
+        $lines = ['<b>📊 Статус подписки</b>'];
+        $lines[] = '🐞 Redmine: <code>' . $this->esc($host) . '</code>';
+        $lines[] = '✅ Подписка: активна';
+        $lines[] = '🕒 Последняя проверка: ' . $lastCheck;
+
+        if ($filters !== []) {
+            $lines[] = '';
+            $lines[] = '🔎 Фильтры (' . count($filters) . '):';
+            foreach ($filters as $filter) {
+                $lines[] = '  • ' . $this->esc($filter);
+            }
+        }
+
+        $lines[] = '';
+        $lines[] = 'Команды: <code>/issues</code> — текущие задачи, <code>/stop</code> — отключить.';
+
+        return implode("\n", $lines);
     }
 
     private function cmdStop(string $chatId): string
@@ -586,6 +614,148 @@ final class GloProTrackerBot
             'unix' => $dt->getTimestamp(),
             'text' => $dt->format('d.m.Y H:i'),
         ];
+    }
+
+    /**
+     * Разбирает atom_url и возвращает читаемый список непустых фильтров Redmine.
+     *
+     * Поддерживает и новый формат (f[]/op[]/v[]), и классические параметры
+     * вида status_id=open&assigned_to_id=me. Служебные параметры (key, sort,
+     * utf8, set_filter, group_by, c[], t[]...) игнорируются.
+     *
+     * @return string[] строки вида «Статус: не 3, 10» или «Статус: открытые»
+     */
+    private function parseAtomFilters(string $url): array
+    {
+        $query = parse_url($url, PHP_URL_QUERY);
+        if ($query === null || $query === '') {
+            return [];
+        }
+        parse_str($query, $params);
+
+        // Человекочитаемые названия полей фильтра.
+        $labels = [
+            'query_id'         => 'Сохранённый запрос',
+            'project_id'       => 'Проект',
+            'tracker_id'       => 'Трекер',
+            'status_id'        => 'Статус',
+            'priority_id'      => 'Приоритет',
+            'author_id'        => 'Автор',
+            'assigned_to_id'   => 'Исполнитель',
+            'category_id'      => 'Категория',
+            'fixed_version_id' => 'Версия',
+            'subject'          => 'Тема',
+            'watcher_id'       => 'Наблюдатель',
+            'last_updated_by'  => 'Обновил',
+        ];
+
+        // Операторы фильтра и их текст. Пустая строка — значение перечисляется как есть.
+        $ops = [
+            '='  => '',
+            '!'  => 'не ',
+            'o'  => 'открытые',
+            'c'  => 'закрытые',
+            '*'  => 'любые',
+            '!*' => 'без значения',
+            '~'  => 'содержит: ',
+            '!~' => 'не содержит: ',
+            '><' => 'между ',
+            '>=' => '≥ ',
+            '<=' => '≤ ',
+            '>'  => '> ',
+            '<'  => '< ',
+            't'  => 'сегодня',
+            'y'  => 'вчера',
+            'w'  => 'текущая неделя',
+            'lw' => 'прошлая неделя',
+            'm'  => 'текущий месяц',
+        ];
+
+        // Особые значения фильтров (специальные значения Redmine).
+        $valueNames = [
+            'me'          => 'Я',
+            'my_projects' => 'мои проекты',
+            'subprojects' => 'и подпроекты',
+        ];
+
+        // Названия статусов GloPro Redmine (id => название).
+        $statusNames = [
+            '1'  => 'Новая',
+            '11' => 'Принято',
+            '2'  => 'В работе',
+            '3'  => 'Решена',
+            '4'  => 'Обратная связь',
+            '9'  => 'Тестирование',
+            '10' => 'В препрод',
+            '8'  => 'В продакшн',
+            '5'  => 'Закрыта',
+            '6'  => 'Отклонена',
+            '12' => 'Технический долг',
+        ];
+
+        // Новый формат: f[]=status_id&op[status_id]=o&v[status_id][]=...
+        $fields = is_array($params['f'] ?? null) ? array_values($params['f']) : [];
+        $filters = [];
+
+        foreach ($fields as $field) {
+            $field = trim((string)$field);
+            if ($field === '' || !isset($labels[$field])) {
+                continue;
+            }
+
+            $op = (string)($params['op'][$field] ?? '=');
+            $values = is_array($params['v'][$field] ?? null) ? $params['v'][$field] : [];
+
+            $pretty = [];
+            foreach ($values as $value) {
+                $value = trim((string)$value);
+                if ($value === '') {
+                    continue;
+                }
+                $pretty[] = $valueNames[$value] ?? ($field === 'status_id' ? ($statusNames[$value] ?? $value) : $value);
+            }
+
+            $label = $labels[$field];
+            $opText = $ops[$op] ?? ($op !== '' && $op !== '=' ? $op . ' ' : '');
+
+            // Операторы без значений (открытые/закрытые/любые) — выводим только текст.
+            if (in_array($op, ['o', 'c', '*', '!*', 't', 'y', 'w', 'lw', 'm'], true)) {
+                $filters[] = $label . ': ' . $opText;
+            } elseif ($pretty !== []) {
+                $filters[] = $label . ': ' . $opText . implode(', ', $pretty);
+            }
+        }
+
+        // Классический формат: status_id=open&assigned_to_id=me&...
+        foreach ($params as $key => $value) {
+            if (!is_string($key) || !isset($labels[$key]) || in_array($key, $fields, true)) {
+                continue;
+            }
+
+            $values = is_array($value) ? array_values($value) : [$value];
+            $pretty = [];
+            foreach ($values as $v) {
+                $v = trim((string)$v);
+                if ($v === '') {
+                    continue;
+                }
+                if ($v === 'open') {
+                    $pretty[] = 'открытые';
+                    continue;
+                }
+                if ($v === 'closed') {
+                    $pretty[] = 'закрытые';
+                    continue;
+                }
+                $pretty[] = $valueNames[$v] ?? ($key === 'status_id' ? ($statusNames[$v] ?? $v) : $v);
+            }
+
+            if ($pretty !== []) {
+                $filters[] = $labels[$key] . ': ' . implode(', ', $pretty);
+            }
+        }
+
+        return $filters;
     }
 
     /**
