@@ -98,7 +98,10 @@ foreach ($lines as $line) {
     if ($currentRawTotal < ($history[$pubKey]['last_total_rx'] + $history[$pubKey]['last_total_tx'])) {
         $history[$pubKey]['rx'] += $history[$pubKey]['last_total_rx'];
         $history[$pubKey]['tx'] += $history[$pubKey]['last_total_tx'];
-        $history[$pubKey]['prev_run_total'] = 0;
+        // Новый baseline — текущие значения, иначе условие будет истинным каждый запуск
+        $history[$pubKey]['last_total_rx'] = $currentRx;
+        $history[$pubKey]['last_total_tx'] = $currentTx;
+        $history[$pubKey]['prev_run_total'] = $currentRawTotal;
     }
 
     // Трафик за этот месяц = (Текущий дамп - Дамп на начало месяца) + Накопленное при перезагрузках
