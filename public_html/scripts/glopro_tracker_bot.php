@@ -777,6 +777,9 @@ final class GloProTrackerBot
     /**
      * Приводит ISO-дату из фида к массиву: unix-время и форматированный текст.
      *
+     * Фиды Redmine отдают время в UTC (суффикс Z), а бот работает в таймзоне
+     * GLOPRO_TZ (по умолчанию Europe/Moscow) — текст форматируем именно в ней.
+     *
      * @return array{unix: int, text: string}
      */
     private function parseDate(string $iso): array
@@ -785,7 +788,8 @@ final class GloProTrackerBot
             return ['unix' => 0, 'text' => ''];
         }
 
-        $dt = new DateTimeImmutable($iso);
+        // setTimezone обязателен: DateTimeImmutable с явным "Z" иначе сохраняет UTC.
+        $dt = (new DateTimeImmutable($iso))->setTimezone(new DateTimeZone(date_default_timezone_get()));
         return [
             'unix' => $dt->getTimestamp(),
             'text' => $dt->format('d.m.Y H:i'),
