@@ -364,7 +364,7 @@ final class GloProTrackerBot
         // Сохраняем текущее состояние, чтобы первый cron не прислал все задачи как новые.
         $this->saveState($this->stateFile($chatId), $issues);
 
-        $message = "<b>Готово!</b> Ключ принят, задач в выдаче: " . count($issues) . '.';
+        $message = "<b>Готово!</b> Ключ принят, задач в выдаче: <b>" . count($issues) . '</b>';
         if ($filters !== []) {
             $message .= "\n\n🔎 Фильтры:\n"
                 . implode("\n", array_map(fn(string $f): string => '  • ' . $f, $filters));
@@ -963,7 +963,7 @@ final class GloProTrackerBot
     private function buildSummary(array $issues, string $host): string
     {
         $count = count($issues);
-        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "📋 Задач в выдаче: {$count}"];
+        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "📋 Задач в выдаче: <b>{$count}</b>"];
 
         if ($count === 0) {
             return implode("\n", $lines) . "\n";
