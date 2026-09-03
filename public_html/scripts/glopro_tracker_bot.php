@@ -710,6 +710,8 @@ final class GloProTrackerBot
         $description = trim($xpath->evaluate('string(atom:content)', $entry));
 
         $parsed = $this->parseTitle($title);
+        // В базовом фиде списка entry: updated = дата создания задачи, author = её автор.
+        $parsedDate = $this->parseDate($updated);
 
         return [
             'id'          => $parsed['id'],
@@ -718,8 +720,10 @@ final class GloProTrackerBot
             'status'      => $parsed['status'],
             'subject'     => $parsed['subject'],
             'url'         => $link,
-            'updated'     => $this->parseDate($updated),
+            'updated'     => $parsedDate,
             'updated_by'  => '',
+            'created'     => $parsedDate,
+            'created_by'  => $author,
             'author'      => $author,
             'description' => $description,
         ];
@@ -978,14 +982,17 @@ final class GloProTrackerBot
     /**
      * Строит HTML-таблицу задач: Номер | Статус | Тема | Обновлено.
      *
+     * При $created = true колонка «Обновлено» меняется на «Создано» и показывает
+     * дату и автора создания (для уведомлений о новых задачах).
+     *
      * @param array<int, array<string, mixed>> $issues
      * @param array<int, string> $oldStatuses id => прежний статус (для «было:»)
      * @return string[]
      */
-    private function buildTable(array $issues, array $oldStatuses = []): array
+    private function buildTable(array $issues, array $oldStatuses = [], bool $created = false): array
     {
         $lines = ['<table bordered>'];
-        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>Обновлено</th></tr>';
+        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>' . ($created ? 'Создано' : 'Обновлено') . '</th></tr>';
 
         foreach ($issues as $issue) {
             $id = $issue['id'];
@@ -1000,18 +1007,18 @@ final class GloProTrackerBot
                 $status .= ' <br><mark>(было: ' . $this->esc($oldStatuses[$id]) . ')</mark>';
             }
 
+            // Дата и автор: для новых задач — создание, для остальных — последнее изменение.
+            $whenText = $created ? ($issue['created']['text'] ?? '') : ($issue['updated']['text'] ?? '');
+            $whoName = trim((string)($created ? ($issue['created_by'] ?? '') : ($issue['updated_by'] ?? '')));
+            if ($whoName !== '') {
+                $whenText .= '<br><i>' . $this->esc($whoName) . '</i>';
+            }
+
             $lines[] = '<tr>';
             $lines[] = '  <td>' . $number . '</td>';
             $lines[] = '  <td>' . $status . '</td>';
             $lines[] = '  <td>' . $this->esc($issue['subject']) . '</td>';
-
-            // «Обновлено»: реальные дата и автор последнего изменения (из фида задачи).
-            $updated = $issue['updated']['text'];
-            $updatedBy = trim((string)($issue['updated_by'] ?? ''));
-            if ($updatedBy !== '') {
-                $updated .= '<br><i>' . $this->esc($updatedBy) . '</i>';
-            }
-            $lines[] = '  <td>' . $updated . '</td>';
+            $lines[] = '  <td>' . $whenText . '</td>';
             $lines[] = '</tr>';
         }
 
@@ -1169,7 +1176,8 @@ final class GloProTrackerBot
 
             $lines[] = '';
             $lines[] = '<b>' . $label . '</b>';
-            $lines = array_merge($lines, $this->buildTable($issues, $oldStatuses));
+            // Для новых задач колонка показывает «Создано» (дата и автор создания).
+            $lines = array_merge($lines, $this->buildTable($issues, $oldStatuses, $type === 'new'));
         }
 
         return implode("\n", $lines);
