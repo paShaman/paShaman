@@ -123,8 +123,10 @@ final class GloProTrackerBot
         }
 
         // Скачиваем актуальный список задач по ссылке пользователя.
+        // В cron добавляем фильтр «последний обновивший — не я», чтобы не слать
+        // изменения, которые пользователь сделал сам.
         try {
-            $issues = $this->fetchIssues($url);
+            $issues = $this->fetchIssues($this->addIgnoreOwnUpdatesFilter($url));
         } catch (RuntimeException $e) {
             // Redmine недоступен или вернул ошибку — пропускаем, не трогая состояние.
             $this->log("❌ Пользователь {$chatId}: " . $e->getMessage());
@@ -145,6 +147,19 @@ final class GloProTrackerBot
         $message = $this->buildChangesMessage($changes, parse_url($url, PHP_URL_HOST) ?: 'Redmine');
         $ok = $this->sendTelegram($chatId, $message);
         $this->log(($ok ? '✅' : '❌') . " Пользователь {$chatId}: изменений " . count($changes) . ($ok ? '' : ' (ошибка отправки)') . '.');
+    }
+
+    /** Фильтр Redmine «последний обновивший — не я», добавляемый к URL фида в cron. */
+    private const IGNORE_OWN_UPDATES = 'f[]=last_updated_by&op[last_updated_by]=!&v[last_updated_by][]=me';
+
+    /**
+     * Добавляет к URL фида фильтр «последний обновивший — не я»,
+     * чтобы отсекать обновления, которые пользователь делает сам.
+     */
+    private function addIgnoreOwnUpdatesFilter(string $url): string
+    {
+        $sep = str_contains($url, '?') ? '&' : '?';
+        return $url . $sep . self::IGNORE_OWN_UPDATES;
     }
 
     // ---------------------------------------------------------------------
@@ -1145,7 +1160,7 @@ final class GloProTrackerBot
     private function buildChangesMessage(array $changes, string $host): string
     {
         $count = count($changes);
-        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "🛠️ Изменений: {$count}"];
+        $lines = ['<b>🐞 Redmine:</b> ' . $this->esc($host), "🛠️ Изменений: <b>{$count}</b>"];
 
         // Сгруппируем изменения по типу: new / status / updated.
         $groups = [];
