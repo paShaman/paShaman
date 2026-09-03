@@ -513,7 +513,182 @@ final class GloProTrackerBot
             }
         }
 
+        // Для каждой задачи уточняем реальную дату последнего обновления и автора
+        // по её собственному Atom-фиду (в фиде списка эти данные неточные).
+        return $this->enrichIssues($issues, $url);
+    }
+
+    /**
+     * Уточняет для каждой задачи реальную дату последнего обновления и того, кто её
+     * обновил. По каждой задаче запрашивается её собственный Atom-фид
+     * (https://<host>/issues/<id>.atom?key=...): <updated> и <author> в общем фиде
+     * списка соответствуют не последнему изменению, а неактуальному updated_on.
+     *
+     * Запросы выполняются параллельно порциями, чтобы не растягивать cron.
+     *
+     * @param array<int, array<string, mixed>> $issues
+     * @return array<int, array<string, mixed>>
+     */
+    private function enrichIssues(array $issues, string $feedUrl): array
+    {
+        // Уже загружен детальный фид одной задачи (issues/<id>.atom): его записи —
+        // это и есть журнал изменений, уточнять нечего.
+        if (preg_match('#/issues/\d+\.atom$#', (string)parse_url($feedUrl, PHP_URL_PATH))) {
+            return $issues;
+        }
+        if ($issues === []) {
+            return $issues;
+        }
+
+        $parts = parse_url($feedUrl);
+        if (!isset($parts['scheme'], $parts['host'])) {
+            return $issues;
+        }
+        parse_str((string)($parts['query'] ?? ''), $params);
+        $key = trim((string)($params['key'] ?? ''));
+        if ($key === '') {
+            return $issues;
+        }
+
+        // Индексируем позиции записей по id задачи.
+        $posById = [];
+        foreach ($issues as $i => $issue) {
+            $id = (int)$issue['id'];
+            if ($id > 0) {
+                $posById[$id][] = $i;
+            }
+        }
+        if ($posById === []) {
+            return $issues;
+        }
+
+        $base = $parts['scheme'] . '://' . $parts['host'] . '/issues/';
+
+        // Скачиваем детальные фиды задач порциями (не больше 8 параллельных запросов).
+        foreach (array_chunk(array_keys($posById), 8) as $chunk) {
+            $details = $this->fetchIssueDetailsBatch($base, $key, $chunk);
+            foreach ($details as $id => $detail) {
+                foreach ($posById[$id] as $i) {
+                    $issues[$i]['updated'] = $detail['updated'];
+                    $issues[$i]['updated_by'] = $detail['updated_by'];
+                }
+            }
+        }
+
         return $issues;
+    }
+
+    /**
+     * Параллельно скачивает Atom-фиды набора задач и возвращает для каждого id
+     * дату последнего изменения и автора, сделавшего его.
+     *
+     * @param int[] $ids
+     * @return array<int, array{updated: array{unix: int, text: string}, updated_by: string}>
+     */
+    private function fetchIssueDetailsBatch(string $base, string $key, array $ids): array
+    {
+        $mh = curl_multi_init();
+        $handles = [];
+        foreach ($ids as $id) {
+            $url = $base . $id . '.atom?' . http_build_query(['key' => $key]);
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT => 20,
+                CURLOPT_CONNECTTIMEOUT => 10,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                CURLOPT_ENCODING => '',
+                CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+                CURLOPT_SSL_VERIFYPEER => true,
+            ]);
+            $handles[$id] = $ch;
+            curl_multi_add_handle($mh, $ch);
+        }
+
+        // Крутим мульти-curl, пока все запросы не завершатся.
+        $running = 0;
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+
+        $details = [];
+        foreach ($handles as $id => $ch) {
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $body = curl_multi_getcontent($ch);
+            curl_multi_remove_handle($mh, $ch);
+
+            if ($body === false || $httpCode !== 200) {
+                $this->log("⚠️ Не удалось получить детали задачи #{$id}: Redmine вернул HTTP {$httpCode}");
+                continue;
+            }
+
+            $detail = $this->parseIssueDetailFeed((string)$body);
+            if ($detail !== null) {
+                $details[$id] = $detail;
+            }
+        }
+        curl_multi_close($mh);
+
+        return $details;
+    }
+
+    /**
+     * Парсит Atom-фид одной задачи и возвращает данные последней записи журнала —
+     * реальную дату и автора последнего изменения.
+     *
+     * @return array{updated: array{unix: int, text: string}, updated_by: string}|null
+     */
+    private function parseIssueDetailFeed(string $xml): ?array
+    {
+        $dom = new DOMDocument();
+        $prev = libxml_use_internal_errors(true);
+        $loaded = $dom->loadXML($xml, LIBXML_NONET);
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+
+        if (!$loaded) {
+            return null;
+        }
+
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('atom', self::ATOM_NS);
+
+        // Каждая <atom:entry> в фиде задачи — одна запись журнала (изменение).
+        // Ищем самую свежую запись по дате, а не по позиции в документе.
+        $bestEntry = null;
+        $bestUnix = -1;
+        foreach ($xpath->query('//atom:entry') as $entry) {
+            if (!$entry instanceof DOMElement) {
+                continue;
+            }
+            $iso = trim($xpath->evaluate('string(atom:updated)', $entry));
+            if ($iso === '') {
+                continue;
+            }
+            try {
+                $unix = (new DateTimeImmutable($iso))->getTimestamp();
+            } catch (\Throwable) {
+                continue;
+            }
+            // >= — при одинаковых датах берём запись, идущую позже в документе.
+            if ($bestEntry === null || $unix >= $bestUnix) {
+                $bestEntry = $entry;
+                $bestUnix = $unix;
+            }
+        }
+
+        if ($bestEntry === null) {
+            return null;
+        }
+
+        return [
+            'updated'    => $this->parseDate(trim($xpath->evaluate('string(atom:updated)', $bestEntry))),
+            'updated_by' => trim($xpath->evaluate('string(atom:author/atom:name)', $bestEntry)),
+        ];
     }
 
     /**
@@ -544,6 +719,7 @@ final class GloProTrackerBot
             'subject'     => $parsed['subject'],
             'url'         => $link,
             'updated'     => $this->parseDate($updated),
+            'updated_by'  => '',
             'author'      => $author,
             'description' => $description,
         ];
@@ -817,14 +993,21 @@ final class GloProTrackerBot
             $status = $issue['status'] !== '' ? '<i>' . $this->esc($issue['status']) . '</i>' : '—';
             // Для сменивших статус задач приписываем прежний статус мелким текстом.
             if (isset($oldStatuses[$id]) && $oldStatuses[$id] !== '') {
-                $status .= ' <br><small>(было: ' . $this->esc($oldStatuses[$id]) . ')</small>';
+                $status .= ' <br><mark>(было: ' . $this->esc($oldStatuses[$id]) . ')</mark>';
             }
 
             $lines[] = '<tr>';
             $lines[] = '  <td>' . $number . '</td>';
             $lines[] = '  <td>' . $status . '</td>';
             $lines[] = '  <td>' . $this->esc($issue['subject']) . '</td>';
-            $lines[] = '  <td>' . $issue['updated']['text'] . '</td>';
+
+            // «Обновлено»: реальные дата и автор последнего изменения (из фида задачи).
+            $updated = $issue['updated']['text'];
+            $updatedBy = trim((string)($issue['updated_by'] ?? ''));
+            if ($updatedBy !== '') {
+                $updated .= '<br><i>' . $this->esc($updatedBy) . '</i>';
+            }
+            $lines[] = '  <td>' . $updated . '</td>';
             $lines[] = '</tr>';
         }
 
