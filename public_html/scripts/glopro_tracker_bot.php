@@ -998,17 +998,17 @@ final class GloProTrackerBot
     /**
      * Строит HTML-таблицу задач: Номер | Статус | Тема | Обновлено.
      *
-     * При $created = true колонка «Обновлено» меняется на «Создано» и показывает
-     * дату и автора создания (для уведомлений о новых задачах).
+     * Колонка всегда «Обновлено»: показываем дату последнего изменения и того,
+     * кто его сделал. Если последний обновивший неизвестен — берём создателя.
      *
      * @param array<int, array<string, mixed>> $issues
      * @param array<int, string> $oldStatuses id => прежний статус (для «было:»)
      * @return string[]
      */
-    private function buildTable(array $issues, array $oldStatuses = [], bool $created = false): array
+    private function buildTable(array $issues, array $oldStatuses = []): array
     {
         $lines = ['<table bordered>'];
-        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>' . ($created ? 'Создано' : 'Обновлено') . '</th></tr>';
+        $lines[] = '<tr><th>Номер</th><th>Статус</th><th>Тема</th><th>Обновлено</th></tr>';
 
         foreach ($issues as $issue) {
             $id = $issue['id'];
@@ -1023,9 +1023,15 @@ final class GloProTrackerBot
                 $status .= ' <br><mark>(было: ' . $this->esc($oldStatuses[$id]) . ')</mark>';
             }
 
-            // Дата и автор: для новых задач — создание, для остальных — последнее изменение.
-            $whenText = $created ? ($issue['created']['text'] ?? '') : ($issue['updated']['text'] ?? '');
-            $whoName = trim((string)($created ? ($issue['created_by'] ?? '') : ($issue['updated_by'] ?? '')));
+            // Дата и автор — последнее изменение; если обновивший неизвестен, берём создателя.
+            $whenText = (string)($issue['updated']['text'] ?? '');
+            $whoName = trim((string)($issue['updated_by'] ?? ''));
+            if ($whoName === '') {
+                $whoName = trim((string)($issue['created_by'] ?? ''));
+                if ($whenText === '') {
+                    $whenText = (string)($issue['created']['text'] ?? '');
+                }
+            }
             if ($whoName !== '') {
                 $whenText .= '<br><i>' . $this->esc($whoName) . '</i>';
             }
@@ -1192,8 +1198,8 @@ final class GloProTrackerBot
 
             $lines[] = '';
             $lines[] = '<b>' . $label . '</b>';
-            // Для новых задач колонка показывает «Создано» (дата и автор создания).
-            $lines = array_merge($lines, $this->buildTable($issues, $oldStatuses, $type === 'new'));
+            // Колонка всегда «Обновлено» (дата и автор последнего изменения).
+            $lines = array_merge($lines, $this->buildTable($issues, $oldStatuses));
         }
 
         return implode("\n", $lines);
