@@ -412,6 +412,7 @@ final class VacationBot
 
         switch ($action) {
             case 'cancel':
+                $number = $this->numberOfRecord($userId, $id);
                 $result = $this->deleteRecord($id, $userId);
                 if (!$result['ok']) {
                     $this->sendHtml($chatId, $result['err'] === 'not_owner'
@@ -419,7 +420,7 @@ final class VacationBot
                         : '⚠️ Запись не найдена.');
                     return;
                 }
-                $this->sendHtml($chatId, '🗑 Запись #' . $id . ' отменена.');
+                $this->sendHtml($chatId, '🗑 ' . ($number !== null ? 'Запись №' . $number : 'Запись') . ' отменена.');
                 return;
             case 'edit':
                 $record = $this->findRecord($id);
@@ -431,8 +432,55 @@ final class VacationBot
                     $this->sendHtml($chatId, '⛔ Можно редактировать только свои записи.');
                     return;
                 }
+                $comment = trim((string)($record['comment'] ?? ''));
+                $number = $this->numberOfRecord($userId, $id);
+                $this->sendHtml(
+                    $chatId,
+                    '✏️ <b>' . ($number !== null ? 'Запись №' . $number : 'Запись') . '</b>' . "\n\n"
+                    . 'Тип: ' . $this->esc($this->typeLabel((string)$record['type'])) . "\n"
+                    . 'Даты: ' . $this->esc($this->formatInterval((string)$record['date_from'], (string)$record['date_to']))
+                    . ' (' . (int)$record['days'] . ' к.д.)' . "\n"
+                    . 'Комментарий: ' . ($comment === '' ? '—' : $this->esc($comment)) . "\n\n"
+                    . 'Что изменить?',
+                    $this->inlineKeyboard([
+                        [self::btn('✏️ Даты', 'rec:editdates:' . $id), self::btn('💬 Комментарий', 'rec:comment:' . $id)],
+                    ])
+                );
+                return;
+            case 'editdates':
+                $record = $this->findRecord($id);
+                if ($record === null) {
+                    $this->sendHtml($chatId, '⚠️ Запись не найдена.');
+                    return;
+                }
+                if ($record['user_id'] !== $userId && !$this->isAdmin($userId)) {
+                    $this->sendHtml($chatId, '⛔ Можно редактировать только свои записи.');
+                    return;
+                }
                 $this->setSession($userId, ['step' => 'edit_dates', 'target' => $id]);
-                $this->sendHtml($chatId, "📅 Введите новые даты для записи #{$id}:");
+                $number = $this->numberOfRecord($userId, $id);
+                $this->sendHtml($chatId, '📅 Введите новые даты для '
+                    . ($number !== null ? 'записи №' . $number : 'записи') . ':');
+                return;
+            case 'comment':
+                $record = $this->findRecord($id);
+                if ($record === null) {
+                    $this->sendHtml($chatId, '⚠️ Запись не найдена.');
+                    return;
+                }
+                if ($record['user_id'] !== $userId && !$this->isAdmin($userId)) {
+                    $this->sendHtml($chatId, '⛔ Можно редактировать только свои записи.');
+                    return;
+                }
+                $this->setSession($userId, ['step' => 'edit_comment', 'target' => $id]);
+                $number = $this->numberOfRecord($userId, $id);
+                $this->sendHtml(
+                    $chatId,
+                    '💬 Введите комментарий для '
+                    . ($number !== null ? 'записи №' . $number : 'записи')
+                    . ' (или «-», чтобы очистить):',
+                    $this->inlineKeyboard([[self::btn('❌ Отмена', 'add:cancel')]])
+                );
                 return;
             case 'finish':
                 $record = $this->findRecord($id);
@@ -445,9 +493,11 @@ final class VacationBot
                     return;
                 }
                 $this->setSession($userId, ['step' => 'finish_date', 'target' => $id]);
+                $number = $this->numberOfRecord($userId, $id);
                 $this->sendHtml(
                     $chatId,
-                    "🏁 Введите дату фактического выхода для записи #{$id}\n"
+                    '🏁 Введите дату фактического выхода для '
+                    . ($number !== null ? 'записи №' . $number : 'записи') . "\n"
                     . '(или «сегодня»):',
                     $this->inlineKeyboard([[self::btn('❌ Отмена', 'add:cancel')]])
                 );
@@ -586,8 +636,10 @@ final class VacationBot
         }
 
         $lines = ['✅ <b>Записано</b>'];
+        $num = 0;
         foreach ($created as $r) {
-            $lines[] = '#' . $r['id'] . ' · ' . $this->esc($this->typeLabel((string)$r['type']))
+            $num++;
+            $lines[] = $num . '. ' . $this->esc($this->typeLabel((string)$r['type']))
                 . ' · ' . $this->esc($this->formatInterval((string)$r['date_from'], (string)$r['date_to']))
                 . ' (' . $r['days'] . ' к.д.)';
         }
@@ -635,9 +687,10 @@ final class VacationBot
                         : '⚠️ Запись не найдена.');
                     return true;
                 }
+                $num = $this->ordinalOf($userId, $id);
                 $this->sendHtml(
                     $chatId,
-                    '✏️ Запись #' . $id . ' перенесена: '
+                    '✏️ ' . ($num !== null ? 'Запись №' . $num : 'Запись') . ' перенесена: '
                     . $this->esc($this->formatInterval($ranges[0]['from'], $ranges[0]['to']))
                     . ' (' . $this->daysInRange($ranges[0]['from'], $ranges[0]['to']) . ' к.д.)'
                 );
@@ -680,7 +733,27 @@ final class VacationBot
                 $this->sendHtml($chatId, $msg);
                 return true;
             }
-            $this->sendHtml($chatId, '🏁 Запись #' . $id . ' завершена ' . $this->esc($this->shortDate($date)) . '.');
+            $number = $this->numberOfRecord($userId, $id);
+            $this->sendHtml($chatId, '🏁 ' . ($number !== null ? 'Запись №' . $number : 'Запись')
+                . ' завершена ' . $this->esc($this->shortDate($date)) . '.');
+            return true;
+        }
+
+        if ($step === 'edit_comment') {
+            $id = (int)($session['target'] ?? 0);
+            $this->clearSession($userId);
+            $comment = trim($text) === '-' ? '' : trim($text);
+            $result = $this->updateRecordComment($id, $userId, $comment);
+            if (!$result['ok']) {
+                $this->sendHtml($chatId, $result['err'] === 'not_owner'
+                    ? '⛔ Это не ваша запись.'
+                    : '⚠️ Запись не найдена.');
+                return true;
+            }
+            $number = $this->numberOfRecord($userId, $id);
+            $this->sendHtml($chatId, '💬 Комментарий '
+                . ($number !== null ? 'записи №' . $number : 'записи') . ' обновлён'
+                . ($comment === '' ? ' (очищен).' : ': ' . $this->esc($comment)));
             return true;
         }
 
@@ -715,8 +788,10 @@ final class VacationBot
         if ($records === []) {
             $lines[] = 'За этот год записей нет.';
         } else {
+            $num = 0;
             foreach ($records as $r) {
-                $line = '#' . $r['id'] . ' · ' . $this->esc($this->typeLabel((string)$r['type']))
+                $num++;
+                $line = $num . '. ' . $this->esc($this->typeLabel((string)$r['type']))
                     . ' · ' . $this->esc($this->formatInterval((string)$r['date_from'], $this->effectiveTo($r)))
                     . ' (' . $this->effectiveDays($r) . ' к.д.)';
                 if (!empty($r['finished_at'])) {
@@ -737,12 +812,14 @@ final class VacationBot
 
         // Кнопки управления по каждой записи (не больше 8, чтобы не перегружать).
         $rows = [];
-        foreach (array_slice($records, 0, 8) as $r) {
+        foreach (array_slice($records, 0, 8, true) as $i => $r) {
+            $num = (int)$i + 1;
             $id = (int)$r['id'];
             $rows[] = [
-                self::btn('✏️ #' . $id, 'rec:edit:' . $id),
-                self::btn('🏁 #' . $id, 'rec:finish:' . $id),
-                self::btn('🗑 #' . $id, 'rec:cancel:' . $id),
+                self::btn('✏️ ' . $num, 'rec:edit:' . $id),
+                self::btn('💬 ' . $num, 'rec:comment:' . $id),
+                self::btn('🏁 ' . $num, 'rec:finish:' . $id),
+                self::btn('🗑 ' . $num, 'rec:cancel:' . $id),
             ];
         }
         $rows = array_merge($rows, $this->menuKeyboard($userId)['inline_keyboard']);
@@ -775,13 +852,19 @@ final class VacationBot
 
     private function cmdCancel(string $chatId, string $userId, string $arg): void
     {
-        $id = (int)trim($arg);
-        if ($id <= 0) {
-            $this->sendHtml($chatId, 'Использование: <code>/cancel &lt;id&gt;</code>. Свой список: /my');
+        $number = (int)trim($arg);
+        if ($number <= 0) {
+            $this->sendHtml($chatId, 'Использование: <code>/cancel &lt;номер из /my&gt;</code>. Список: /my');
             return;
         }
 
-        $result = $this->deleteRecord($id, $userId);
+        $record = $this->recordByNumber($userId, $number);
+        if ($record === null) {
+            $this->sendHtml($chatId, '⚠️ В /my нет записи №' . $number . '.');
+            return;
+        }
+
+        $result = $this->deleteRecord((int)$record['id'], $userId);
         if (!$result['ok']) {
             $this->sendHtml($chatId, $result['err'] === 'not_owner'
                 ? '⛔ Можно отменять только свои записи.'
@@ -789,7 +872,9 @@ final class VacationBot
             return;
         }
 
-        $this->sendHtml($chatId, '🗑 Запись #' . $id . ' отменена.');
+        $this->sendHtml($chatId, '🗑 Запись №' . $number . ' отменена: '
+            . $this->esc($this->typeLabel((string)$record['type'])) . ' · '
+            . $this->esc($this->formatInterval((string)$record['date_from'], $this->effectiveTo($record))));
     }
 
     private function cmdEdit(string $chatId, string $userId, string $arg): void
@@ -797,13 +882,13 @@ final class VacationBot
         if (!preg_match('/^(\d+)\s+(.+)$/u', $arg, $m)) {
             $this->sendHtml(
                 $chatId,
-                "Использование: <code>/edit &lt;id&gt; &lt;даты&gt;</code>\n"
-                . 'Например: <code>/edit 5 01.08-10.08</code>'
+                "Использование: <code>/edit &lt;номер из /my&gt; &lt;даты&gt;</code>\n"
+                . 'Например: <code>/edit 2 01.08-10.08</code>'
             );
             return;
         }
 
-        $id = (int)$m[1];
+        $number = (int)$m[1];
         try {
             $ranges = $this->parseRanges($m[2]);
         } catch (RuntimeException $e) {
@@ -815,7 +900,13 @@ final class VacationBot
             return;
         }
 
-        $result = $this->updateRecordDates($id, $userId, $ranges[0]);
+        $record = $this->recordByNumber($userId, $number);
+        if ($record === null) {
+            $this->sendHtml($chatId, '⚠️ В /my нет записи №' . $number . '.');
+            return;
+        }
+
+        $result = $this->updateRecordDates((int)$record['id'], $userId, $ranges[0]);
         if (!$result['ok']) {
             $this->sendHtml($chatId, $result['err'] === 'not_owner'
                 ? '⛔ Это не ваша запись.'
@@ -825,7 +916,7 @@ final class VacationBot
 
         $this->sendHtml(
             $chatId,
-            '✏️ Запись #' . $id . ' перенесена: '
+            '✏️ Запись №' . $number . ' перенесена: '
             . $this->esc($this->formatInterval($ranges[0]['from'], $ranges[0]['to']))
             . ' (' . $this->daysInRange($ranges[0]['from'], $ranges[0]['to']) . ' к.д.)'
         );
@@ -834,9 +925,9 @@ final class VacationBot
     private function cmdFinish(string $chatId, string $userId, string $arg): void
     {
         $parts = preg_split('/\s+/', trim($arg)) ?: [];
-        $id = (int)($parts[0] ?? 0);
-        if ($id <= 0) {
-            $this->sendHtml($chatId, 'Использование: <code>/finish &lt;id&gt; [дата|сегодня]</code>');
+        $number = (int)($parts[0] ?? 0);
+        if ($number <= 0) {
+            $this->sendHtml($chatId, 'Использование: <code>/finish &lt;номер из /my&gt; [дата|сегодня]</code>');
             return;
         }
 
@@ -853,7 +944,13 @@ final class VacationBot
             $date = $ranges[0]['from'];
         }
 
-        $result = $this->finishRecord($id, $userId, $date);
+        $record = $this->recordByNumber($userId, $number);
+        if ($record === null) {
+            $this->sendHtml($chatId, '⚠️ В /my нет записи №' . $number . '.');
+            return;
+        }
+
+        $result = $this->finishRecord((int)$record['id'], $userId, $date);
         if (!$result['ok']) {
             $msg = match ($result['err']) {
                 'not_owner' => '⛔ Это не ваша запись.',
@@ -864,7 +961,7 @@ final class VacationBot
             return;
         }
 
-        $this->sendHtml($chatId, '🏁 Запись #' . $id . ' завершена ' . $this->esc($this->shortDate($date)) . '.');
+        $this->sendHtml($chatId, '🏁 Запись №' . $number . ' завершена ' . $this->esc($this->shortDate($date)) . '.');
     }
 
     // ---------------------------------------------------------------------
@@ -995,14 +1092,15 @@ final class VacationBot
         if ($records === []) {
             $lines[] = 'Записей нет.';
         } else {
+            $num = 0;
             foreach ($records as $r) {
-                $line = '• ' . $this->esc($this->formatInterval((string)$r['date_from'], $this->effectiveTo($r)))
-                    . ' (' . $this->effectiveDays($r) . ' к.д.)';
+                $num++;
+                $interval = $this->esc($this->formatInterval((string)$r['date_from'], $this->effectiveTo($r)));
+                $days = $this->effectiveDays($r) . ' к.д.';
                 // Тип и комментарий показываем только самому сотруднику.
-                if ($isSelf) {
-                    $line = '#' . $r['id'] . ' · ' . $this->esc($this->typeLabel((string)$r['type'])) . ' ' . $line;
-                }
-                $lines[] = $line;
+                $lines[] = $isSelf
+                    ? $num . '. ' . $this->esc($this->typeLabel((string)$r['type'])) . ' · ' . $interval . ' (' . $days . ')'
+                    : $num . '. ' . $interval . ' (' . $days . ')';
                 if ($isSelf && trim((string)($r['comment'] ?? '')) !== '') {
                     $lines[] = '    💬 ' . $this->esc((string)$r['comment']);
                 }
@@ -1056,9 +1154,9 @@ final class VacationBot
             . "• /add — добавить отсутствие (кнопками)\n"
             . "• /my [год] — мои отсутствия\n"
             . "• /left — остаток отпуска в этом году\n"
-            . "• /cancel &lt;id&gt; — отменить\n"
-            . "• /edit &lt;id&gt; &lt;даты&gt; — перенести\n"
-            . "• /finish &lt;id&gt; [дата|сегодня] — досрочно завершить\n\n"
+            . "• /cancel &lt;номер&gt; — отменить (номер из /my)\n"
+            . "• /edit &lt;номер&gt; &lt;даты&gt; — перенести (комментарий — кнопкой 💬 в /my)\n"
+            . "• /finish &lt;номер&gt; [дата|сегодня] — досрочно завершить\n\n"
             . "<b>Общая картина</b>\n"
             . "• /today — кто отсутствует сегодня\n"
             . "• /week — кто отсутствует на этой неделе\n"
@@ -1511,6 +1609,29 @@ final class VacationBot
     }
 
     /**
+     * Меняет комментарий записи.
+     *
+     * @return array{ok: bool, err?: string}
+     */
+    private function updateRecordComment(int $id, string $requesterId, string $comment): array
+    {
+        return $this->mutateRecords(function (array &$data) use ($id, $requesterId, $comment): array {
+            foreach ($data['records'] as $i => $r) {
+                if ((int)$r['id'] !== $id) {
+                    continue;
+                }
+                if ((string)$r['user_id'] !== $requesterId && !$this->isAdmin($requesterId)) {
+                    return ['ok' => false, 'err' => 'not_owner'];
+                }
+                $data['records'][$i]['comment'] = $comment;
+                $data['records'][$i]['updated_at'] = date('c');
+                return ['ok' => true];
+            }
+            return ['ok' => false, 'err' => 'not_found'];
+        });
+    }
+
+    /**
      * @return array{ok: bool, err?: string}
      */
     private function finishRecord(int $id, string $requesterId, string $date): array
@@ -1553,6 +1674,45 @@ final class VacationBot
         }
         usort($records, static fn(array $a, array $b): int => strcmp((string)$a['date_from'], (string)$b['date_from']));
         return $records;
+    }
+
+    /**
+     * Записи сотрудника за год с нумерацией с 1 (как в /my).
+     *
+     * @return array<int, array<string, mixed>> [номер => запись]
+     */
+    private function numberedRecords(string $userId, ?int $year = null): array
+    {
+        $year ??= (int)$this->now()->format('Y');
+        $out = [];
+        $n = 0;
+        foreach ($this->recordsForUserYear($userId, $year) as $r) {
+            $out[++$n] = $r;
+        }
+        return $out;
+    }
+
+    /**
+     * Запись по её номеру в списке /my.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function recordByNumber(string $userId, int $number, ?int $year = null): ?array
+    {
+        return $this->numberedRecords($userId, $year)[$number] ?? null;
+    }
+
+    /**
+     * Номер записи в списке /my (для вывода) или null, если её там нет.
+     */
+    private function numberOfRecord(string $userId, int $recordId, ?int $year = null): ?int
+    {
+        foreach ($this->numberedRecords($userId, $year) as $num => $r) {
+            if ((int)$r['id'] === $recordId) {
+                return $num;
+            }
+        }
+        return null;
     }
 
     /**
