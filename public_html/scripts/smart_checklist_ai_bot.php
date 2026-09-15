@@ -960,6 +960,7 @@ class SmartChecklistAIBot
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
 
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
@@ -968,7 +969,7 @@ class SmartChecklistAIBot
             if ($this->logTgErrors) {
                 file_put_contents(
                     'tg_api_errors.log',
-                    sprintf("%s | URL: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, $curlError, print_r($payload, true)),
+                    sprintf("%s | URL: %s | proxy: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $curlError, print_r($payload, true)),
                     FILE_APPEND
                 );
             }
@@ -981,7 +982,7 @@ class SmartChecklistAIBot
                 if ($this->logTgErrors) {
                     file_put_contents(
                         'tg_api_errors.log',
-                        sprintf("%s | URL: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, $response, print_r($payload, true)),
+                        sprintf("%s | URL: %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $response, print_r($payload, true)),
                         FILE_APPEND
                     );
                 }
@@ -1056,6 +1057,7 @@ class SmartChecklistAIBot
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($audioUrl));
 
         $audioData = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1225,6 +1227,7 @@ class SmartChecklistAIBot
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 15);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
         $response = curl_exec($ch);
 
         if (!$response) {

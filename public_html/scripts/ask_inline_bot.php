@@ -197,6 +197,7 @@ class DeepSeekInlineBot
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
 
         $response = curl_exec($ch);
         $curlError = curl_error($ch);
@@ -207,12 +208,13 @@ class DeepSeekInlineBot
         }
 
         $hasError = false;
+        $proxyLabel = tgProxyCurlOptions() ? 'TG_PROXY' : 'direct';
 
         if ($curlError) {
             $hasError = true;
             file_put_contents(
                 $logDir . '/ask_errors.log',
-                sprintf("%s | URL: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, $curlError, print_r($payload, true)),
+                sprintf("%s | URL: %s | proxy: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, $proxyLabel, $curlError, print_r($payload, true)),
                 FILE_APPEND
             );
         }
@@ -223,7 +225,7 @@ class DeepSeekInlineBot
                 $hasError = true;
                 file_put_contents(
                     $logDir . '/tg_api_errors.log',
-                    sprintf("%s | URL: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, $response, print_r($payload, true)),
+                    sprintf("%s | URL: %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, $proxyLabel, $response, print_r($payload, true)),
                     FILE_APPEND
                 );
             }

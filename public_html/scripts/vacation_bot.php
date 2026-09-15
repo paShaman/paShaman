@@ -23,6 +23,8 @@ include __DIR__ . '/_env.php';
  *   VACATION_TZ              — часовой пояс, по умолчанию Europe/Moscow
  *   VACATION_TYPES           — список типов "ключ:эмодзи,ключ:эмодзи" (опционально)
  *   VACATION_QUOTA_TYPES     — типы, списывающие остаток отпуска (по умолчанию "отпуск")
+ *   TG_PROXY                 — прокси для запросов к api.telegram.org (опционально,
+ *                              напр. socks5h://user:pass@host:1080; пусто — соединение прямое)
  *
  * Хранение (public_html/scripts/logs/):
  *   vacations_users.json     — белый список / справочник (сидируется из glopro_users.json)
@@ -2365,7 +2367,8 @@ final class VacationBot
      */
     private function api(string $method, array $payload, bool $raw = false): ?array
     {
-        $ch = curl_init('https://api.telegram.org/bot' . $this->tgToken . '/' . $method);
+        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/' . $method;
+        $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 20,
@@ -2376,17 +2379,18 @@ final class VacationBot
         if (!$raw) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }
+        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
 
         $response = curl_exec($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
 
         if ($response === false || $error !== '') {
-            $this->logError("cURL {$method}: {$error}");
+            $this->logError("cURL {$method}: {$error}" . $this->proxyHint());
             return null;
         }
         if ($httpCode >= 400) {
-            $this->logError("{$method} HTTP {$httpCode}: " . substr((string)$response, 0, 300));
+            $this->logError("{$method} HTTP {$httpCode}" . $this->proxyHint() . ': ' . substr((string)$response, 0, 300));
             return null;
         }
 
@@ -2396,6 +2400,12 @@ final class VacationBot
             return null;
         }
         return $decoded;
+    }
+
+    /** Пометка для логов: запрос шёл через TG_PROXY или напрямую. */
+    private function proxyHint(): string
+    {
+        return trim((string)getenv('TG_PROXY')) !== '' ? ' [via TG_PROXY]' : '';
     }
 
     private function answerCallback(string $callbackId): void
