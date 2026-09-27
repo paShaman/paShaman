@@ -47,6 +47,7 @@ require_once __DIR__ . '/../_env.php';
  *   JEV_OPENROUTER_URL / JEV_TYPESAFE_URL — переопределение эндпоинта
  *   OPENROUTER_JEV_KEY — ключ для openrouter
  *   TYPESAFE_API_KEY — ключ для typesafe
+ *   OPENROUTER_PROXY — прокси для маршрута openrouter (по умолчанию TG_PROXY)
  *   LOG_JEV, JEV_LOG_FILE — логирование запросов/ответов (по умолчанию выкл.)
  */
 final class JevException extends RuntimeException
@@ -703,6 +704,10 @@ final class JevClient
                 return strlen($header);
             },
         ]);
+
+        if ($this->provider === self::OPENROUTER) {
+            curl_setopt_array($ch, openrouterProxyCurlOptions());
+        }
 
         $body = curl_exec($ch);
         $error = curl_error($ch);
