@@ -101,7 +101,7 @@ class SmartChecklistAIBot
         // Интент-распознавание через Jev (decision-модель): по умолчанию включено,
         // отключается переменной JEV_INTENT_ENABLED=false.
         $this->jevIntentEnabled = getenv('JEV_INTENT_ENABLED') !== 'false';
-        $this->jevIntentThreshold = (float)(getenv('JEV_INTENT_THRESHOLD') ?: 0.85);
+        $this->jevIntentThreshold = (float)(getenv('JEV_INTENT_THRESHOLD') ?: 0.75);
         $this->jevIntentTimeout = (float)(getenv('JEV_INTENT_TIMEOUT') ?: 8);
         $this->jevIntentMinWords = max(1, (int)(getenv('JEV_INTENT_MIN_WORDS') ?: 2));
 
@@ -411,22 +411,26 @@ class SmartChecklistAIBot
 
         $requestLower = trim(mb_strtolower($this->text ?? ''));
 
-        // Интент через Jev-каскад: 'create' | 'add' | 'none', либо null — тогда
-        // работает прежняя эвристика (в т.ч. транскрибация входящих голосовых).
-        $intent = $this->detectIntent($requestLower);
-
         $isListRequest = false;
         $isAddRequest = false;
         $matchedTrigger = '';
 
-        if ($intent === 'create' && (!empty($this->replyToText) || !empty($this->replyToVoiceFileId))) {
-            $isListRequest = true;
-        } elseif ($intent === 'add' && !empty($this->replyToChecklist) && !empty($this->replyToMessageId)) {
-            $isAddRequest = true;
-            $matchedTrigger = $this->matchKnownAddTrigger($requestLower) ?? '';
-        } elseif ($intent === null) {
+        if (!empty($this->replyToChecklist) && !empty($this->replyToMessageId)) {
+            // Ответ на чек-лист — только дополнение. Jev решает, есть ли в
+            // сообщении то, что стоит записать пунктом.
+            $addIntent = $this->detectAddIntent($requestLower);
+
+            if ($addIntent === 'add') {
+                $isAddRequest = true;
+                $matchedTrigger = $this->matchKnownAddTrigger($requestLower) ?? '';
+            } elseif ($addIntent === null) {
+                // Jev выключен/не уверен → прежняя эвристика дополнения.
+                [$isAddRequest, $matchedTrigger] = $this->detectAddRequest(false, $requestLower);
+            }
+        } else {
+            // Ответ на обычное сообщение — только создание, без Jev:
+            // прежняя точная проверка триггера.
             $isListRequest = $this->isListCreateTrigger($requestLower);
-            [$isAddRequest, $matchedTrigger] = $this->detectAddRequest($isListRequest, $requestLower);
         }
 
         if ($matchedTrigger === '__VOICE_ERROR__') {
@@ -489,41 +493,25 @@ class SmartChecklistAIBot
     }
 
     /**
-     * Определяет, просит ли пользователь оформить чек-лист, каскадом: сначала
-     * дешёвые локальные проверки, и только неоднозначный остаток многословных
-     * reply уходит в Jev.
+     * Определяет, нужно ли дополнить чек-лист, каскадом: сначала дешёвые
+     * локальные проверки, и только неоднозначный остаток многословных reply
+     * уходит в Jev.
      *
-     * create/add модель НЕ решает — это функция цели reply: ответ на чек-лист
-     * всегда означает «дополнить», ответ на обычное сообщение — «создать».
-     * Поэтому Jev отвечает только на бинарный вопрос «это вообще запрос?».
+     * Вызывается ТОЛЬКО для ответа на чек-лист: там дополнение — единственный
+     * вариант, и вопрос стоит не «просит ли», а «есть ли что записать пунктом»
+     * (замеры: позы 0.81–0.98, негативы ≤0.33). Создание списка Jev не касается.
      *
-     * Возвращает 'create' | 'add' | 'none', либо null — тогда решает прежняя
-     * эвристика (в т.ч. транскрибация входящих голосовых).
+     * Возвращает 'add', либо null — тогда решает прежняя эвристика
+     * (в т.ч. транскрибация входящих голосовых).
      */
-    private function detectIntent(string $requestLower): ?string
+    private function detectAddIntent(string $requestLower): ?string
     {
-        $targetIsChecklist = !empty($this->replyToChecklist) && !empty($this->replyToMessageId);
-        $targetIsText = !empty($this->replyToText) || !empty($this->replyToVoiceFileId);
-
-        // 0. Без осмысленной цели reply интента быть не может.
-        if (!$targetIsChecklist && !$targetIsText) {
-            return null;
-        }
-
-        // 1. Точный триггер создания в reply на обычное сообщение → create, без сети.
-        if (!$targetIsChecklist && $this->isListCreateTrigger($requestLower)) {
-            return 'create';
-        }
-
-        // 2. Известный триггер дополнения в reply на чек-лист → add, без сети.
-        if ($targetIsChecklist
-            && $this->voiceFileId === null
-            && $this->matchKnownAddTrigger($requestLower) !== null
-        ) {
+        // 1. Известный триггер дополнения → add, без сети.
+        if ($this->voiceFileId === null && $this->matchKnownAddTrigger($requestLower) !== null) {
             return 'add';
         }
 
-        // 3. Голосовые остаются на прежней ветке (нужна транскрибация).
+        // 2. Голосовые остаются на прежней ветке (нужна транскрибация).
         if ($this->voiceFileId !== null) {
             return null;
         }
@@ -537,40 +525,38 @@ class SmartChecklistAIBot
             return null;
         }
 
-        // 4. Дешёвый локальный отсев: короткие реакции («ок», «спасибо», «+»,
-        // эмодзи) запросом быть не могут — Jev для них не вызывается.
+        // 3. Дешёвый локальный отсев: короткие реакции («ок», «спасибо», «+»,
+        // эмодзи) пунктом быть не могут — Jev для них не вызывается.
         if ($this->significantWordCount($text) < $this->jevIntentMinWords) {
             return null;
         }
 
-        // 5. Jev — только бинарный вопрос «это запрос оформить/дополнить чек-лист?».
+        // 4. Jev — про содержание: есть ли что записать пунктом.
         try {
             $result = $this->jev()
                 ->state([
                     'text'               => $text,
                     'reply_text'         => $this->replyToText,
-                    'reply_is_checklist' => $targetIsChecklist,
+                    'reply_is_checklist' => true,
                 ])
                 ->noul(
-                    'is_request',
-                    'Пользователь отвечает на сообщение и хочет оформить его как чек-лист, '
-                        . 'либо добавить его пунктом в чек-лист, на который отвечает?',
+                    'is_item',
+                    'Содержит ли это сообщение задачу, дело или идею, которую можно записать пунктом в чек-лист?',
                     [
-                        'true'  => 'задача, просьба оформить список или дополнить чек-лист',
-                        'false' => 'обычная реплика, болтовня, благодарность, ничего не просит',
+                        'true'  => 'задача, дело или идея для списка',
+                        'false' => 'вопрос, благодарность, комментарий, обсуждение',
                     ]
                 )
                 ->timeout($this->jevIntentTimeout)
                 ->retries(0)
                 ->send();
 
-            $probability = $result->noul('is_request');
-            $isRequest = $probability !== null && $probability >= $this->jevIntentThreshold;
-            $action = $isRequest ? ($targetIsChecklist ? 'add' : 'create') : 'none';
+            $probability = $result->noul('is_item');
+            $isItem = $probability !== null && $probability >= $this->jevIntentThreshold;
 
-            $this->logJevIntent($text, $action, $probability, $isRequest ? 'ok' : 'below_threshold');
+            $this->logJevIntent($text, $isItem ? 'add' : 'none', $probability, $isItem ? 'ok' : 'below_threshold');
 
-            return $isRequest ? $action : null;
+            return $isItem ? 'add' : null;
         } catch (JevException $e) {
             $this->logJevIntent($text, null, null, 'error: ' . $e->getMessage());
 
