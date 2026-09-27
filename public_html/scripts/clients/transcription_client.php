@@ -30,7 +30,7 @@ require_once __DIR__ . '/../_env.php';
  *   STT_CONNECT_TIMEOUT    таймаут соединения, сек (по умолчанию 15)
  *   STT_MAX_RETRIES        повторы при 408/429/5xx (по умолчанию 2)
  *   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN — доступ к Cloudflare
- *   OPENROUTER_KEY | OPENROUTER_API_KEY — доступ к OpenRouter
+ *   OPENROUTER_KEY — доступ к OpenRouter
  *   STT_CLOUDFLARE_MODEL / STT_OPENROUTER_MODEL — переопределение модели
  *   LOG_STT, STT_LOG_FILE — логирование запросов/ответов (по умолчанию выкл.)
  */
@@ -142,7 +142,7 @@ final class TranscriptionClient
         ],
         self::OPENROUTER => [
             'kind' => 'openrouter',
-            'key_env' => ['OPENROUTER_KEY', 'OPENROUTER_API_KEY'],
+            'key_env' => ['OPENROUTER_KEY'],
             'model_env' => 'STT_OPENROUTER_MODEL',
             'default_model' => 'openai/whisper-large-v3-turbo',
         ],

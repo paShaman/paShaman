@@ -22,7 +22,7 @@ require_once __DIR__ . '/../_env.php';
  *   echo $balance['remaining'];   // остаток в USD
  *
  * Переменные окружения (читаются через _env.php, файл .env в корне проекта):
- *   OPENROUTER_KEY | OPENROUTER_API_KEY — API-ключ OpenRouter
+ *   OPENROUTER_KEY — API-ключ OpenRouter
  *   OPENROUTER_BALANCE_URL             — переопределение эндпоинта баланса
  *   OPENROUTER_TIMEOUT                 — таймаут запроса, сек (по умолчанию 30)
  *   OPENROUTER_CONNECT_TIMEOUT         — таймаут соединения, сек (по умолчанию 10)
@@ -53,7 +53,7 @@ final class OpenRouterClient
     private const BALANCE_URL = 'https://openrouter.ai/api/v1/credits';
 
     /** @var list<string> */
-    private const KEY_ENV = ['OPENROUTER_KEY', 'OPENROUTER_API_KEY'];
+    private const KEY_ENV = ['OPENROUTER_KEY'];
 
     private ?string $apiKey;
     private float $timeout;

@@ -45,7 +45,7 @@ require_once __DIR__ . '/../_env.php';
  *   JEV_CONNECT_TIMEOUT  таймаут соединения, сек (по умолчанию 10)
  *   JEV_MAX_RETRIES   повторы при 408/429/5xx, по умолчанию 2
  *   JEV_OPENROUTER_URL / JEV_TYPESAFE_URL — переопределение эндпоинта
- *   OPENROUTER_KEY | OPENROUTER_API_KEY — ключ для openrouter
+ *   OPENROUTER_JEV_KEY — ключ для openrouter
  *   TYPESAFE_API_KEY — ключ для typesafe
  *   LOG_JEV, JEV_LOG_FILE — логирование запросов/ответов (по умолчанию выкл.)
  */
@@ -268,7 +268,7 @@ final class JevClient
         self::OPENROUTER => [
             'endpoint' => 'https://openrouter.ai/api/alpha/decisions',
             'url_env' => 'JEV_OPENROUTER_URL',
-            'key_env' => ['OPENROUTER_KEY', 'OPENROUTER_API_KEY'],
+            'key_env' => ['OPENROUTER_JEV_KEY'],
             'default_model' => 'jev-latest',
         ],
         self::TYPESAFE => [
