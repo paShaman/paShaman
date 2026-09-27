@@ -1,6 +1,7 @@
 <?php
 
 include __DIR__.'/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 date_default_timezone_set('Europe/Moscow');
 
@@ -144,9 +145,4 @@ if ($monthlyLimitGB !== false) {
     $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic);
 }
 
-$postData = ['chat_id' => $chatId, 'text' => $message, 'parse_mode' => 'Markdown'];
-$ch = curl_init("https://api.telegram.org/bot$botToken/sendMessage");
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-curl_exec($ch);
-curl_close($ch);
+(new TelegramClient($botToken))->sendMessage($chatId, $message, 'Markdown');

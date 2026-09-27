@@ -1,6 +1,7 @@
 <?php
 
 include __DIR__.'/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 // Задаем таймзону, чтобы отчеты и сброс месяца совпадали с твоим временем
 date_default_timezone_set('Europe/Moscow');
@@ -97,11 +98,5 @@ file_put_contents($monthFile, json_encode($monthStats));
 
 // --- 4. ОТПРАВКА ---
 if ($hasUpdates) {
-    $tgUrl = "https://api.telegram.org/bot{$botToken}/sendMessage";
-    $p = ['chat_id' => $chatId, 'text' => $report, 'parse_mode' => 'Markdown'];
-    $tx = curl_init($tgUrl);
-    curl_setopt($tx, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($tx, CURLOPT_POSTFIELDS, $p);
-    curl_exec($tx);
-    curl_close($tx);
+    (new TelegramClient($botToken))->sendMessage($chatId, $report, 'Markdown');
 }

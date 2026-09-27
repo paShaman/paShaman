@@ -1,6 +1,7 @@
 <?php
 
 include __DIR__ . '/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 /**
  * GloPro Redmine трекер-бот (мультипользовательский).
@@ -46,6 +47,8 @@ final class GloProTrackerBot
 
     /** Токен Telegram-бота из окружения (GLOPRO_TG_TOKEN). */
     private ?string $tgToken = null;
+    /** Клиент Telegram Bot API. */
+    private ?TelegramClient $telegramClient = null;
     /** Префикс имени файла лога (glopro_cron / glopro_listen). */
     private ?string $logPrefix = null;
     /** Флаг: логировать сырые апдейты getUpdates (для отладки). */
@@ -226,33 +229,19 @@ final class GloProTrackerBot
             'timeout' => 50,
             'allowed_updates' => json_encode(['message']),
         ];
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/getUpdates?' . http_build_query($params);
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 60,   // чуть больше, чем timeout long-polling
-            CURLOPT_CONNECTTIMEOUT => 15,
-        ]);
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-
-        // Проблемы на уровне соединения — вернём null (вызывающий подождёт и повторит).
-        if ($error) {
-            $this->log('⚠️ cURL ошибка: ' . $error);
-            return null;
-        }
-        if ($response === false || $httpCode !== 200) {
-            $this->log('⚠️ Telegram API HTTP ' . $httpCode . ': ' . substr((string)$response, 0, 300));
+        try {
+            $result = $this->telegram()->timeout(60)->call('getUpdates', $params);
+        } catch (TelegramException $e) {
+            // Проблемы на уровне соединения — вернём null (вызывающий подождёт и повторит).
+            $this->log('⚠️ cURL ошибка: ' . $e->getMessage());
             return null;
         }
 
-        $data = json_decode((string)$response, true);
-        if (!$data || !($data['ok'] ?? false)) {
+        if (!$result->ok()) {
             // Фатальные ошибки API: неверный токен (401) или конфликт (409 — уже работает
             // другой экземпляр бота) — продолжать бессмысленно, завершаем процесс.
-            $code = $data['error_code'] ?? 0;
+            $code = $result->errorCode() ?? 0;
             if ($code === 401) {
                 $this->log('❌ Неверный GLOPRO_TG_TOKEN');
                 exit(1);
@@ -261,11 +250,12 @@ final class GloProTrackerBot
                 $this->log('⚠️ 409 Conflict — уже работает другой экземпляр бота');
                 exit(1);
             }
-            $this->log('⚠️ Некорректный ответ Telegram API: ' . substr((string)$response, 0, 300));
+            $this->log('⚠️ Некорректный ответ Telegram API: ' . json_encode($result->raw(), JSON_UNESCAPED_UNICODE));
             return null;
         }
 
-        $updates = $data['result'] ?? [];
+        $updates = $result->result();
+        $updates = is_array($updates) ? array_values($updates) : [];
 
         // Отладочный лог сырых апдейтов (включается вызовом setLogTgUpdates или вручную).
         if ($updates !== [] && $this->logTgUpdates) {
@@ -274,6 +264,12 @@ final class GloProTrackerBot
         }
 
         return $updates;
+    }
+
+    /** Ленивая инициализация клиента Telegram Bot API. */
+    private function telegram(): TelegramClient
+    {
+        return $this->telegramClient ??= new TelegramClient($this->tgToken);
     }
 
     /**
@@ -1318,31 +1314,16 @@ final class GloProTrackerBot
      */
     private function sendRichMessage(int|string $chatId, string $html): bool
     {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/sendRichMessage';
-
-        $postFields = [
-            'chat_id'      => $chatId,
-            // В rich HTML переносы строк схлопываются, поэтому \n -> <br>.
-            'rich_message' => json_encode(['html' => str_replace("\n", '<br>', $html)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $postFields,
-        ]);
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($response === false || $httpCode >= 400) {
+        try {
+            return $this->telegram()->call('sendRichMessage', [
+                'chat_id'      => $chatId,
+                // В rich HTML переносы строк схлопываются, поэтому \n -> <br>.
+                'rich_message' => ['html' => str_replace("\n", '<br>', $html)],
+            ])->ok();
+        } catch (TelegramException $e) {
+            $this->log('⚠️ sendRichMessage: ' . $e->getMessage());
             return false;
         }
-
-        $result = json_decode((string)$response, true);
-        return isset($result['ok']) && $result['ok'] === true;
     }
 
     /**
@@ -1350,33 +1331,14 @@ final class GloProTrackerBot
      */
     private function sendMessage(int|string $chatId, string $text, ?string $parseMode = null): bool
     {
-        $payload = [
-            'chat_id' => $chatId,
-            'text' => $text,
-            'disable_web_page_preview' => true, // не разворачиваем превью ссылок в сообщении
-        ];
-        if ($parseMode !== null) {
-            $payload['parse_mode'] = $parseMode;
-        }
-
-        $ch = curl_init('https://api.telegram.org/bot' . $this->tgToken . '/sendMessage');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        ]);
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($response === false || $httpCode >= 400) {
+        try {
+            return $this->telegram()->sendMessage($chatId, $text, $parseMode, null, [
+                'disable_web_page_preview' => true, // не разворачиваем превью ссылок в сообщении
+            ])->ok();
+        } catch (TelegramException $e) {
+            $this->log('⚠️ sendMessage: ' . $e->getMessage());
             return false;
         }
-
-        $result = json_decode((string)$response, true);
-        return isset($result['ok']) && $result['ok'] === true;
     }
 
     /**

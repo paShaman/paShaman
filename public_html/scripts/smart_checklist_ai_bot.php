@@ -3,10 +3,10 @@
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 include __DIR__ . '/_env.php';
-
-use danog\MadelineProto\API;
-use danog\MadelineProto\Settings;
-use danog\MadelineProto\Settings\AppInfo;
+require_once __DIR__ . '/clients/deepseek_client.php';
+require_once __DIR__ . '/clients/telegram_client.php';
+require_once __DIR__ . '/clients/transcription_client.php';
+require_once __DIR__ . '/clients/madeline_client.php';
 
 /*
  * @getWebhook https://api.telegram.org/bot<TG_TOKEN>/getWebhookInfo
@@ -31,12 +31,11 @@ class SmartChecklistAIBot
     private int $tgChatId;
     private int $tgAppId;
     private string $tgAppHash;
-    private string $openRouterKey;
     private string $deepseekKey;
     private string $deepseekModel;
-    private string $cfAccountId;
-    private string $cfApiToken;
-    private ?API $MadelineProto = null;
+    private ?MadelineClient $madeline = null;
+    private ?TelegramClient $telegramClient = null;
+    private ?TranscriptionClient $transcriptionClient = null;
 
     // Список дополнительных разрешенных Telegram ID (белый список)
     // TG_CHAT_ID проверяется отдельно — всегда имеет доступ
@@ -47,8 +46,6 @@ class SmartChecklistAIBot
 
     // --- ТУМБЛЕРЫ ЛОГИРОВАНИЯ ---
     private bool $logTg;
-    private bool $logDeepseek;
-    private bool $logStt;
     private bool $logTgErrors;
     private bool $logUserRequests;
     private bool $logBotStatus;
@@ -90,15 +87,10 @@ class SmartChecklistAIBot
         $this->tgChatId = (int)getenv('TG_CHAT_ID');
         $this->tgAppId = (int)getenv('TG_APP_ID');
         $this->tgAppHash = (string)getenv('TG_APP_HASH');
-        $this->openRouterKey = (string)getenv('OPENROUTER_KEY');
         $this->deepseekKey = (string)getenv('DEEPSEEK_KEY');
         $this->deepseekModel = (string)getenv('DEEPSEEK_MODEL');
-        $this->cfAccountId = (string)getenv('CLOUDFLARE_ACCOUNT_ID');
-        $this->cfApiToken = (string)getenv('CLOUDFLARE_API_TOKEN');
 
         $this->logTg = getenv('LOG_TG') === 'true';
-        $this->logDeepseek = getenv('LOG_DEEPSEEK') === 'true';
-        $this->logStt = getenv('LOG_STT') === 'true';
         $this->logTgErrors = getenv('LOG_TG_ERRORS') === 'true';
         $this->logUserRequests = getenv('LOG_USER_REQUESTS') === 'true';
         $this->logBotStatus = getenv('LOG_BOT_STATUS') === 'true';
@@ -626,51 +618,20 @@ class SmartChecklistAIBot
     {
         $startApi = microtime(true);
 
-        $url = 'https://api.deepseek.com/chat/completions';
-        $payload = [
-            'model' => $this->deepseekModel,
-            'messages' => $messages,
-            'temperature' => 0.2,
-            'stream' => false,
-        ];
-
-        $jsonPayload = json_encode($payload, JSON_UNESCAPED_UNICODE);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->deepseekKey,
-        ]);
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if ($this->logDeepseek) {
-            $dsLog = sprintf(
-                "=== %s ===\n>>> TO DEEPSEEK [%s]: %s\n<<< FROM DEEPSEEK [HTTP %d]: %s\n\n",
-                date('Y-m-d H:i:s'),
-                $this->deepseekModel,
-                $jsonPayload,
-                $httpCode,
-                $response ?: 'Ошибка cURL: ' . $curlError
-            );
-            file_put_contents('deepseek_debug.log', $dsLog, FILE_APPEND);
-        }
-
-        if (!$response || $curlError) {
+        try {
+            $result = (new DeepSeekClient($this->deepseekKey, DeepSeekClient::DEEPSEEK, $this->deepseekModel))
+                ->messages($messages)
+                ->temperature(0.2)
+                ->timeout(60)
+                ->send();
+        } catch (DeepSeekException $e) {
             return "Ошибка связи с DeepSeek API.";
         }
 
-        $res = json_decode($response, true);
         $generationTime = round(microtime(true) - $startApi, 2);
 
-        $total = $res['usage']['total_tokens'] ?? 0;
-        $cache = $res['usage']['prompt_cache_hit_tokens'] ?? 0;
+        $total = $result->totalTokens();
+        $cache = $result->cacheHitTokens();
         $paidTokens = $total - $cache;
 
         if ($this->logUserRequests) {
@@ -685,155 +646,23 @@ class SmartChecklistAIBot
             file_put_contents('user_requests.log', $log, FILE_APPEND);
         }
 
-        return $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.";
+        return $result->content() ?? "Ошибка: пустой ответ API.";
     }
 
     // ============================================================
     // ОТПРАВКА В TELEGRAM
     // ============================================================
 
-    /**
-     * Удаляет зависшие lock/ipc-socket файлы MadelineProto, оставшиеся от аварийно
-     * завершившегося IPC-воркера. Не трогает файлы самой сессии/авторизации —
-     * только служебные .lock/.sock файлы, которые пересоздаются автоматически.
-     * Файл считается "зомби", если не менялся дольше $staleAfterSeconds —
-     * это защищает от удаления лока живого, просто медленного, процесса.
-     */
-    private function cleanStaleMadelineLocks(string $sessionDir, int $staleAfterSeconds = 60): void
-    {
-        if (!is_dir($sessionDir)) {
-            return;
-        }
-
-        // Точные имена служебных IPC/lock-файлов MadelineProto (не session-данные!).
-        // Эти файлы пересоздаются автоматически при следующем старте.
-        // НИКОГДА не трогаем safe.php и lightState.php — там реальные данные авторизации сессии.
-        $candidates = [
-            'ipc',
-            'callback.ipc',
-            'ipcState.php',
-            'lock',
-            'lightState.php.lock',
-            'safe.php.lock',
-        ];
-
-        $now = time();
-        $removed = [];
-
-        foreach ($candidates as $name) {
-            $file = $sessionDir . '/' . $name;
-            if (!file_exists($file)) {
-                continue;
-            }
-            $mtime = @filemtime($file);
-            if ($mtime !== false && ($now - $mtime) > $staleAfterSeconds) {
-                if (@unlink($file)) {
-                    $removed[] = $name;
-                }
-            }
-        }
-
-        if (!empty($removed) && $this->logTgErrors) {
-            file_put_contents(
-                'tg_api_errors.log',
-                sprintf(
-                    "%s | MadelineProto removed stale ipc/lock files: %s\n",
-                    date('Y-m-d H:i:s'),
-                    implode(', ', $removed)
-                ),
-                FILE_APPEND
-            );
-        }
-    }
-
     /** Отправляет/редактирует нативный чек-лист через MadelineProto (для групп, от своего имени) */
     private function sendFromMyself(array $entries, ?int $replyToMessageId = null, ?int $authorId = null): bool
     {
         try {
-            if (empty($this->MadelineProto)) {
-                $sessionUserId = $authorId ?? $this->userId;
+            $sessionUserId = $authorId ?? $this->userId;
 
-                $settings = new Settings();
+            $client = $this->madeline();
+            $client->ensureStarted($sessionUserId, $this->chatId);
 
-                $appInfo = new AppInfo();
-                $appInfo->setApiId($this->tgAppId);
-                $appInfo->setApiHash($this->tgAppHash);
-
-                $settings->setAppInfo($appInfo);
-
-                $settings->getLogger()->setLevel(\danog\MadelineProto\Logger::LEVEL_ERROR);
-
-                // Чистим зависшие lock/socket файлы от упавшего IPC-воркера,
-                // чтобы start() не завис навсегда, ожидая мёртвый процесс
-                $this->cleanStaleMadelineLocks('session_' . $sessionUserId);
-
-                $this->MadelineProto = new API('session_' . $sessionUserId, $settings);
-
-                // Запускаем сессию
-                $this->MadelineProto->start();
-
-                // Получаем инфо о чате. Если peer ещё не закэширован в локальной базе
-                // сессии (новый чат / новая группа) — getInfo() бросает исключение
-                // "This peer is not present in the internal peer database".
-                // В этом случае прогреваем полную базу диалогов и пробуем резолв ещё раз.
-                try {
-                    $this->MadelineProto->getInfo($this->chatId);
-                } catch (\Throwable $e) {
-                    if ($this->logTgErrors) {
-                        file_put_contents(
-                            'tg_api_errors.log',
-                            sprintf(
-                                "%s | MadelineProto getInfo(%s) failed: %s — прогреваю getDialogIds()\n",
-                                date('Y-m-d H:i:s'),
-                                $this->chatId,
-                                $e->getMessage()
-                            ),
-                            FILE_APPEND
-                        );
-                    }
-
-                    $this->MadelineProto->getDialogIds();
-                }
-            }
-
-            // Форматируем элементы под спецификацию TodoItem и textWithEntities
-            foreach ($entries as &$entry) {
-                $entry['_'] = 'todoItem';
-                $entry['title'] = [
-                    '_' => 'textWithEntities',
-                    'text' => $entry['text'],
-                    'entities' => []
-                ];
-            }
-
-            // Обертка под корректный inputMediaTodo
-            $inputMediaTodo = [
-                '_' => 'inputMediaTodo',
-                'todo' => [
-                    '_' => 'todoList',
-                    'title' => [
-                        '_' => 'textWithEntities',
-                        'text' => "📋 Список задач",
-                        'entities' => []
-                    ],
-                    'list' => $entries,
-                    'others_can_append' => true,
-                    'others_can_complete' => true,
-                ]
-            ];
-
-            if ($replyToMessageId) {
-                $result = $this->MadelineProto->messages->editMessage(peer: $this->chatId, id: $replyToMessageId, media: $inputMediaTodo);
-            } else {
-                $result = $this->MadelineProto->messages->sendMedia(peer: $this->chatId, media: $inputMediaTodo);
-            }
-
-            if (
-                !empty($result['updates'][0]['message']['id']) || //edit
-                !empty($result['updates'][0]['id']) //new
-            ) {
-                return true;
-            }
+            return $client->sendTodoList($this->chatId, $entries, $replyToMessageId);
         } catch (\Throwable $e) {
             if ($this->logTgErrors) {
                 file_put_contents(
@@ -845,6 +674,28 @@ class SmartChecklistAIBot
         }
 
         return false;
+    }
+
+    /** Ленивая инициализация клиента MadelineProto. */
+    private function madeline(): MadelineClient
+    {
+        if ($this->madeline === null) {
+            $client = new MadelineClient($this->tgAppId, $this->tgAppHash);
+
+            if ($this->logTgErrors) {
+                $client->logger(static function (string $message): void {
+                    file_put_contents(
+                        'tg_api_errors.log',
+                        sprintf("%s | MadelineProto %s\n", date('Y-m-d H:i:s'), $message),
+                        FILE_APPEND
+                    );
+                });
+            }
+
+            $this->madeline = $client;
+        }
+
+        return $this->madeline;
     }
 
     /** Отправляет/редактирует чек-лист через Bot API (для бизнес-чатов) */
@@ -950,52 +801,46 @@ class SmartChecklistAIBot
         return $this->sendCurl($fallbackUrl, $fallbackPayload);
     }
 
-    /** Универсальный cURL-метод для отправки запросов к Telegram Bot API */
+    /** Универсальный метод отправки запросов к Telegram Bot API через TelegramClient */
     private function sendCurl(string $url, array $payload, bool $isStatusMessage = false): bool
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
+        $method = basename((string) parse_url($url, PHP_URL_PATH));
 
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-
-        if ($curlError) {
+        try {
+            $result = $this->telegram()->call($method, $payload);
+        } catch (TelegramException $e) {
             if ($this->logTgErrors) {
                 file_put_contents(
                     'tg_api_errors.log',
-                    sprintf("%s | URL: %s | proxy: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $curlError, print_r($payload, true)),
+                    sprintf("%s | %s | proxy: %s | Error: %s\n%s\n", date('Y-m-d H:i:s'), $method, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $e->getMessage(), print_r($payload, true)),
                     FILE_APPEND
                 );
             }
             return false;
         }
 
-        if ($response) {
-            $resArr = json_decode($response, true);
-            if (isset($resArr['ok']) && $resArr['ok'] === false) {
-                if ($this->logTgErrors) {
-                    file_put_contents(
-                        'tg_api_errors.log',
-                        sprintf("%s | URL: %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $response, print_r($payload, true)),
-                        FILE_APPEND
-                    );
-                }
-                return false;
-            } else {
-                if ($isStatusMessage) {
-                    $this->statusMessageId = $resArr['result']['message_id'] ?? null;
-                }
+        if (!$result->ok()) {
+            if ($this->logTgErrors) {
+                file_put_contents(
+                    'tg_api_errors.log',
+                    sprintf("%s | %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $method, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', json_encode($result->raw(), JSON_UNESCAPED_UNICODE), print_r($payload, true)),
+                    FILE_APPEND
+                );
             }
-            return true;
+            return false;
         }
 
-        return false;
+        if ($isStatusMessage) {
+            $this->statusMessageId = $result->messageId();
+        }
+
+        return true;
+    }
+
+    /** Ленивая инициализация клиента Telegram Bot API. */
+    private function telegram(): TelegramClient
+    {
+        return $this->telegramClient ??= new TelegramClient($this->tgToken);
     }
 
     // ============================================================
@@ -1026,221 +871,47 @@ class SmartChecklistAIBot
     // ТРАНСКРИБАЦИЯ ГОЛОСОВЫХ
     // ============================================================
 
-    /** Получает голосовое из Telegram и распознаёт речь: сначала Cloudflare Workers AI, при ошибке — OpenRouter */
+    /** Получает голосовое из Telegram и распознаёт речь (Cloudflare → OpenRouter фолбэк) */
     private function getVoiceTranscription(string $fileId): ?string
     {
-        $voiceFileUrl = $this->getTelegramFileUrl($fileId);
-        if (empty($voiceFileUrl)) {
-            return null;
+        try {
+            $telegram = $this->telegram();
+            $filePath = $telegram->getFile($fileId);
+            $audioData = $filePath === null ? null : $telegram->downloadFile($filePath);
+        } catch (TelegramException $e) {
+            $audioData = null;
         }
 
-        $audioData = $this->downloadAudioFile($voiceFileUrl);
         if (empty($audioData)) {
             return null;
         }
 
-        if ($this->cfAccountId !== '' && $this->cfApiToken !== '') {
-            $cfText = $this->transcribeWithCloudflare($audioData);
-            if ($cfText !== null) {
-                return $cfText;
-            }
-        }
-
-        return $this->transcribeWithOpenRouter($audioData);
-    }
-
-    /** Скачивает аудиофайл с прямого URL Telegram в память */
-    private function downloadAudioFile(string $audioUrl): ?string
-    {
-        $ch = curl_init($audioUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($audioUrl));
-
-        $audioData = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200 || empty($audioData)) {
-            if ($this->logStt) {
-                file_put_contents(
-                    'stt_debug.log',
-                    sprintf("[%s] Ошибка скачивания файла из TG: HTTP %d\n", date('Y-m-d H:i:s'), $httpCode),
-                    FILE_APPEND
-                );
-            }
+        $result = $this->transcription()->transcribeWithFallback($audioData);
+        if ($result === null) {
             return null;
         }
-
-        return $audioData;
-    }
-
-    /** Распознаёт речь через Cloudflare Workers AI (@cf/openai/whisper-large-v3-turbo), тело запроса — JSON с base64 аудио */
-    private function transcribeWithCloudflare(string $audioData): ?string
-    {
-        $startApi = microtime(true);
-
-        $url = 'https://api.cloudflare.com/client/v4/accounts/' . $this->cfAccountId . '/ai/run/@cf/openai/whisper-large-v3-turbo';
-
-        $payload = json_encode([
-            'audio' => base64_encode($audioData),
-            'language' => 'ru',
-        ]);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $this->cfApiToken,
-            'Content-Type: application/json',
-        ]);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($this->logStt) {
-            $logMsg = sprintf(
-                "=== %s ===\n>>> TO CLOUDFLARE WORKERS AI WHISPER: файл голосовое (%d bytes)\n<<< FROM CLOUDFLARE [HTTP %d]: %s\n\n",
-                date('Y-m-d H:i:s'),
-                strlen($audioData),
-                $httpCode,
-                $response ?: 'Ошибка cURL: ' . $curlError
-            );
-            file_put_contents('stt_debug.log', $logMsg, FILE_APPEND);
-        }
-
-        if ($curlError || $httpCode !== 200 || !$response) {
-            return null;
-        }
-
-        $result = json_decode($response, true);
-        if (empty($result['success']) || empty($result['result']['text'])) {
-            return null;
-        }
-
-        $transcriptionText = trim($result['result']['text']);
 
         if ($this->logUserRequests) {
-            $duration = round(microtime(true) - $startApi, 2);
             $log = sprintf(
-                "[%s] User: @%s | Transcription (Cloudflare) | Duration: %.2fs\n",
+                "[%s] User: @%s | Transcription (%s) | Cost: %s | Duration: %.2fs\n",
                 date('Y-m-d H:i:s'),
                 $this->username,
-                $duration
+                $result->provider(),
+                $result->cost() === null ? 'N/A' : number_format($result->cost(), 6),
+                $result->duration()
             );
             file_put_contents('user_requests.log', $log, FILE_APPEND);
         }
 
-        return $transcriptionText;
+        return $result->text();
     }
 
-    /** Кодирует аудио в base64 и отправляет в OpenRouter Whisper для распознавания речи (фолбэк, если Cloudflare недоступен) */
-    private function transcribeWithOpenRouter(string $audioData): ?string
+    /** Ленивая инициализация клиента распознавания речи. */
+    private function transcription(): TranscriptionClient
     {
-        $startApi = microtime(true);
-
-        // 1. Определяем расширение файла через MIME-тип из буфера памяти
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime = $finfo->buffer($audioData);
-
-        $ext = (str_contains($mime, 'mpeg') || str_contains($mime, 'mp3')) ? 'mp3' : 'ogg';
-
-        // 2. Кодируем в Base64 для API OpenRouter
-        $base64Audio = base64_encode($audioData);
-
-        $apiUrl = 'https://openrouter.ai/api/v1/audio/transcriptions';
-        $postData = [
-            'model' => 'openai/whisper-large-v3-turbo',
-            'language' => 'ru',
-            'input_audio' => [
-                'data' => $base64Audio,
-                'format' => $ext,
-            ],
-        ];
-
-        // 3. Отправляем запрос в OpenRouter
-        $ch = curl_init($apiUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($postData));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Authorization: Bearer ' . $this->openRouterKey,
-            'Content-Type: application/json',
-        ]);
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-        $httpCodeApi = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        // Логирование дебага OpenRouter
-        if ($this->logStt) {
-            $logMsg = sprintf(
-                "=== %s ===\n>>> TO OPENROUTER WHISPER: файл голосовое.%s (Base64 encoded)\n<<< FROM OPENROUTER [HTTP %d]: %s\n\n",
-                date('Y-m-d H:i:s'),
-                $ext,
-                $httpCodeApi,
-                $response ?: 'Ошибка cURL: ' . $curlError
-            );
-            file_put_contents('stt_debug.log', $logMsg, FILE_APPEND);
-        }
-
-        if ($curlError || $httpCodeApi !== 200 || !$response) {
-            return null;
-        }
-
-        $result = json_decode($response, true);
-        $transcriptionText = !empty($result['text']) ? trim($result['text']) : null;
-
-        // Логирование статистики запроса
-        if ($this->logUserRequests && $transcriptionText !== null) {
-            $usage = $result['usage'] ?? [];
-            $cost = $usage['cost'] ?? 0;
-            $duration = round(microtime(true) - $startApi, 2);
-            $log = sprintf(
-                "[%s] User: @%s | Transcription | Cost: %s | Duration: %.2fs\n",
-                date('Y-m-d H:i:s'),
-                $this->username,
-                is_numeric($cost) ? number_format((float)$cost, 6) : 'N/A',
-                $duration
-            );
-            file_put_contents('user_requests.log', $log, FILE_APPEND);
-        }
-
-        return $transcriptionText;
+        return $this->transcriptionClient ??= new TranscriptionClient();
     }
 
-    /** Получает прямую ссылку на файл из Telegram по file_id */
-    private function getTelegramFileUrl(string $fileId): ?string
-    {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/getFile?file_id=' . urlencode($fileId);
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
-        $response = curl_exec($ch);
-
-        if (!$response) {
-            return null;
-        }
-
-        $data = json_decode($response, true);
-        if (!($data['ok'] ?? false) || empty($data['result']['file_path'])) {
-            return null;
-        }
-
-        return 'https://api.telegram.org/file/bot' . $this->tgToken . '/' . $data['result']['file_path'];
-    }
 }
 
 // ============================================================

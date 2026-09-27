@@ -2,6 +2,8 @@
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 include __DIR__ . '/_env.php';
+require_once __DIR__ . '/clients/deepseek_client.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 // Устанавливаем Content-Type для ответа Telegram
 header('Content-Type: application/json');
@@ -147,61 +149,23 @@ class DeepSeekInlineBot
 
     private function askDeepSeekDirect(string $text): string
     {
-        $url = 'https://api.deepseek.com/chat/completions';
-        $payload = [
-            'model' => $this->deepseekModel,
-            'messages' => [
-                [
-                    'role' => 'system',
-                    'content' => "Ты — утилита для быстрых ответов задач. Твоя цель — дать краткий и быстрый ответ без лишнего форматирования.",
-                ],
-                ['role' => 'user', 'content' => $text]
-            ],
-            'temperature' => 0.6,
-            'stream' => false,
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload, JSON_UNESCAPED_UNICODE));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $this->deepseekKey,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        if (!$response || $httpCode !== 200) {
+        try {
+            $content = (new DeepSeekClient($this->deepseekKey, DeepSeekClient::DEEPSEEK, $this->deepseekModel))
+                ->system('Ты — утилита для быстрых ответов задач. Твоя цель — дать краткий и быстрый ответ без лишнего форматирования.')
+                ->user($text)
+                ->temperature(0.6)
+                ->timeout(60)
+                ->send()
+                ->content();
+        } catch (DeepSeekException $e) {
             return "⚠️ Ошибка генерации или превышен тайм-аут ожидания ответа ИИ.";
         }
 
-        $res = json_decode($response, true);
-        return $res['choices'][0]['message']['content'] ?? "Ошибка: пустой ответ API.";
+        return $content ?? "Ошибка: пустой ответ API.";
     }
 
     private function sendInlineAnswer(array $results, bool $isFallback = false): void
     {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/answerInlineQuery';
-        $payload = [
-            'inline_query_id' => $this->inlineQueryId,
-            'results' => $results,
-            'is_personal' => true
-        ];
-
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
-
-        $response = curl_exec($ch);
-        $curlError = curl_error($ch);
-
         $logDir = __DIR__ . '/logs';
         if (!is_dir($logDir)) {
             mkdir($logDir, 0755, true);
@@ -210,25 +174,25 @@ class DeepSeekInlineBot
         $hasError = false;
         $proxyLabel = tgProxyCurlOptions() ? 'TG_PROXY' : 'direct';
 
-        if ($curlError) {
-            $hasError = true;
-            file_put_contents(
-                $logDir . '/ask_errors.log',
-                sprintf("%s | URL: %s | proxy: %s | cURL Error: %s\n%s\n", date('Y-m-d H:i:s'), $url, $proxyLabel, $curlError, print_r($payload, true)),
-                FILE_APPEND
-            );
-        }
+        try {
+            $result = (new TelegramClient($this->tgToken))
+                ->answerInlineQuery($this->inlineQueryId, $results, ['is_personal' => true]);
 
-        if ($response) {
-            $resArr = json_decode($response, true);
-            if (isset($resArr['ok']) && $resArr['ok'] === false) {
+            if (!$result->ok()) {
                 $hasError = true;
                 file_put_contents(
                     $logDir . '/tg_api_errors.log',
-                    sprintf("%s | URL: %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $url, $proxyLabel, $response, print_r($payload, true)),
+                    sprintf("%s | proxy: %s | Response: %s\n", date('Y-m-d H:i:s'), $proxyLabel, json_encode($result->raw(), JSON_UNESCAPED_UNICODE)),
                     FILE_APPEND
                 );
             }
+        } catch (TelegramException $e) {
+            $hasError = true;
+            file_put_contents(
+                $logDir . '/ask_errors.log',
+                sprintf("%s | proxy: %s | Error: %s\n", date('Y-m-d H:i:s'), $proxyLabel, $e->getMessage()),
+                FILE_APPEND
+            );
         }
 
         if ($hasError && !$isFallback) {

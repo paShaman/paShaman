@@ -1,15 +1,16 @@
 <?php
 
-require_once __DIR__ . '/../_env.php';
+require_once __DIR__ . '/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
-$logFile      = __DIR__ . '/stat_bot.log';
-$offsetFile   = __DIR__ . '/stat_bot.offset';
-$lockFile     = __DIR__ . '/stat_bot.lock';
+$logFile      = __DIR__ . '/paShaman_stats_logpolling.log';
+$offsetFile   = __DIR__ . '/paShaman_stats_logpolling.offset';
+$lockFile     = __DIR__ . '/paShaman_stats_logpolling.lock';
 $cooldownFile = __DIR__ . '/alfa.lastrun';
 
 const LOG_MAX_SIZE   = 5 * 1024 * 1024;  // 5 МБ — порог ротации лога
 const ALFA_COOLDOWN  = 60;               // сек между запусками /alfa
-const ALFA_SCRIPT    = '/volume1/NAS/scripts/alfa.php';
+const ALFA_SCRIPT    = '/volume1/NAS/scripts/alfa_stats.php';
 const MEMORY_LIMIT   = 64 * 1024 * 1024; // 64 МБ — плановый самоперезапуск
 
 // Путь к текущему интерпретатору PHP (не хардкодим версию/путь вручную)
@@ -117,38 +118,26 @@ while ($running) {
             'timeout'         => 50,
             'allowed_updates' => json_encode(['message']),
         ];
-        $url = "https://api.telegram.org/bot{$tgToken}/getUpdates?" . http_build_query($params);
 
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 60,
-            CURLOPT_CONNECTTIMEOUT => 15,
-        ]);
-
-        $response  = curl_exec($ch);
-        $curlError = curl_error($ch);
-        curl_close($ch);
-
-        if ($curlError) {
-            logMsg("⚠️ Ошибка cURL: {$curlError}");
+        try {
+            $result = (new TelegramClient($tgToken))->timeout(60)->call('getUpdates', $params);
+        } catch (TelegramException $e) {
+            logMsg("⚠️ Ошибка getUpdates: " . $e->getMessage());
             sleep(5);
             continue;
         }
 
-        $data = json_decode($response, true);
-
-        if (!$data || !($data['ok'] ?? false)) {
-            if (($data['error_code'] ?? 0) === 401) {
+        if (!$result->ok()) {
+            if ($result->errorCode() === 401) {
                 logMsg("❌ Неверный TG_TOKEN_STAT");
                 exit(1);
             }
-            logMsg("⚠️ Некорректный ответ Telegram API: " . substr((string) $response, 0, 300));
+            logMsg("⚠️ Некорректный ответ Telegram API: " . json_encode($result->raw(), JSON_UNESCAPED_UNICODE));
             sleep(5);
             continue;
         }
 
-        foreach ($data['result'] ?? [] as $update) {
+        foreach ($result->result() ?? [] as $update) {
             $lastUpdateId = $update['update_id'] ?? $lastUpdateId;
             saveOffset($lastUpdateId);
 

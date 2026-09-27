@@ -1,1 +1,0 @@
-D:/Work/paShaman.ru/site/CLAUDE.md

@@ -1,6 +1,7 @@
 <?php
 
 include __DIR__ . '/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 /**
  * Бот учёта отсутствий (Telegram, webhook).
@@ -59,6 +60,8 @@ final class VacationBot
 
     /** Токен Telegram-бота. */
     private ?string $tgToken = null;
+    /** Клиент Telegram Bot API. */
+    private ?TelegramClient $telegramClient = null;
     /** Секрет вебхука. */
     private string $webhookSecret = '';
     /** Telegram ID тех.админа. */
@@ -2353,12 +2356,9 @@ final class VacationBot
     {
         $payload = [
             'chat_id'      => $chatId,
-            'rich_message' => json_encode(
-                ['html' => str_replace("\n", '<br>', $html)],
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            ),
+            'rich_message' => ['html' => str_replace("\n", '<br>', $html)],
         ];
-        return $this->api('sendRichMessage', $payload, true) !== null;
+        return $this->api('sendRichMessage', $payload) !== null;
     }
 
     /**
@@ -2367,39 +2367,25 @@ final class VacationBot
      */
     private function api(string $method, array $payload, bool $raw = false): ?array
     {
-        $url = 'https://api.telegram.org/bot' . $this->tgToken . '/' . $method;
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 20,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $raw ? $payload : json_encode($payload, JSON_UNESCAPED_UNICODE),
-        ]);
-        if (!$raw) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        }
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
-
-        $response = curl_exec($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-
-        if ($response === false || $error !== '') {
-            $this->logError("cURL {$method}: {$error}" . $this->proxyHint());
-            return null;
-        }
-        if ($httpCode >= 400) {
-            $this->logError("{$method} HTTP {$httpCode}" . $this->proxyHint() . ': ' . substr((string)$response, 0, 300));
+        try {
+            $result = $this->telegram()->timeout(20)->call($method, $payload);
+        } catch (TelegramException $e) {
+            $this->logError("{$method}: " . $e->getMessage() . $this->proxyHint());
             return null;
         }
 
-        $decoded = json_decode((string)$response, true);
-        if (!is_array($decoded) || ($decoded['ok'] ?? false) !== true) {
-            $this->logError("{$method} bad response: " . substr((string)$response, 0, 300));
+        if (!$result->ok()) {
+            $this->logError("{$method} bad response: " . json_encode($result->raw(), JSON_UNESCAPED_UNICODE) . $this->proxyHint());
             return null;
         }
-        return $decoded;
+
+        return $result->raw();
+    }
+
+    /** Ленивая инициализация клиента Telegram Bot API. */
+    private function telegram(): TelegramClient
+    {
+        return $this->telegramClient ??= new TelegramClient($this->tgToken);
     }
 
     /** Пометка для логов: запрос шёл через TG_PROXY или напрямую. */

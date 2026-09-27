@@ -1,6 +1,7 @@
 <?php
 
 include __DIR__.'/_env.php';
+require_once __DIR__ . '/clients/telegram_client.php';
 
 // =========================================================================
 // 1. НАСТРОЙКИ ТЕЛЕГРАМА
@@ -44,7 +45,7 @@ if (ALFA_PROD) {
     $apiUrl = 'https://sandbox.alfabank.ru/api/pp/v1/operations';
 }
 
-$tokenStorage = __DIR__ . '/tokens.json';
+$tokenStorage = __DIR__ . '/alfa_stats_tokens.json';
 
 // =========================================================================
 // ЛОГИКА АВТОРИЗАЦИИ И ОБНОВЛЕНИЯ ТОКЕНОВ (ДЛЯ SYNOLOGY CRON)
@@ -449,46 +450,29 @@ function requestTokens($postFields) {
  * @return bool
  */
 function sendRichMessageToTelegram($html) {
-    $url = "https://api.telegram.org/bot" . TG_BOT_TOKEN . "/sendRichMessage";
-
     $richMessage = [
         'html' => $html,
     ];
 
-    $postFields = [
-        'chat_id'      => TG_CHAT_ID,
-        'rich_message' => json_encode($richMessage, JSON_UNESCAPED_UNICODE),
-    ];
-
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POSTFIELDS     => $postFields,
-        CURLOPT_SSL_VERIFYPEER => false,
-    ]);
-
-    $response = curl_exec($ch);
-
-    if (curl_errno($ch)) {
-        echo "❌ Системная ошибка cURL при отправке rich message в Telegram: " . curl_error($ch) . "\n";
-        curl_close($ch);
+    try {
+        $result = (new TelegramClient(TG_BOT_TOKEN))->call('sendRichMessage', [
+            'chat_id'      => TG_CHAT_ID,
+            'rich_message' => $richMessage,
+        ]);
+    } catch (TelegramException $e) {
+        echo "❌ Системная ошибка при отправке rich message в Telegram: " . $e->getMessage() . "\n";
         return false;
     }
 
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-
-    if (isset($result['ok']) && $result['ok'] === true) {
+    if ($result->ok()) {
         return true;
     }
 
-    echo "❌ Telegram API вернул ошибку при отправке rich message: [" . ($result['error_code'] ?? '???') . "] " . ($result['description'] ?? 'Неизвестная ошибка') . "\n";
+    echo "❌ Telegram API вернул ошибку при отправке rich message: [" . ($result->errorCode() ?? '???') . "] " . ($result->description() ?? 'Неизвестная ошибка') . "\n";
 
     // Авто-фолбек: если rich message не поддерживается — пробуем отправить обычным текстом
-    if (isset($result['description']) && strpos($result['description'], 'rich') !== false) {
+    $description = $result->description();
+    if ($description !== null && strpos($description, 'rich') !== false) {
         echo "⚠️ Rich message не поддерживается, пробую отправить обычным текстом…\n";
         $plainText = "🤖 Alfa API: Аналитика расходов\n\n" . strip_tags($html);
         return sendToTelegram($plainText, null);
@@ -498,47 +482,28 @@ function sendRichMessageToTelegram($html) {
 }
 
 function sendToTelegram($text, $parseMode = 'Markdown') {
-    $url = "https://api.telegram.org/bot" . TG_BOT_TOKEN . "/sendMessage";
-
     // Защита от превышения лимита ТГ (макс 4096 символов)
     if (mb_strlen($text) > 4000) {
         $text = mb_substr($text, 0, 3800) . "\n\n… [обрезано: превышен лимит Telegram в 4096 символов]";
     }
 
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => $url,
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POSTFIELDS     => [
-            'chat_id'    => TG_CHAT_ID,
-            'text'       => $text,
-            'parse_mode' => $parseMode,
-        ],
-        CURLOPT_SSL_VERIFYPEER => false,
-    ]);
-
-    $response = curl_exec($ch);
-    $error    = curl_errno($ch) ? curl_error($ch) : null;
-    curl_close($ch);
-
-    if ($error) {
-        echo "❌ Ошибка cURL при отправке в Telegram: {$error}\n";
+    try {
+        $result = (new TelegramClient(TG_BOT_TOKEN))->sendMessage(TG_CHAT_ID, $text, $parseMode);
+    } catch (TelegramException $e) {
+        echo "❌ Ошибка отправки в Telegram: " . $e->getMessage() . "\n";
         return false;
     }
 
-    $result = json_decode($response, true);
-
-    if (!empty($result['ok'])) {
+    if ($result->ok()) {
         return true;
     }
 
-    $code = $result['error_code']  ?? '???';
-    $desc = $result['description'] ?? 'Неизвестная ошибка';
+    $code = $result->errorCode()  ?? '???';
+    $desc = $result->description() ?? 'Неизвестная ошибка';
     echo "❌ Telegram API вернул ошибку: [{$code}] {$desc}\n";
 
     // Авто-фолбек: если ТГ ругается на разметку — пробуем послать голым текстом
-    if ($parseMode !== null && isset($result['description']) && strpos($result['description'], 'parse') !== false) {
+    if ($parseMode !== null && $result->description() !== null && strpos($result->description(), 'parse') !== false) {
         echo "⚠️ Пробую переотправить как plain text…\n";
         $plainText = str_replace(['```json', '```', '*', '`'], '', $text);
         return sendToTelegram($plainText, null);
