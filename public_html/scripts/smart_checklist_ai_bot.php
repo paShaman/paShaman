@@ -439,7 +439,7 @@ class SmartChecklistAIBot
 
         $this->prompt = empty($this->replyToVoiceFileId)
             ? $this->resolveToText($isListRequest, $isAddRequest, $matchedTrigger)
-            : $this->handleReplyToVoice();
+            : ($isListRequest ? $this->handleReplyToVoice() : null);
 
         if ($this->prompt === null) {
             return 'ignored';
