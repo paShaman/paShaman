@@ -44,9 +44,7 @@ class StatsUsers extends Page implements HasTable
         $yearRows = DB::select("
             SELECT SUBSTR(p.date, 4, 4) AS year
             FROM projects p
-            INNER JOIN users_to_projects utp ON utp.project_id = p.id
-            WHERE utp.user_id != 1
-              AND SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
+            WHERE SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
             GROUP BY SUBSTR(p.date, 4, 4)
             ORDER BY SUBSTR(p.date, 4, 4) DESC
         ");
@@ -66,6 +64,32 @@ class StatsUsers extends Page implements HasTable
               AND SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
             GROUP BY u.id, u.name, u.site, SUBSTR(p.date, 4, 4)
         ");
+
+        $unassignedRows = DB::select("
+            SELECT SUBSTR(p.date, 4, 4) AS year,
+                   COUNT(*) AS cnt
+            FROM projects p
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM users_to_projects utp
+                WHERE utp.project_id = p.id
+                  AND utp.user_id != 1
+            )
+              AND SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
+            GROUP BY SUBSTR(p.date, 4, 4)
+        ");
+
+        $unassignedYears = array_fill_keys($years, 0);
+        $unassignedTotal = 0;
+
+        foreach ($unassignedRows as $row) {
+            if (! isset($unassignedYears[$row->year])) {
+                continue;
+            }
+
+            $unassignedYears[$row->year] = (int) $row->cnt;
+            $unassignedTotal += (int) $row->cnt;
+        }
 
         $clients = [];
 
@@ -97,6 +121,20 @@ class StatsUsers extends Page implements HasTable
             }
         }
 
+        foreach ($years as $year) {
+            $totals[$year] += $unassignedYears[$year];
+            $maxPerYear[$year] = max($maxPerYear[$year], $unassignedYears[$year]);
+        }
+
+        $clients[] = [
+            '__key' => 'unassigned',
+            'id' => 'unassigned',
+            'name' => 'Без заказчика',
+            'site' => '',
+            'years' => $unassignedYears,
+            'total' => $unassignedTotal,
+        ];
+
         $clients[] = [
             '__key' => 'total',
             'id' => 'total',
@@ -111,9 +149,17 @@ class StatsUsers extends Page implements HasTable
         $columns = [
             TextColumn::make('name')
                 ->label('Клиент')
-                ->formatStateUsing(fn ($state, $record) => $record['__key'] === 'total'
-                    ? new HtmlString('<strong style="font-weight:700;">' . e($state) . '</strong>')
-                    : $state),
+                ->formatStateUsing(function ($state, $record) {
+                    if ($record['__key'] === 'total') {
+                        return new HtmlString('<strong style="font-weight:700;">' . e($state) . '</strong>');
+                    }
+
+                    if ($record['__key'] === 'unassigned') {
+                        return new HtmlString('<span style="color:var(--gray-500); font-style:italic;">' . e($state) . '</span>');
+                    }
+
+                    return $state;
+                }),
             TextColumn::make('site')
                 ->label('Сайт')
                 ->toggleable(isToggledHiddenByDefault: true),
