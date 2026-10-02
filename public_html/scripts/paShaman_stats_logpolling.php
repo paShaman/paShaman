@@ -3,6 +3,19 @@
 require_once __DIR__ . '/_env.php';
 require_once __DIR__ . '/clients/telegram_client.php';
 
+/**
+ * # 1. Проверяем, не запущен ли уже скрипт
+ * if ! pgrep -f "paShaman_stats_logpolling.php" > /dev/null; then
+ * # 2. Подгружаем переменные из .env файла (если он лежит рядом со скриптом)
+ * if [ -f "/volume1/NAS/scripts/.env" ]; then
+ * export $(grep -v '^#' /volume1/NAS/scripts/.env | xargs)
+ * fi
+ *
+ * # 3. Запускаем PHP в фоновом режиме
+ * nohup /usr/local/bin/php82 /volume1/NAS/scripts/paShaman_stats_logpolling.php > /dev/null 2>&1 &
+ * fi
+ */
+
 $logFile      = __DIR__ . '/paShaman_stats_logpolling.log';
 $offsetFile   = __DIR__ . '/paShaman_stats_logpolling.offset';
 $lockFile     = __DIR__ . '/paShaman_stats_logpolling.lock';
@@ -34,7 +47,7 @@ if ($lockHandle === false) {
     exit(1);
 }
 if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
-    logMsg("❌ Другой экземпляр stat_bot.php уже запущен, выход");
+    logMsg("❌ Другой экземпляр paShaman_stats_logpolling.php уже запущен, выход");
     exit(1);
 }
 
@@ -170,7 +183,7 @@ while ($running) {
                 continue;
             }
 
-            logMsg("/alfa — запуск alfa.php");
+            logMsg("/alfa — запуск alfa_stats.php");
 
             // Запуск alfa.php без ожидания результата (fire-and-forget)
             $cmd = escapeshellarg(ALFA_PHP_BIN) . ' ' . escapeshellarg(ALFA_SCRIPT) . ' > /dev/null 2>&1 &';
