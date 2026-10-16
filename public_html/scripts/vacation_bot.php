@@ -795,12 +795,19 @@ final class VacationBot
 
     private function cmdMy(string $chatId, string $userId, string $arg): void
     {
-        $year = $this->parseYear($arg) ?? (int)$this->now()->format('Y');
-        $records = $this->recordsForUserYear($userId, $year);
+        // Без явного года показываем текущий и все будущие годы (планы).
+        $explicitYear = $this->parseYear($arg);
 
-        $lines = ['📋 <b>Мои отсутствия за ' . $year . '</b>', ''];
+        if ($explicitYear !== null) {
+            $records = $this->recordsForUserYear($userId, $explicitYear);
+            $lines = ['📋 <b>Мои отсутствия за ' . $explicitYear . '</b>', ''];
+        } else {
+            $records = $this->plannedRecords($userId, (int)$this->now()->format('Y'));
+            $lines = ['📋 <b>Мои отсутствия · текущий и будущие годы</b>', ''];
+        }
+
         if ($records === []) {
-            $lines[] = 'За этот год записей нет.';
+            $lines[] = $explicitYear !== null ? 'За этот год записей нет.' : 'Записей нет.';
         } else {
             $num = 0;
             foreach ($records as $r) {
@@ -819,10 +826,19 @@ final class VacationBot
             }
         }
 
-        $balance = $this->balanceFor($userId, $year);
         $lines[] = '';
-        $lines[] = '🏖 Остаток отпуска: <b>' . $balance['remaining'] . '</b> из ' . $balance['norm']
-            . ' (использовано ' . $balance['used'] . ')';
+        if ($explicitYear !== null) {
+            $balance = $this->balanceFor($userId, $explicitYear);
+            $lines[] = '🏖 Остаток отпуска: <b>' . $balance['remaining'] . '</b> из ' . $balance['norm']
+                . ' (использовано ' . $balance['used'] . ')';
+        } else {
+            $lines[] = '🏖 <b>Остаток отпуска:</b>';
+            foreach ($this->planYears($userId) as $y) {
+                $balance = $this->balanceFor($userId, $y);
+                $lines[] = '• ' . $y . ': <b>' . $balance['remaining'] . '</b> из ' . $balance['norm']
+                    . ' (использовано ' . $balance['used'] . ')';
+            }
+        }
 
         // Кнопки управления по каждой записи (не больше 8, чтобы не перегружать).
         $rows = [];
@@ -843,19 +859,48 @@ final class VacationBot
 
     private function cmdLeft(string $chatId, string $userId, string $arg): void
     {
-        $year = $this->parseYear($arg) ?? (int)$this->now()->format('Y');
-        $balance = $this->balanceFor($userId, $year);
+        // Без явного года показываем текущий и все будущие годы (планы).
+        $explicitYear = $this->parseYear($arg);
 
-        $lines = ['🏖 <b>Остаток отпуска за ' . $year . '</b>', ''];
-        $lines[] = 'Норма: <b>' . $balance['norm'] . '</b> к.д.'
-            . ($balance['default_norm'] ? ' (по умолчанию)' : '');
-        $lines[] = 'Использовано: <b>' . $balance['used'] . '</b> к.д.';
-        $lines[] = 'Осталось: <b>' . $balance['remaining'] . '</b> к.д.';
+        if ($explicitYear !== null) {
+            $balance = $this->balanceFor($userId, $explicitYear);
 
-        if ($balance['records'] !== []) {
+            $lines = ['🏖 <b>Остаток отпуска за ' . $explicitYear . '</b>', ''];
+            $lines[] = 'Норма: <b>' . $balance['norm'] . '</b> к.д.'
+                . ($balance['default_norm'] ? ' (по умолчанию)' : '');
+            $lines[] = 'Использовано: <b>' . $balance['used'] . '</b> к.д.';
+            $lines[] = 'Осталось: <b>' . $balance['remaining'] . '</b> к.д.';
+
+            if ($balance['records'] !== []) {
+                $lines[] = '';
+                $lines[] = '<b>Списания (тип: ' . $this->esc(implode(', ', $this->quotaTypes)) . '):</b>';
+                foreach ($balance['records'] as $r) {
+                    $lines[] = '• ' . $this->esc($this->formatInterval((string)$r['date_from'], $this->effectiveTo($r)))
+                        . ' — ' . $this->effectiveDays($r) . ' дн.';
+                }
+            }
+
+            $this->sendHtml($chatId, implode("\n", $lines), $this->menuKeyboard($userId));
+            return;
+        }
+
+        $lines = ['🏖 <b>Остаток отпуска · текущий и будущие годы</b>', ''];
+        foreach ($this->planYears($userId) as $y) {
+            $balance = $this->balanceFor($userId, $y);
+            $lines[] = '<b>' . $y . '</b>: осталось <b>' . $balance['remaining'] . '</b> из ' . $balance['norm']
+                . ' (использовано ' . $balance['used'] . ')';
+        }
+
+        $quota = [];
+        foreach ($this->plannedRecords($userId, (int)$this->now()->format('Y')) as $r) {
+            if (in_array((string)$r['type'], $this->quotaTypes, true)) {
+                $quota[] = $r;
+            }
+        }
+        if ($quota !== []) {
             $lines[] = '';
             $lines[] = '<b>Списания (тип: ' . $this->esc(implode(', ', $this->quotaTypes)) . '):</b>';
-            foreach ($balance['records'] as $r) {
+            foreach ($quota as $r) {
                 $lines[] = '• ' . $this->esc($this->formatInterval((string)$r['date_from'], $this->effectiveTo($r)))
                     . ' — ' . $this->effectiveDays($r) . ' дн.';
             }
@@ -1164,8 +1209,8 @@ final class VacationBot
             . 'Остаток отпуска считают типы: ' . $this->esc(implode(', ', $this->quotaTypes)) . ".\n\n"
             . "<b>Свои записи</b>\n"
             . "• /add — добавить отсутствие (кнопками)\n"
-            . "• /my [год] — мои отсутствия\n"
-            . "• /left — остаток отпуска в этом году\n"
+            . "• /my [год] — мои отсутствия (без года — текущий и будущие годы)\n"
+            . "• /left [год] — остаток отпуска (без года — текущий и будущие годы)\n"
             . "• /cancel &lt;номер&gt; — отменить (номер из /my)\n"
             . "• /edit &lt;номер&gt; &lt;даты&gt; — перенести (комментарий — кнопкой 💬 в /my)\n"
             . "• /finish &lt;номер&gt; [дата|сегодня] — досрочно завершить\n\n"
@@ -1706,16 +1751,71 @@ final class VacationBot
     }
 
     /**
+     * Записи сотрудника с указанного года и на все будущие годы (планы),
+     * отсортированные по дате начала.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function plannedRecords(string $userId, int $fromYear): array
+    {
+        $start = sprintf('%04d-01-01', $fromYear);
+        $records = [];
+        foreach ($this->loadRecords()['records'] as $r) {
+            if ((string)$r['user_id'] !== $userId) {
+                continue;
+            }
+            if ($this->effectiveTo($r) < $start) {
+                continue;
+            }
+            $records[] = $r;
+        }
+        usort($records, static fn(array $a, array $b): int => strcmp((string)$a['date_from'], (string)$b['date_from']));
+        return $records;
+    }
+
+    /**
+     * Годы для вывода планов: текущий и все будущие, затронутые записями
+     * сотрудника. По возрастанию.
+     *
+     * @return int[]
+     */
+    private function planYears(string $userId): array
+    {
+        $current = (int)$this->now()->format('Y');
+        $years = [$current => true];
+        foreach ($this->loadRecords()['records'] as $r) {
+            if ((string)$r['user_id'] !== $userId) {
+                continue;
+            }
+            $from = (int)substr((string)$r['date_from'], 0, 4);
+            $to = (int)substr($this->effectiveTo($r), 0, 4);
+            for ($y = max($from, $current); $y <= $to; $y++) {
+                $years[$y] = true;
+            }
+        }
+        $out = array_keys($years);
+        sort($out);
+        return $out;
+    }
+
+    /**
      * Записи сотрудника за год с нумерацией с 1 (как в /my).
+     *
+     * Без явного года нумерация охватывает текущий и все будущие годы —
+     * ровно те записи, что показывает /my по умолчанию, чтобы /cancel,
+     * /edit и /finish ссылались на те же номера.
      *
      * @return array<int, array<string, mixed>> [номер => запись]
      */
     private function numberedRecords(string $userId, ?int $year = null): array
     {
-        $year ??= (int)$this->now()->format('Y');
+        $records = $year === null
+            ? $this->plannedRecords($userId, (int)$this->now()->format('Y'))
+            : $this->recordsForUserYear($userId, $year);
+
         $out = [];
         $n = 0;
-        foreach ($this->recordsForUserYear($userId, $year) as $r) {
+        foreach ($records as $r) {
             $out[++$n] = $r;
         }
         return $out;
