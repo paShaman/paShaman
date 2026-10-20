@@ -3,12 +3,15 @@
 namespace App\Filament\Resources\Projects\Schemas;
 
 use App\Models\User;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\ToggleButtons;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class ProjectForm
 {
@@ -26,6 +29,21 @@ class ProjectForm
                     ->required(),
                 TextInput::make('date')
                     ->required(),
+
+                FileUpload::make('images')
+                    ->label('Изображения проекта')
+                    ->helperText('Файлы сохраняются в /images/projects/{link}')
+                    ->disk('projects')
+                    ->directory(fn (Get $get): string => trim((string) $get('link'), '/'))
+                    ->multiple()
+                    ->image()
+                    ->preserveFilenames()
+                    ->panelLayout('grid')
+                    ->imagePreviewHeight('200')
+                    ->openable()
+                    ->downloadable()
+                    ->deleteUploadedFileUsing(fn (string $file) => Storage::disk('projects')->delete($file))
+                    ->visibleOn('edit'),
 
                 Repeater::make('authors')
                     ->label('Авторы')

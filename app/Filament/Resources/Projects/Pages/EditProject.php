@@ -8,6 +8,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Storage;
 
 #[AllowDynamicProperties]
 class EditProject extends EditRecord
@@ -44,11 +45,27 @@ class EditProject extends EditRecord
             ];
         })->toArray();
 
+        $link = trim((string) ($data['link'] ?? ''), '/');
+
+        $data['images'] = $link === ''
+            ? []
+            : collect(Storage::disk('projects')->files($link))
+                ->filter(fn (string $file): bool => in_array(
+                    strtolower(pathinfo($file, PATHINFO_EXTENSION)),
+                    ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
+                    true
+                ))
+                ->values()
+                ->all();
+
         return $data;
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        // Файлы уже сохранены на диск компонентом FileUpload, в БД их записывать не нужно
+        unset($data['images']);
+
         // Извлекаем авторов из данных перед сохранением,
         // чтобы сохранить их вручную с pivot-полем role
         if (array_key_exists('authors', $data)) {
