@@ -37,7 +37,7 @@ class EditMoney extends EditRecord
                     if ($record->is_payed || $record->status !== 'finish') {
                         Notification::make()
                             ->title('Нельзя отметить оплаченным')
-                            ->body('Операция должна иметь статус finish и быть неоплаченной.')
+                            ->body('Операция должна иметь статус «Завершена» и быть неоплаченной.')
                             ->danger()
                             ->send();
 

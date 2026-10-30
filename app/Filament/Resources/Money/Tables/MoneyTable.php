@@ -17,13 +17,24 @@ class MoneyTable
         return $table
             ->columns([
                 TextColumn::make('year')
+                    ->label('Год')
                     ->size('xs')
                     ->numeric(),
                 TextColumn::make('month')
+                    ->label('Месяц')
                     ->size('xs')
                     ->numeric(),
                 TextColumn::make('type')
+                    ->label('Тип')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'site' => 'Сайт',
+                        'salary' => 'Зарплата',
+                        'bank' => 'Банк',
+                        'other' => 'Прочее',
+                        'delta' => 'Разница',
+                        default => $state,
+                    })
                     ->color(fn (string $state): string => match ($state) {
                         'site' => 'primary',
                         'salary' => 'warning',
@@ -33,20 +44,33 @@ class MoneyTable
                         default => 'gray',
                     }),
                 TextColumn::make('sum')
+                    ->label('Сумма')
                     ->size('xs')
                     ->alignRight()
                     ->numeric(),
                 TextColumn::make('project')
+                    ->label('Проект')
                     ->size('xs')
                     ->searchable(),
                 TextColumn::make('date_payed')
+                    ->label('Дата оплаты')
                     ->size('xs')
                     ->date(),
                 IconColumn::make('is_payed')
+                    ->label('Оплачено')
                     ->size('sm')
                     ->boolean(),
                 TextColumn::make('status')
+                    ->label('Статус')
                     ->badge()
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'plan' => 'План',
+                        'active' => 'Активная',
+                        'cancel' => 'Отменена',
+                        'finish' => 'Завершена',
+                        'payed' => 'Оплачена',
+                        default => $state,
+                    })
                     ->color(fn (string $state): string => match ($state) {
                         'plan' => 'info',
                         'active' => 'primary',
@@ -56,11 +80,11 @@ class MoneyTable
                         default => 'gray',
                     }),
                 TextColumn::make('comment')
+                    ->label('Комментарий')
                     ->size('xs')
                     ->searchable(),
             ])
             ->extraAttributes([
-                // Добавляем кастомный класс именно для этой таблицы
                 'class' => 'compact-table-rows',
             ])
             ->recordClasses(function ($record) {

@@ -12,13 +12,17 @@ class UserForm
     {
         return $schema
             ->components([
-                TextInput::make('name'),
-                TextInput::make('site'),
-                TextInput::make('nick'),
+                TextInput::make('name')
+                    ->label('Имя'),
+                TextInput::make('site')
+                    ->label('Сайт'),
+                TextInput::make('nick')
+                    ->label('Ник'),
                 Textarea::make('email')
-                    ->label('Email address')
+                    ->label('Email')
                     ->columnSpanFull(),
                 Textarea::make('password')
+                    ->label('Пароль')
                     ->columnSpanFull(),
             ]);
     }

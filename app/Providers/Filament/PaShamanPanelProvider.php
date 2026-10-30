@@ -70,7 +70,9 @@ class PaShamanPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Сайт',
                 'Деньги',
+                'Система',
             ])
+            ->breadcrumbs(false)
             ->authMiddleware([
                 Authenticate::class,
             ])

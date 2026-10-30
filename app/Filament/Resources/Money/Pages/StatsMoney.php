@@ -20,9 +20,9 @@ class StatsMoney extends Page implements HasTable
 
     protected string $view = 'filament.resources.money.pages.stats-money';
 
-    protected static ?string $title = 'Статистика';
+    protected static ?string $title = 'Заработок';
 
-    protected static ?string $navigationLabel = 'Статистика';
+    protected static ?string $navigationLabel = 'Заработок';
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
@@ -163,7 +163,7 @@ class StatsMoney extends Page implements HasTable
                     ->numeric(decimalPlaces: 0)
                     ->money('RUB'),
                 TextColumn::make('delta')
-                    ->label('Delta')
+                    ->label('Разница')
                     ->numeric(decimalPlaces: 0)
                     ->money('RUB')
                     ->color(fn ($state) => $state >= 0 ? 'success' : 'danger'),

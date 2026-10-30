@@ -129,11 +129,11 @@ class StatsUsers extends Page implements HasTable
         $clients[] = [
             '__key' => 'unassigned',
             'id' => 'unassigned',
-            'name' => 'Без заказчика',
-            'site' => '',
-            'years' => $unassignedYears,
-            'total' => $unassignedTotal,
-        ];
+                    'name' => 'Без заказчика',
+                    'site' => '',
+                    'years' => $unassignedYears,
+                    'total' => $unassignedTotal,
+                ];
 
         $clients[] = [
             '__key' => 'total',
@@ -144,7 +144,7 @@ class StatsUsers extends Page implements HasTable
             'total' => array_sum($totals),
         ];
 
-        $records = array_values($clients);
+        $records = $unassignedTotal > 0 ? array_values($clients) : array_values(array_filter($clients, fn (array $row): bool => $row['__key'] !== 'unassigned'));
 
         $columns = [
             TextColumn::make('name')

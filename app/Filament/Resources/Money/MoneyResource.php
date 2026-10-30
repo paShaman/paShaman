@@ -24,7 +24,11 @@ class MoneyResource extends Resource
 
     protected static string|null|\UnitEnum $navigationGroup = 'Деньги';
 
-    protected static ?string $navigationLabel = 'Money';
+    protected static ?string $navigationLabel = 'Операции';
+
+    protected static ?string $modelLabel = 'операция';
+
+    protected static ?string $pluralModelLabel = 'Операции';
 
     protected static ?string $recordTitleAttribute = 'project';
 
@@ -65,7 +69,7 @@ class MoneyResource extends Resource
                 ->isActiveWhen(fn (): bool => request()->routeIs(static::getRouteBaseName() . '.index'))
                 ->url(static::getUrl('index')),
             NavigationItem::make()
-                ->label('Статистика')
+                ->label('Заработок')
                 ->icon(Heroicon::OutlinedChartBar)
                 ->group(static::$navigationGroup)
                 ->sort(2)

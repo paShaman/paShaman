@@ -75,7 +75,7 @@ class MoneyChartWidget extends ChartWidget
         return [
             'datasets' => [
                 [
-                    'label' => 'Общий доход (Site + Salary)',
+                    'label' => 'Общий доход (сайт + зарплата)',
                     'data' => $chartDataTotal,
                     'borderColor' => '#3b82f6', // Красивая синяя линия Tailwind
                     'backgroundColor' => 'rgba(59, 130, 246, 0.1)', // Легкая заливка под линией

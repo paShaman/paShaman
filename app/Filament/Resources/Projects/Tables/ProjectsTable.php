@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Projects\Tables;
 
-use App\Models\Project; // Импортируем модель проекта
+use App\Models\Project;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,6 +18,7 @@ class ProjectsTable
         return $table
             ->columns([
                 TextColumn::make('id')
+                    ->label('ID')
                     ->searchable()
                     ->sortable(),
                 ImageColumn::make('authors_avatars')
@@ -37,10 +38,13 @@ class ProjectsTable
                         })->join("\n");
                     }),
                 TextColumn::make('name')
+                    ->label('Название')
                     ->searchable(),
                 TextColumn::make('link')
+                    ->label('Ссылка')
                     ->searchable(),
                 TextColumn::make('active')
+                    ->label('Статус')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         '1' => 'success',
@@ -54,17 +58,22 @@ class ProjectsTable
                     })
                     ->sortable(),
                 TextColumn::make('tags')
+                    ->label('Теги')
                     ->searchable(),
                 TextColumn::make('date')
+                    ->label('Дата')
                     ->searchable(),
                 TextColumn::make('site')
+                    ->label('Сайт')
                     ->searchable(),
 
                 TextColumn::make('created_at')
+                    ->label('Создано')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
+                    ->label('Изменено')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

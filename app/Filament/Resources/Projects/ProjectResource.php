@@ -23,6 +23,10 @@ class ProjectResource extends Resource
 
     protected static string|null|\UnitEnum $navigationGroup = 'Сайт';
 
+    protected static ?string $modelLabel = 'проект';
+
+    protected static ?string $pluralModelLabel = 'Проекты';
+
     public static function getNavigationBadge(): ?string
     {
         return Number::abbreviate(static::getModel()::count());

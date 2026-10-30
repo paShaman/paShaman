@@ -26,6 +26,10 @@ class UserResource extends Resource
 
     protected static string|null|\UnitEnum $navigationGroup = 'Сайт';
 
+    protected static ?string $modelLabel = 'клиент';
+
+    protected static ?string $pluralModelLabel = 'Клиенты';
+
     public static function getNavigationBadge(): ?string
     {
         return Number::abbreviate(static::getModel()::count());

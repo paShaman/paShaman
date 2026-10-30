@@ -20,14 +20,20 @@ class ProjectForm
         return $schema
             ->components([
                 TextInput::make('name')
+                    ->label('Название')
                     ->required(),
-                TextInput::make('site'),
+                TextInput::make('site')
+                    ->label('Сайт'),
                 TextInput::make('link')
+                    ->label('Ссылка')
                     ->required(),
-                Textarea::make('info'),
+                Textarea::make('info')
+                    ->label('Описание'),
                 TextInput::make('tags')
+                    ->label('Теги')
                     ->required(),
                 TextInput::make('date')
+                    ->label('Дата')
                     ->required(),
 
                 FileUpload::make('images')
