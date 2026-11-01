@@ -109,6 +109,18 @@ class StatsUsers extends Page implements HasTable
             $clients[$row->id]['total'] += (int) $row->cnt;
         }
 
+        $visibleYears = array_slice($years, 0, 10);
+
+        $clients = array_values(array_filter($clients, function (array $client) use ($visibleYears): bool {
+            foreach ($visibleYears as $year) {
+                if (($client['years'][$year] ?? 0) > 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        }));
+
         usort($clients, fn ($a, $b) => $b['total'] <=> $a['total']);
 
         $totals = array_fill_keys($years, 0);
@@ -186,9 +198,11 @@ class StatsUsers extends Page implements HasTable
         $columns[] = TextColumn::make('total')
             ->label('Всего')
             ->alignCenter()
-            ->formatStateUsing(fn ($state, $record) => new HtmlString(
-                '<strong style="font-weight:700; color:var(--primary-700);">' . $state . '</strong>'
-            ));
+            ->formatStateUsing(fn ($state, $record) => $record['__key'] === 'total'
+                ? ''
+                : new HtmlString(
+                    '<strong style="font-weight:700; color:var(--primary-700);">' . $state . '</strong>'
+                ));
 
         return $table
             ->records(fn () => $records)

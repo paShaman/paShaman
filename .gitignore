@@ -11,6 +11,9 @@ composer.phar
 package-lock.json
 /node_modules
 /public_html/build
+/public_html/css/filament/
+/public_html/js/filament/
+/public_html/fonts/filament/
 /composer.lock
 .claude
 .codegraph

@@ -34,21 +34,19 @@ class UsersChartWidget extends ChartWidget
     protected function getData(): array
     {
         $rows = DB::select("
-            SELECT y.year,
-                   y.projects,
-                   y.clients
-            FROM (
-                SELECT SUBSTR(p.date, 4, 4) AS year,
-                       COUNT(DISTINCT p.id) AS projects,
-                       COUNT(DISTINCT utp.user_id) AS clients
-                FROM projects p
-                INNER JOIN users_to_projects utp ON utp.project_id = p.id
-                WHERE utp.user_id != 1
-                  AND SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
-                GROUP BY SUBSTR(p.date, 4, 4)
-            ) y
-            ORDER BY y.year
+            SELECT SUBSTR(p.date, 4, 4) AS year,
+                   COUNT(DISTINCT p.id) AS projects,
+                   COUNT(DISTINCT utp.user_id) AS clients
+            FROM projects p
+            LEFT JOIN users_to_projects utp
+                   ON utp.project_id = p.id
+                  AND utp.user_id != 1
+            WHERE SUBSTR(p.date, 4, 4) REGEXP '^[0-9]{4}$'
+            GROUP BY SUBSTR(p.date, 4, 4)
+            ORDER BY year
         ");
+
+        $rows = array_slice($rows, -15);
 
         $labels = [];
         $projects = [];
