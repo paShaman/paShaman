@@ -60,6 +60,7 @@ final class Ny2027Bot
     /** Команды, которые перехватываются до обработки текста активной сессии. */
     private const COMMANDS = [
         '/start', '/help', '/my', '/cancel', '/id', '/stats', '/list', '/export', '/broadcast',
+        '/delete', '/deleteall',
     ];
 
     private ?string $tgToken = null;
@@ -392,6 +393,12 @@ final class Ny2027Bot
             case '/export':
                 $this->cmdExport($chatId, $userId);
                 return;
+            case '/delete':
+                $this->cmdAdminDelete($chatId, $userId, $arg);
+                return;
+            case '/deleteall':
+                $this->cmdAdminDeleteAll($chatId, $userId);
+                return;
             default:
                 if (str_starts_with($command, '/')) {
                     $this->sendHtml($chatId, 'Неизвестная команда. Список команд: /help');
@@ -452,6 +459,34 @@ final class Ny2027Bot
                     } else {
                         $this->sendHtml($chatId, 'Рассылка отменена.');
                     }
+                    return;
+            }
+            return;
+        }
+
+        if ($scope === 'adm') {
+            if (!$this->isAdmin($userId)) {
+                $this->sendHtml($chatId, '⛔ Команда доступна только администратору.');
+                return;
+            }
+
+            switch ((string)($parts[1] ?? '')) {
+                case 'del':
+                    $this->adminDeleteOne(
+                        $chatId,
+                        $userId,
+                        (string)($parts[2] ?? ''),
+                        (string)($parts[3] ?? ''),
+                        $messageId
+                    );
+                    return;
+                case 'delall':
+                    if ((string)($parts[2] ?? '') === 'confirm') {
+                        $this->adminDeleteAllConfirm($chatId, $userId, $messageId);
+                    }
+                    return;
+                case 'cancel':
+                    $this->finishAdminAction($chatId, $messageId, 'Удаление отменено.');
                     return;
             }
             return;
@@ -847,7 +882,7 @@ HTML;
 
         $keyboard = null;
         if ($this->isAdmin($userId)) {
-            $text .= "\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка";
+            $text .= "\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну заявку\n/deleteall — удалить все заявки";
             $keyboard = $this->inlineKeyboard([[self::btn('✉️ Рассылка', 'bc:start')]]);
         }
 
@@ -929,6 +964,9 @@ HTML;
             $lines[] = 'Удалённых заявок: ' . $deleted . ' (в выгрузке /export)';
         }
 
+        $lines[] = '';
+        $lines[] = 'Удалить одну: /delete &lt;номер&gt;, все: /deleteall';
+
         $this->sendHtml($chatId, implode("\n", $lines));
     }
 
@@ -998,6 +1036,170 @@ HTML;
         }
 
         $this->sendHtml($chatId, 'Вы можете зарегистрироваться заново:', $this->registerKeyboard());
+    }
+
+    private function cmdAdminDelete(string $chatId, string $userId, string $arg): void
+    {
+        if (!$this->isAdmin($userId)) {
+            $this->sendHtml($chatId, '⛔ Команда доступна только администратору.');
+            return;
+        }
+
+        $arg = trim($arg);
+        if ($arg === '') {
+            $this->sendHtml(
+                $chatId,
+                'Использование: <code>/delete &lt;номер из /list&gt;</code> или <code>/delete &lt;Telegram ID&gt;</code>.'
+            );
+            return;
+        }
+
+        $records = $this->sortedRecords();
+        if ($records === []) {
+            $this->sendHtml($chatId, 'Нет активных заявок.');
+            return;
+        }
+
+        $record = null;
+        if (ctype_digit($arg)) {
+            $number = (int)$arg;
+            if ($number >= 1 && $number <= count($records)) {
+                $record = $records[$number - 1];
+            }
+        }
+        if ($record === null) {
+            $record = $this->findRecord($arg);
+        }
+
+        if ($record === null) {
+            $this->sendHtml(
+                $chatId,
+                'Заявка не найдена. /list — номера активных заявок; также можно указать Telegram ID.'
+            );
+            return;
+        }
+
+        $targetId = (string)($record['telegram_id'] ?? '');
+        if ($targetId === '') {
+            $this->sendHtml($chatId, 'У заявки нет Telegram ID — удаление невозможно.');
+            return;
+        }
+
+        $hash = substr(md5((string)($record['created_at'] ?? '')), 0, 8);
+
+        $this->sendHtml(
+            $chatId,
+            "🗑 <b>Удалить заявку?</b>\n\n"
+            . $this->recordSummaryHtml($record)
+            . "\nTelegram ID: <code>" . $this->esc($targetId) . "</code>"
+            . "\n\nЗаявка исчезнет у пользователя, в выгрузке останется со статусом «Удалена».",
+            $this->adminDeleteKeyboard($targetId, $hash)
+        );
+    }
+
+    private function cmdAdminDeleteAll(string $chatId, string $userId): void
+    {
+        if (!$this->isAdmin($userId)) {
+            $this->sendHtml($chatId, '⛔ Команда доступна только администратору.');
+            return;
+        }
+
+        $count = count($this->sortedRecords());
+        if ($count === 0) {
+            $this->sendHtml($chatId, 'Нет активных заявок.');
+            return;
+        }
+
+        $this->sendHtml(
+            $chatId,
+            "🗑 <b>Удалить все заявки?</b>\n\n"
+            . "Активных заявок: <b>{$count}</b>.\n\n"
+            . 'Все они переместятся в архив со статусом «Удалена» и останутся в /export. '
+            . 'Пользователи смогут зарегистрироваться заново.',
+            $this->adminDeleteAllKeyboard($count)
+        );
+    }
+
+    private function adminDeleteOne(
+        string $chatId,
+        string $adminId,
+        string $targetId,
+        string $hash,
+        int $messageId
+    ): void {
+        if (!$this->isAdmin($adminId)) {
+            $this->sendHtml($chatId, '⛔ Команда доступна только администратору.');
+            return;
+        }
+
+        $record = $this->findRecord($targetId);
+        if ($record === null) {
+            $this->finishAdminAction($chatId, $messageId, 'Заявка уже удалена.');
+            return;
+        }
+
+        $actualHash = substr(md5((string)($record['created_at'] ?? '')), 0, 8);
+        if (!hash_equals($actualHash, $hash)) {
+            $this->finishAdminAction($chatId, $messageId, 'Заявка изменилась. Проверьте /list и повторите.');
+            return;
+        }
+
+        $deleted = $this->deleteRecord($targetId);
+        $this->clearSession($targetId);
+
+        if ($deleted === null) {
+            $this->finishAdminAction($chatId, $messageId, 'Заявка уже удалена.');
+            return;
+        }
+
+        $this->log("Админ {$adminId} удалил заявку: ID={$targetId}");
+        $fio = trim((string)($deleted['fio'] ?? ''));
+        $this->finishAdminAction(
+            $chatId,
+            $messageId,
+            $fio !== '' ? '🗑 <b>Заявка удалена:</b> ' . $this->esc($fio) : '🗑 <b>Заявка удалена.</b>'
+        );
+    }
+
+    private function adminDeleteAllConfirm(string $chatId, string $adminId, int $messageId): void
+    {
+        if (!$this->isAdmin($adminId)) {
+            $this->sendHtml($chatId, '⛔ Команда доступна только администратору.');
+            return;
+        }
+
+        $count = $this->deleteAllRecords();
+        $this->clearAllSessions();
+
+        if ($count === 0) {
+            $this->finishAdminAction($chatId, $messageId, 'Активных заявок уже нет.');
+            return;
+        }
+
+        $this->log("Админ {$adminId} удалил все заявки: {$count}");
+        $this->finishAdminAction(
+            $chatId,
+            $messageId,
+            "🗑 <b>Удалено заявок: {$count}.</b>\n\nВсе перемещены в архив со статусом «Удалена»."
+        );
+    }
+
+    private function finishAdminAction(string $chatId, int $messageId, string $html): void
+    {
+        if ($messageId > 0) {
+            $edited = $this->api('editMessageText', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'text' => $html,
+                'parse_mode' => 'HTML',
+                'reply_markup' => ['inline_keyboard' => []],
+            ]);
+            if ($edited !== null) {
+                return;
+            }
+        }
+
+        $this->sendHtml($chatId, $html);
     }
 
     // -----------------------------------------------------------------
@@ -1466,6 +1668,24 @@ HTML;
         ]]);
     }
 
+    /** @return array{inline_keyboard: list<list<array{text: string, callback_data: string}>>} */
+    private function adminDeleteKeyboard(string $targetId, string $hash): array
+    {
+        return $this->inlineKeyboard([[
+            self::btn('🗑 Да, удалить', 'adm:del:' . $targetId . ':' . $hash),
+            self::btn('❌ Отмена', 'adm:cancel'),
+        ]]);
+    }
+
+    /** @return array{inline_keyboard: list<list<array{text: string, callback_data: string}>>} */
+    private function adminDeleteAllKeyboard(int $count): array
+    {
+        return $this->inlineKeyboard([[
+            self::btn('🗑 Удалить все (' . $count . ')', 'adm:delall:confirm'),
+            self::btn('❌ Отмена', 'adm:cancel'),
+        ]]);
+    }
+
     /**
      * @param list<list<array{text: string, callback_data: string}>> $rows
      * @return array{inline_keyboard: list<list<array{text: string, callback_data: string}>>}
@@ -1632,6 +1852,48 @@ HTML;
         return is_array($deleted) ? $deleted : null;
     }
 
+    private function deleteAllRecords(): int
+    {
+        $count = $this->withLock('ny2027_records', function (): int {
+            $data = $this->loadData();
+            if ($data['records'] === []) {
+                return 0;
+            }
+
+            $now = date('Y-m-d H:i:s');
+            $deleted = 0;
+
+            foreach ($data['records'] as $userId => $record) {
+                if (!is_array($record)) {
+                    continue;
+                }
+
+                $record['status'] = 'deleted';
+                $record['deleted_at'] = $now;
+                $data['archive'][] = $record;
+                $deleted++;
+
+                $username = trim((string)($record['username'] ?? ''));
+                $this->log(sprintf(
+                    'Заявка удалена: ID=%s, username=%s, ФИО=%s, компания=%s, размер=%s',
+                    (string)$userId,
+                    $username !== '' ? '@' . $username : '—',
+                    (string)($record['fio'] ?? '—'),
+                    (string)($record['company'] ?? '—'),
+                    (string)($record['size'] ?? '—')
+                ));
+            }
+
+            $data['records'] = [];
+            $this->writeData($data);
+            $this->log("Массовое удаление заявок: {$deleted}");
+
+            return $deleted;
+        });
+
+        return is_int($count) ? $count : 0;
+    }
+
     /** @return array<string, mixed>|null */
     private function getSession(string $userId): ?array
     {
@@ -1681,6 +1943,13 @@ HTML;
 
             unset($sessions[$userId]);
             $this->writeJson($this->sessionsFile(), $sessions);
+        });
+    }
+
+    private function clearAllSessions(): void
+    {
+        $this->withLock('ny2027_sessions', function (): void {
+            $this->writeJson($this->sessionsFile(), []);
         });
     }
 
@@ -2341,20 +2610,31 @@ HTML;
 
     private function log(string $message): void
     {
+        $line = sprintf('[%s] %s', date('Y-m-d H:i:s'), $message);
         @file_put_contents(
             $this->logsDir() . '/ny2027.log',
-            sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message),
+            $line . "\n",
             FILE_APPEND | LOCK_EX
         );
+
+        // В long polling дублируем в консоль батника, чтобы события было видно сразу.
+        if (PHP_SAPI === 'cli') {
+            echo $line . PHP_EOL;
+        }
     }
 
     private function logError(string $message): void
     {
+        $line = sprintf('[%s] %s', date('Y-m-d H:i:s'), $message);
         @file_put_contents(
             $this->logsDir() . '/ny2027_errors.log',
-            sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message),
+            $line . "\n",
             FILE_APPEND | LOCK_EX
         );
+
+        if (PHP_SAPI === 'cli') {
+            fwrite(STDERR, $line . PHP_EOL);
+        }
     }
 
     // -----------------------------------------------------------------
