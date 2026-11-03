@@ -11,7 +11,8 @@ $chatId    = getenv('TG_CHAT_ID');
 $interface = "awg0";
 $serverConfig = "/etc/amnezia/amneziawg/awg0.conf";
 $historyFile = "/root/awg_history.json";
-$monthlyLimitGB = false;
+$monthlyLimitGB = getenv('AWG_MONTHLY_LIMIT_GB');
+$providerName  = getenv('AWG_PROVIDER_NAME');
 
 function formatBytes($bytes, $precision = 2)
 {
@@ -47,7 +48,7 @@ if (file_exists($historyFile)) {
                 'tx'             => 0,
                 'last_total_rx'  => (int)$data[5],
                 'last_total_tx'  => (int)$data[6],
-                'prev_run_total' => (int)$data[5] + (int)$data[6]
+                'prev_run_total' => (int)$data[5] + (int)$data[6],
             ];
         }
         file_put_contents($historyFile, json_encode($history));
@@ -61,7 +62,7 @@ array_shift($lines);
 
 $history = file_exists($historyFile) ? json_decode(file_get_contents($historyFile), true) : [];
 
-// 3. Парсим конфиг для имен (оставляем без изменений)
+// 3. Парсим конфиг для имен
 $clientNames = [];
 if (file_exists($serverConfig)) {
     $content = file_get_contents($serverConfig);
@@ -77,7 +78,7 @@ if (file_exists($serverConfig)) {
 }
 
 // 4. Обработка данных
-$message = "📊 *Отчет AmneziaWG (rdp-onedash) за " . date('F') . "*\n" . date('d.m.Y H:i') . "\n\n";
+$message = "📊 *Отчет AmneziaWG ($providerName) за " . date('F') . "*\n" . date('d.m.Y H:i') . "\n\n";
 $totalServerTraffic = 0;
 $activeCount = 0;
 
@@ -135,7 +136,7 @@ foreach ($lines as $line) {
 
 file_put_contents($historyFile, json_encode($history));
 
-// Итоги (остальной код отправки без изменений)
+// Итоги
 $totalGB = $totalServerTraffic / (1024 ** 3);
 
 if ($monthlyLimitGB !== false) {
