@@ -3,17 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#05070b">
+  <meta name="color-scheme" content="dark">
+  <meta name="application-name" content="Money Zoom">
+  <meta name="apple-mobile-web-app-title" content="Money Zoom">
   <title>Money Zoom</title>
   <style>
     :root {
-      --bg-color: #000000;
-      --card-bg: #1c1c1e;
-      --accent-color: #30d158;
-      --text-main: #ffffff;
-      --text-muted: #8e8e93;
-      --border-color: #2c2c2e;
+      color-scheme: dark;
+      --bg: #05070b;
+      --panel-2: rgba(255, 255, 255, 0.045);
+      --panel-3: rgba(255, 255, 255, 0.07);
+      --line: rgba(255, 255, 255, 0.07);
+      --line-strong: rgba(255, 255, 255, 0.13);
+      --text: #eef2f7;
+      --muted: #8b95a7;
+      --dim: #596273;
+      --mint: #3ef0a8;
+      --mint-2: #14c97f;
+      --cyan: #6fdcff;
+      --violet: #a78bfa;
+      --danger: #ff6b6b;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --row-h: 48px;
     }
-    
+
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
@@ -25,177 +39,497 @@
       padding: 0;
       width: 100%;
       height: 100%;
-      height: 100dvh;
-      background-color: var(--bg-color);
-      color: var(--text-main);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
       overflow: hidden;
+      overscroll-behavior: none;
     }
 
-    .app-container {
+    body::before {
+      content: "";
+      position: fixed;
+      inset: -20%;
+      background:
+        radial-gradient(38% 34% at 16% 18%, rgba(62, 240, 168, 0.18), transparent 70%),
+        radial-gradient(34% 30% at 86% 80%, rgba(111, 220, 255, 0.15), transparent 70%),
+        radial-gradient(30% 28% at 78% 10%, rgba(167, 139, 250, 0.15), transparent 70%);
+      filter: blur(28px);
+      pointer-events: none;
+    }
+
+    .page {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 100%;
+      min-height: 100dvh;
+    }
+
+    .app {
+      position: relative;
+      isolation: isolate;
       display: flex;
       flex-direction: column;
       width: 100%;
-      height: 100%;
+      max-width: 480px;
       height: 100dvh;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(13, 17, 24, 0.96), rgba(5, 8, 13, 0.99));
     }
 
-    .header {
+    .app::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(80% 46% at 50% -8%, rgba(62, 240, 168, 0.10), transparent 62%),
+        radial-gradient(56% 38% at 104% 102%, rgba(111, 220, 255, 0.07), transparent 62%);
+    }
+
+    .head {
+      position: relative;
+      z-index: 2;
       flex-shrink: 0;
-      background-color: rgba(28, 28, 30, 0.95);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border-color);
-      padding: 10px 16px;
-      z-index: 100;
+      padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+      background: linear-gradient(180deg, rgba(10, 14, 20, 0.94), rgba(10, 14, 20, 0.72));
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
     }
 
-    .currency-selector {
+    .brand {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      gap: 8px;
-    }
-
-    .curr-select {
-      background: #2c2c2e;
-      color: #fff;
-      border: none;
-      font-size: 18px;
+      gap: 7px;
+      margin-bottom: 9px;
+      padding-left: 2px;
+      color: var(--muted);
+      font-size: 9px;
       font-weight: 700;
-      padding: 6px 12px;
-      border-radius: 8px;
-      outline: none;
-      flex: 1;
-    }
-
-    .swap-btn {
-      background: #2c2c2e;
-      color: var(--accent-color);
-      border: none;
-      font-size: 18px;
-      font-weight: bold;
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .swap-btn:active {
-      background: #3a3a3c;
-      transform: scale(0.95);
-    }
-
-    .bank-inputs {
-      display: flex;
-      gap: 12px;
-    }
-
-    .input-group {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .input-group label {
-      font-size: 10px;
-      color: var(--text-muted);
+      letter-spacing: 0.18em;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+    }
+
+    .brand__dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 10px rgba(62, 240, 168, 0.9);
+    }
+
+    .head__top {
+      display: grid;
+      grid-template-columns: 1fr 44px 1fr;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .cur {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-2);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
     }
 
-    .input-group input {
-      background: #2c2c2e;
-      border: 1px solid transparent;
-      border-radius: 8px;
-      padding: 6px 10px;
-      color: var(--text-main);
-      font-size: 13px;
-      font-weight: 600;
-      width: 100%;
+    .cur:focus-within {
+      border-color: rgba(62, 240, 168, 0.5);
+      background: rgba(62, 240, 168, 0.06);
+    }
+
+    .cur__token {
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(62, 240, 168, 0.26);
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 24%, rgba(62, 240, 168, 0.22), rgba(62, 240, 168, 0.04));
+      color: var(--mint);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .cur--target .cur__token {
+      border-color: rgba(111, 220, 255, 0.26);
+      background: radial-gradient(circle at 30% 24%, rgba(111, 220, 255, 0.20), rgba(111, 220, 255, 0.04));
+      color: var(--cyan);
+    }
+
+    .cur__select {
+      flex: 1;
+      min-width: 0;
+      padding: 0;
+      border: 0;
       outline: none;
-    }
-
-    .input-group input:focus {
-      border-color: var(--accent-color);
-    }
-
-    .status-badge {
-      font-size: 10px;
-      color: var(--accent-color);
-    }
-
-    .geo-badge {
-      font-size: 10px;
-      color: #0a84ff;
+      background: transparent;
+      color: var(--text);
+      font: 600 15px/1.2 var(--font);
+      letter-spacing: 0.02em;
+      appearance: none;
+      -webkit-appearance: none;
       cursor: pointer;
     }
 
-    .zoom-bar {
+    .cur__select option {
+      background: #0b0f16;
+      color: var(--text);
+    }
+
+    .cur__chevron {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      color: var(--dim);
+      pointer-events: none;
+    }
+
+    .swap {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid rgba(62, 240, 168, 0.28);
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 25%, rgba(62, 240, 168, 0.22), rgba(62, 240, 168, 0.05));
+      color: var(--mint);
+      box-shadow: inset 0 0 0 1px rgba(62, 240, 168, 0.06);
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s, transform 0.12s;
+    }
+
+    .swap:hover {
+      background: radial-gradient(circle at 30% 25%, rgba(62, 240, 168, 0.3), rgba(62, 240, 168, 0.08));
+      box-shadow: 0 0 20px rgba(62, 240, 168, 0.18);
+    }
+
+    .swap:active {
+      transform: scale(0.94);
+    }
+
+    .swap svg {
+      width: 19px;
+      height: 19px;
+      transform: rotate(var(--swap-angle, 0deg));
+      transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .rate {
+      display: grid;
+      grid-template-columns: 1.35fr 0.75fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .rate__main,
+    .rate__fee {
+      padding: 9px 12px 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel-2);
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .rate__main:focus-within,
+    .rate__fee:focus-within {
+      border-color: rgba(62, 240, 168, 0.4);
+      background: rgba(62, 240, 168, 0.05);
+    }
+
+    .rate__label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--dim);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .rate__geo {
+      display: grid;
+      place-items: center;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .rate__geo:hover {
+      color: var(--cyan);
+    }
+
+    .rate__geo svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .rate__status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: none;
+      white-space: nowrap;
+      padding: 2px 4px;
+      border: 0;
+      background: transparent;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .rate__status:hover {
+      opacity: 0.75;
+    }
+
+    .rate__status::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--dim);
+      box-shadow: 0 0 8px currentColor;
+    }
+
+    .rate__status[data-state="auto"] {
+      color: var(--mint);
+    }
+
+    .rate__status[data-state="auto"]::before {
+      background: var(--mint);
+    }
+
+    .rate__status[data-state="manual"] {
+      color: var(--cyan);
+    }
+
+    .rate__status[data-state="manual"]::before {
+      background: var(--cyan);
+    }
+
+    .rate__status[data-state="offline"] {
+      color: var(--danger);
+    }
+
+    .rate__status[data-state="offline"]::before {
+      background: var(--danger);
+    }
+
+    .rate__status[data-state="loading"] {
+      color: var(--violet);
+    }
+
+    .rate__status[data-state="loading"]::before {
+      background: var(--violet);
+      animation: status-blink 1s ease-in-out infinite;
+    }
+
+    @keyframes status-blink {
+      50% { opacity: 0.25; }
+    }
+
+    .rate__field {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .rate__field input {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font: 700 23px/1.2 var(--font);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+      appearance: none;
+      -moz-appearance: textfield;
+    }
+
+    .rate__field input::-webkit-outer-spin-button,
+    .rate__field input::-webkit-inner-spin-button {
+      margin: 0;
+      -webkit-appearance: none;
+    }
+
+    .rate__field input::placeholder {
+      color: var(--dim);
+    }
+
+    .rate__fee .rate__field input {
+      font-size: 18px;
+    }
+
+    .rate__unit {
+      flex-shrink: 0;
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .zoom {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-top: 8px;
-      padding-top: 6px;
-      border-top: 1px solid rgba(255,255,255,0.05);
+      gap: 10px;
+      margin-top: 10px;
     }
 
-    .zoom-info {
-      font-size: 12px;
-      color: var(--text-muted);
+    .zoom__step {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      padding: 7px 12px;
+      border: 1px solid rgba(62, 240, 168, 0.18);
+      border-radius: 12px;
+      background: linear-gradient(90deg, rgba(62, 240, 168, 0.10), rgba(62, 240, 168, 0.02));
     }
 
-    .zoom-info span {
-      color: var(--accent-color);
-      font-weight: bold;
+    .zoom__caption {
+      color: var(--dim);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
     }
 
-    .zoom-controls {
+    .zoom__value {
+      color: var(--mint);
+      font: 700 18px/1 var(--font);
+      font-variant-numeric: tabular-nums;
+      transform-origin: left center;
+    }
+
+    .zoom__value.is-pulse {
+      animation: step-pulse 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    @keyframes step-pulse {
+      0% { transform: scale(1); }
+      35% {
+        transform: scale(1.16);
+        text-shadow: 0 0 16px rgba(62, 240, 168, 0.85);
+      }
+      100% { transform: scale(1); }
+    }
+
+    .zoom__unit {
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+    }
+
+    .zoom__btns {
       display: flex;
       gap: 6px;
     }
 
-    .btn-btn {
-      background: #2c2c2e;
-      color: #fff;
-      border: none;
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      font-weight: bold;
-      font-size: 15px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    .icon-btn {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1;
       cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
     }
 
-    .btn-btn:active {
-      background: #3a3a3c;
+    .icon-btn:hover {
+      border-color: var(--line-strong);
+      background: var(--panel-3);
     }
 
-    .btn-reset {
-      width: auto;
-      padding: 0 8px;
-      font-size: 11px;
+    .icon-btn:active {
+      transform: scale(0.93);
     }
 
-    .grid-container {
-      flex: 1;
-      overflow: hidden;
+    .icon-btn--ghost {
+      color: var(--muted);
+    }
+
+    .icon-btn--accent {
+      border-color: rgba(62, 240, 168, 0.22);
+      background: rgba(62, 240, 168, 0.06);
+      color: var(--mint);
+    }
+
+    .icon-btn--accent:hover {
+      border-color: rgba(62, 240, 168, 0.4);
+      background: rgba(62, 240, 168, 0.12);
+    }
+
+    .icon-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+    .tape {
       position: relative;
+      z-index: 1;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
       touch-action: none;
       overscroll-behavior: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 24%, transparent 76%, rgba(255, 255, 255, 0.012));
+    }
+
+    .tape::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 1px;
+      z-index: 1;
+      background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.09) 18%, rgba(255, 255, 255, 0.09) 82%, transparent);
     }
 
     #gridContent {
       position: absolute;
-      inset: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 1;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 87%, transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 87%, transparent 100%);
     }
 
     .grid-row {
@@ -203,102 +537,347 @@
       left: 16px;
       right: 16px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      height: 48px;
-      padding: 0 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      border-radius: 8px;
+      justify-content: space-between;
+      gap: 12px;
+      height: var(--row-h);
+      padding: 0 12px;
+      border-radius: 12px;
       pointer-events: none;
     }
 
+    .grid-row::after {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06) 14%, rgba(255, 255, 255, 0.06) 86%, transparent);
+    }
+
+    .grid-row::before {
+      content: "";
+      position: absolute;
+      left: -10px;
+      top: 50%;
+      width: 6px;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.16);
+      transform: translateY(-50%);
+    }
+
+    .grid-row.is-focus {
+      background: linear-gradient(90deg, rgba(62, 240, 168, 0), rgba(62, 240, 168, 0.10) 16%, rgba(62, 240, 168, 0.10) 84%, rgba(62, 240, 168, 0));
+      box-shadow: inset 0 0 0 1px rgba(62, 240, 168, 0.16), 0 0 28px rgba(62, 240, 168, 0.06);
+    }
+
+    .grid-row.is-focus::before {
+      width: 10px;
+      background: var(--mint);
+      box-shadow: 0 0 9px rgba(62, 240, 168, 0.9);
+    }
+
+    .grid-row.is-focus::after {
+      background: linear-gradient(90deg, transparent, rgba(62, 240, 168, 0.42), transparent);
+    }
+
+    .base-val,
+    .target-val {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+    }
+
     .base-val {
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--text-muted);
+      color: var(--muted);
     }
 
     .target-val {
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--accent-color);
+      justify-content: flex-end;
+      color: var(--text);
     }
 
-    .hint-footer {
+    .base-num {
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .target-num {
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .base-cur,
+    .target-cur {
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .base-cur {
+      color: var(--dim);
+    }
+
+    .target-cur {
+      color: var(--mint-2);
+    }
+
+    .grid-row.is-focus .base-val {
+      color: var(--text);
+    }
+
+    .grid-row.is-focus .target-val {
+      color: var(--mint);
+      text-shadow: 0 0 18px rgba(62, 240, 168, 0.32);
+    }
+
+    .grid-row.is-focus .base-cur {
+      color: var(--muted);
+    }
+
+    .grid-row.is-focus .target-cur {
+      color: var(--mint);
+    }
+
+    .tape-focus {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .tape-focus::before,
+    .tape-focus::after {
+      content: "";
+      position: absolute;
+      top: -1px;
+      width: 18px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--mint);
+      box-shadow: 0 0 14px rgba(62, 240, 168, 0.8);
+    }
+
+    .tape-focus::before {
+      left: 0;
+    }
+
+    .tape-focus::after {
+      right: 0;
+    }
+
+    .foot {
+      position: relative;
+      z-index: 2;
       flex-shrink: 0;
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+      background: linear-gradient(0deg, rgba(6, 9, 14, 0.97), rgba(6, 9, 14, 0.58));
       text-align: center;
-      padding: 8px;
-      color: #48484a;
+    }
+
+    .foot__hint {
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      bottom: calc(52px + env(safe-area-inset-bottom));
+      z-index: 5;
+      padding: 8px 14px;
+      border: 1px solid rgba(62, 240, 168, 0.26);
+      border-radius: 999px;
+      background: rgba(8, 12, 17, 0.94);
+      color: var(--mint);
       font-size: 11px;
-      border-top: 1px solid rgba(255,255,255,0.03);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      transform: translate(-50%, 8px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    @media (min-width: 1024px) {
+      .page {
+        padding: 28px;
+      }
+
+      .app {
+        height: min(900px, calc(100dvh - 56px));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 30px;
+        box-shadow: 0 42px 120px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+
+      .head {
+        padding-top: 18px;
+      }
+    }
+
+    @media (max-width: 359px) {
+      .head {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .head__top {
+        grid-template-columns: 1fr 40px 1fr;
+        gap: 8px;
+      }
+
+      .cur {
+        gap: 6px;
+        padding: 7px 8px;
+      }
+
+      .cur__token {
+        width: 25px;
+        height: 25px;
+        font-size: 11px;
+      }
+
+      .cur__select {
+        font-size: 13px;
+      }
+
+      .swap {
+        width: 40px;
+        height: 40px;
+      }
+
+      .base-num {
+        font-size: 16px;
+      }
+
+      .target-num {
+        font-size: 19px;
+      }
     }
   </style>
 </head>
 <body>
 
-  <div class="app-container">
-    <div class="header">
-      <div class="currency-selector">
-        <select id="baseCurr" class="curr-select">
-          <option value="USD">USD ($)</option>
-          <option value="EUR">EUR (€)</option>
-          <option value="CNY">CNY (¥)</option>
-          <option value="THB">THB (฿)</option>
-          <option value="AED">AED (Dh)</option>
-          <option value="VND">VND (₫)</option>
-          <option value="TRY">TRY (₺)</option>
-          <option value="BYN">BYN (Br)</option>
-          <option value="GEL">GEL (₾)</option>
-          <option value="AMD">AMD (֏)</option>
-          <option value="KZT">KZT (₸)</option>
-          <option value="RUB">RUB (₽)</option>
-        </select>
-        
-        <button id="btnSwap" class="swap-btn" title="Развернуть направление">⇄</button>
-        
-        <select id="targetCurr" class="curr-select">
-          <option value="RUB">RUB (₽)</option>
-          <option value="USD">USD ($)</option>
-          <option value="EUR">EUR (€)</option>
-          <option value="CNY">CNY (¥)</option>
-          <option value="THB">THB (฿)</option>
-          <option value="VND">VND (₫)</option>
-        </select>
-      </div>
+  <div class="page">
+    <div class="app">
+      <header class="head">
+        <div class="brand">
+          <span class="brand__dot" aria-hidden="true"></span>
+          <span>Money Zoom</span>
+        </div>
 
-      <div class="bank-inputs">
-        <div class="input-group">
-          <label>
-            Базовый курс 
-            <span>
-              <span id="geoBadge" class="geo-badge" title="Определить локацию">📍 geo</span>
-              <span id="statusBadge" class="status-badge"></span>
-            </span>
+        <div class="head__top">
+          <label class="cur" for="baseCurr">
+            <span class="cur__token" id="baseToken">$</span>
+            <select id="baseCurr" class="cur__select" aria-label="Базовая валюта">
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="CNY">CNY</option>
+              <option value="THB">THB</option>
+              <option value="AED">AED</option>
+              <option value="VND">VND</option>
+              <option value="TRY">TRY</option>
+              <option value="BYN">BYN</option>
+              <option value="GEL">GEL</option>
+              <option value="AMD">AMD</option>
+              <option value="KZT">KZT</option>
+              <option value="RUB">RUB</option>
+            </select>
+            <svg class="cur__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </label>
-          <input type="number" id="bankRate" step="0.0001" placeholder="Курс">
-        </div>
-        <div class="input-group">
-          <label>Наценка банка (%)</label>
-          <input type="number" id="bankFee" step="0.5" value="0" placeholder="0">
-        </div>
-      </div>
 
-      <div class="zoom-bar">
-        <div class="zoom-info">Шаг сетки: <span id="stepLabel">25</span></div>
-        <div class="zoom-controls">
-          <button class="btn-btn" id="btnZoomOut">−</button>
-          <button class="btn-btn" id="btnZoomIn">+</button>
-          <button class="btn-btn btn-reset" id="btnReset">Сброс</button>
+          <button id="btnSwap" class="swap" type="button" aria-label="Поменять валюты местами" title="Поменять валюты">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13"/><path d="m13 4 4 4-4 4"/><path d="M20 16H7"/><path d="m11 12-4 4 4 4"/></svg>
+          </button>
+
+          <label class="cur cur--target" for="targetCurr">
+            <span class="cur__token" id="targetToken">₽</span>
+            <select id="targetCurr" class="cur__select" aria-label="Целевая валюта">
+              <option value="RUB">RUB</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="CNY">CNY</option>
+              <option value="THB">THB</option>
+              <option value="VND">VND</option>
+            </select>
+            <svg class="cur__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </label>
         </div>
-      </div>
-    </div>
 
-    <div class="grid-container" id="gridContainer">
-      <div id="gridContent"></div>
-    </div>
+        <div class="rate">
+          <div class="rate__main">
+            <div class="rate__label">
+              <span>Курс</span>
+              <button id="geoBadge" class="rate__geo" type="button" aria-label="Определить валюту по геолокации" title="Определить валюту">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              </button>
+              <button id="statusBadge" class="rate__status" data-state="loading" type="button" aria-label="Обновить курс" title="Обновить курс"></button>
+            </div>
+            <div class="rate__field">
+              <input type="number" id="bankRate" inputmode="decimal" step="0.0001" placeholder="Курс" aria-label="Базовый курс">
+              <span class="rate__unit" id="rateUnit">RUB</span>
+            </div>
+          </div>
 
-    <div class="hint-footer">
-      Два пальца — зум шкалы • Один палец — прокрутка
+          <div class="rate__fee">
+            <label class="rate__label" for="bankFee">Наценка</label>
+            <div class="rate__field">
+              <input type="number" id="bankFee" inputmode="decimal" step="0.5" value="0" placeholder="0" aria-label="Наценка банка в процентах">
+              <span class="rate__unit">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="zoom">
+          <div class="zoom__step">
+            <span class="zoom__caption">Шаг</span>
+            <span class="zoom__value" id="stepLabel">25</span>
+            <span class="zoom__unit" id="stepUnit">USD</span>
+          </div>
+          <div class="zoom__btns">
+            <button class="icon-btn" id="btnZoomOut" type="button" aria-label="Уменьшить масштаб">−</button>
+            <button class="icon-btn" id="btnZoomIn" type="button" aria-label="Увеличить масштаб">+</button>
+            <button class="icon-btn icon-btn--accent" id="btnCopy" type="button" aria-label="Скопировать текущее значение" title="Скопировать">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
+            <button class="icon-btn icon-btn--ghost" id="btnReset" type="button" aria-label="Сбросить масштаб" title="Сброс">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="tape" id="gridContainer">
+        <div id="gridContent"></div>
+        <div class="tape-focus" aria-hidden="true"></div>
+      </main>
+
+      <footer class="foot">
+        <span class="foot__hint">Два пальца — масштаб · Один — прокрутка</span>
+      </footer>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
     </div>
   </div>
 
@@ -309,48 +888,77 @@
     const STEPS_PRESETS = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
     const MIN_SCALE = ROW_HEIGHT / STEPS_PRESETS[STEPS_PRESETS.length - 1];
     const MAX_SCALE = ROW_HEIGHT / STEPS_PRESETS[0];
-    
+
     const FALLBACK_RATES = {
       USD: 1, EUR: 0.92, RUB: 92.5, CNY: 7.23, THB: 36.5, AED: 3.67, VND: 25400, TRY: 32.2, BYN: 3.25, GEL: 2.7, AMD: 388, KZT: 445
     };
 
+    const CURRENCY_SYMBOLS = {
+      USD: '$', EUR: '€', RUB: '₽', CNY: '¥', THB: '฿', AED: 'Dh', VND: '₫',
+      TRY: '₺', BYN: 'Br', GEL: '₾', AMD: '֏', KZT: '₸'
+    };
+
+    const store = {
+      get(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+      },
+      set(key, value) {
+        try { localStorage.setItem(key, value); } catch (e) { }
+      }
+    };
+
     let isManualRate = false;
+
+    function setManualRate(manual) {
+      isManualRate = manual;
+      store.set('moneyzoom_manual', manual ? '1' : '0');
+    }
 
     function clamp(value, min, max) {
       return Math.min(max, Math.max(min, value));
     }
 
+    function pairId() {
+      return `${state.baseCurr}_${state.targetCurr}`;
+    }
+
     function readInitialScale() {
-      const savedScale = parseFloat(localStorage.getItem('elk_scale'));
+      const savedScale = parseFloat(store.get('moneyzoom_scale'));
       if (Number.isFinite(savedScale) && savedScale > 0) {
         return clamp(savedScale, MIN_SCALE, MAX_SCALE);
       }
-      const savedStep = parseFloat(localStorage.getItem('elk_step')) || DEFAULT_STEP;
-      return clamp(ROW_HEIGHT / savedStep, MIN_SCALE, MAX_SCALE);
+      return clamp(ROW_HEIGHT / DEFAULT_STEP, MIN_SCALE, MAX_SCALE);
     }
 
     const state = {
-      baseCurr: localStorage.getItem('elk_base') || 'USD',
-      targetCurr: localStorage.getItem('elk_target') || 'RUB',
-      bankRate: parseFloat(localStorage.getItem('elk_rate')) || 92.5,
-      bankFee: parseFloat(localStorage.getItem('elk_fee')) || 0,
+      baseCurr: store.get('moneyzoom_base') || 'USD',
+      targetCurr: store.get('moneyzoom_target') || 'RUB',
+      bankRate: 0,
+      bankFee: parseFloat(store.get('moneyzoom_fee')) || 0,
       scale: readInitialScale(),
-      topValue: 0
+      topValue: 0,
+      focusValue: 0
     };
 
     const baseCurrEl = document.getElementById('baseCurr');
     const targetCurrEl = document.getElementById('targetCurr');
+    const baseTokenEl = document.getElementById('baseToken');
+    const targetTokenEl = document.getElementById('targetToken');
     const bankRateEl = document.getElementById('bankRate');
     const bankFeeEl = document.getElementById('bankFee');
+    const rateUnitEl = document.getElementById('rateUnit');
     const stepLabelEl = document.getElementById('stepLabel');
+    const stepUnitEl = document.getElementById('stepUnit');
     const statusBadgeEl = document.getElementById('statusBadge');
     const geoBadgeEl = document.getElementById('geoBadge');
     const btnSwapEl = document.getElementById('btnSwap');
+    const btnCopyEl = document.getElementById('btnCopy');
+    const toastEl = document.getElementById('toast');
     const gridContainer = document.getElementById('gridContainer');
     const gridContent = document.getElementById('gridContent');
 
     function ensureOptionExists(selectEl, currCode) {
-      const exists = Array.from(selectEl.options).some(opt => opt.value === currCode);
+      const exists = Array.from(selectEl.options).some((opt) => opt.value === currCode);
       if (!exists) {
         const opt = document.createElement('option');
         opt.value = currCode;
@@ -359,80 +967,163 @@
       }
     }
 
+    function setStatus(name, text) {
+      statusBadgeEl.dataset.state = name;
+      statusBadgeEl.textContent = text;
+    }
+
+    function updateCurrencyLabels() {
+      baseTokenEl.textContent = CURRENCY_SYMBOLS[state.baseCurr] || state.baseCurr.charAt(0);
+      targetTokenEl.textContent = CURRENCY_SYMBOLS[state.targetCurr] || state.targetCurr.charAt(0);
+      rateUnitEl.textContent = state.targetCurr;
+    }
+
+    const numberFormats = new Map();
+
+    function fmt(value, digits) {
+      let formatter = numberFormats.get(digits);
+      if (!formatter) {
+        formatter = new Intl.NumberFormat('ru-RU', {
+          maximumFractionDigits: digits,
+          minimumFractionDigits: 0
+        });
+        numberFormats.set(digits, formatter);
+      }
+      return formatter.format(value);
+    }
+
+    function digitsForRate(rate) {
+      if (!Number.isFinite(rate) || rate <= 0) return 0;
+      if (rate >= 10) return 0;
+      if (rate >= 0.01) return 2;
+      return 4;
+    }
+
+    function rateCacheKey() {
+      return `moneyzoom_auto_${pairId()}`;
+    }
+
+    function readCachedRate() {
+      try {
+        const raw = store.get(rateCacheKey());
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        return data && Number.isFinite(data.rate) && data.rate > 0 ? data : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function writeCachedRate(rate) {
+      store.set(rateCacheKey(), JSON.stringify({ rate, at: Date.now() }));
+    }
+
+    function useCachedOrFallbackRate() {
+      const cached = readCachedRate();
+      if (cached) {
+        state.bankRate = cached.rate;
+        bankRateEl.value = state.bankRate;
+        setStatus('auto', 'кэш');
+      } else {
+        calcFallbackRate();
+      }
+    }
+
+    function calcFallbackRate(showStatus = true) {
+      const baseUSD = FALLBACK_RATES[state.baseCurr] || 1;
+      const targetUSD = FALLBACK_RATES[state.targetCurr] || 1;
+      state.bankRate = parseFloat((targetUSD / baseUSD).toFixed(4));
+      bankRateEl.value = state.bankRate;
+      if (showStatus) setStatus('offline', 'офлайн');
+    }
+
     function initUI() {
       ensureOptionExists(baseCurrEl, state.baseCurr);
       ensureOptionExists(targetCurrEl, state.targetCurr);
 
       baseCurrEl.value = state.baseCurr;
       targetCurrEl.value = state.targetCurr;
-      bankRateEl.value = state.bankRate;
       bankFeeEl.value = state.bankFee;
+      updateCurrencyLabels();
+
+      const savedPair = store.get('moneyzoom_pair');
+      const savedRate = parseFloat(store.get('moneyzoom_rate'));
+      const wasManual = store.get('moneyzoom_manual') === '1';
+
+      if (savedPair === pairId() && Number.isFinite(savedRate) && savedRate > 0) {
+        state.bankRate = savedRate;
+        setManualRate(wasManual);
+        if (wasManual) setStatus('manual', 'ручной');
+      } else {
+        setManualRate(false);
+        useCachedOrFallbackRate();
+      }
+      bankRateEl.value = state.bankRate;
 
       const height = gridContainer.clientHeight || window.innerHeight;
-      const savedTop = parseFloat(localStorage.getItem('elk_top'));
+      const savedTop = parseFloat(store.get('moneyzoom_top'));
       if (Number.isFinite(savedTop)) {
         state.topValue = Math.max(0, savedTop);
       } else {
-        const legacyCenter = parseFloat(localStorage.getItem('elk_center'));
-        const center = Number.isFinite(legacyCenter) ? legacyCenter : DEFAULT_CENTER;
-        state.topValue = Math.max(0, center - (height / 2) / state.scale);
+        state.topValue = Math.max(0, DEFAULT_CENTER - (height / 2) / state.scale);
       }
 
       renderGrid();
-
-      if (!state.bankRate || state.bankRate <= 0) {
-        calcFallbackRate();
-      }
-
       fetchOnlineRate();
-    }
-
-    function calcFallbackRate() {
-      const baseUSD = FALLBACK_RATES[state.baseCurr] || 1;
-      const targetUSD = FALLBACK_RATES[state.targetCurr] || 1;
-      state.bankRate = parseFloat((targetUSD / baseUSD).toFixed(4));
-      bankRateEl.value = state.bankRate;
-      statusBadgeEl.textContent = 'офлайн';
-      renderGrid();
     }
 
     async function fetchOnlineRate() {
       if (isManualRate) return;
-      statusBadgeEl.textContent = '...';
-      
+      setStatus('loading', '...');
+
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
         const res = await fetch(`https://open.er-api.com/v6/latest/${state.baseCurr}`, { signal: controller.signal });
         clearTimeout(timeoutId);
-        
+
         const data = await res.json();
-        
+
         if (data && data.rates && data.rates[state.targetCurr]) {
           const freshRate = data.rates[state.targetCurr];
           state.bankRate = freshRate < 0.01 ? parseFloat(freshRate.toFixed(6)) : parseFloat(freshRate.toFixed(4));
           bankRateEl.value = state.bankRate;
-          statusBadgeEl.textContent = '✓ авто';
+          writeCachedRate(state.bankRate);
+          setStatus('auto', 'авто');
           saveState();
           renderGrid();
         } else {
-          calcFallbackRate();
+          if (!state.bankRate) calcFallbackRate();
+          else setStatus('offline', 'офлайн');
+          renderGrid();
         }
       } catch (e) {
-        calcFallbackRate();
+        if (!state.bankRate) calcFallbackRate();
+        else setStatus('offline', 'офлайн');
+        renderGrid();
       }
+    }
+
+    function applyPairChange() {
+      updateCurrencyLabels();
+      setManualRate(false);
+      state.bankRate = 0;
+      useCachedOrFallbackRate();
+      saveState();
+      renderGrid();
+      fetchOnlineRate();
     }
 
     async function detectLocationCurrency() {
       try {
-        statusBadgeEl.textContent = 'GPS...';
+        setStatus('loading', 'GPS...');
         const controller = new AbortController();
         setTimeout(() => controller.abort(), 3000);
 
         const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
         const data = await res.json();
-        
+
         if (data && data.currency) {
           const detectedCurr = data.currency;
           ensureOptionExists(baseCurrEl, detectedCurr);
@@ -440,26 +1131,25 @@
           if (state.baseCurr !== detectedCurr) {
             state.baseCurr = detectedCurr;
             baseCurrEl.value = detectedCurr;
-            saveState();
-            fetchOnlineRate();
+            applyPairChange();
+            setStatus('auto', data.country_code || 'geo');
           }
-          statusBadgeEl.textContent = `📍 ${data.country_code}`;
         }
       } catch (e) {
-        statusBadgeEl.textContent = 'офлайн';
+        setStatus('offline', 'офлайн');
       }
     }
 
     function saveState() {
-      localStorage.setItem('elk_base', state.baseCurr);
-      localStorage.setItem('elk_target', state.targetCurr);
-      localStorage.setItem('elk_rate', state.bankRate);
-      localStorage.setItem('elk_fee', state.bankFee);
-      localStorage.setItem('elk_scale', state.scale);
-      localStorage.setItem('elk_top', state.topValue);
+      store.set('moneyzoom_base', state.baseCurr);
+      store.set('moneyzoom_target', state.targetCurr);
+      store.set('moneyzoom_pair', pairId());
+      store.set('moneyzoom_rate', state.bankRate);
+      store.set('moneyzoom_fee', state.bankFee);
+      store.set('moneyzoom_scale', state.scale);
+      store.set('moneyzoom_top', state.topValue);
     }
 
-    // Непрерывный масштаб (px на единицу валюты) → ближайший «красивый» шаг сетки
     function getStepForScale(scale) {
       const ideal = ROW_HEIGHT / scale;
       let best = STEPS_PRESETS[0];
@@ -485,7 +1175,6 @@
       });
     }
 
-    // Переиспользуем строки, чтобы не удалять DOM-узел под пальцем во время жеста
     const rowPool = [];
 
     function getRow(index) {
@@ -496,32 +1185,59 @@
 
         const base = document.createElement('div');
         base.className = 'base-val';
+        const baseNum = document.createElement('span');
+        baseNum.className = 'base-num';
+        const baseCur = document.createElement('span');
+        baseCur.className = 'base-cur';
+        base.appendChild(baseNum);
+        base.appendChild(baseCur);
 
         const target = document.createElement('div');
         target.className = 'target-val';
+        const targetNum = document.createElement('span');
+        targetNum.className = 'target-num';
+        const targetCur = document.createElement('span');
+        targetCur.className = 'target-cur';
+        target.appendChild(targetNum);
+        target.appendChild(targetCur);
 
         el.appendChild(base);
         el.appendChild(target);
         gridContent.appendChild(el);
 
-        row = { el, base, target };
+        row = { el, baseNum, baseCur, targetNum, targetCur };
         rowPool[index] = row;
       }
       return row;
     }
+    let lastStep = null;
 
     function renderGrid() {
       const height = gridContainer.clientHeight || window.innerHeight;
       const step = getStepForScale(state.scale);
-      stepLabelEl.textContent = `${step} ${state.baseCurr}`;
+
+      if (lastStep !== null && lastStep !== step) {
+        stepLabelEl.classList.remove('is-pulse');
+        void stepLabelEl.offsetWidth;
+        stepLabelEl.classList.add('is-pulse');
+        if (navigator.vibrate) navigator.vibrate(5);
+      }
+      lastStep = step;
+
+      stepLabelEl.textContent = fmt(step, 0);
+      stepUnitEl.textContent = state.baseCurr;
 
       if (state.topValue < 0) state.topValue = 0;
 
       const effectiveRate = state.bankRate * (1 + state.bankFee / 100);
+      const digits = digitsForRate(effectiveRate);
       const spacing = step * state.scale;
       const firstValue = Math.floor(state.topValue / step) * step;
       const startY = (firstValue - state.topValue) * state.scale;
       const count = Math.ceil((height - startY) / spacing) + 1;
+      const centerValue = state.topValue + (height / 2) / state.scale;
+      const focusValue = Math.max(0, Math.round((centerValue - (ROW_HEIGHT / 2) / state.scale) / step) * step);
+      state.focusValue = focusValue;
 
       let used = 0;
       for (let i = 0; i < count; i++) {
@@ -531,18 +1247,22 @@
         const y = startY + i * spacing;
         if (y > height) break;
 
-        const targetVal = Math.round(baseVal * effectiveRate);
         const row = getRow(used++);
         row.el.style.display = '';
         row.el.style.top = `${y}px`;
-        row.base.textContent = `${baseVal.toLocaleString()} ${state.baseCurr}`;
-        row.target.textContent = `${targetVal.toLocaleString()} ${state.targetCurr}`;
+        row.el.classList.toggle('is-focus', baseVal === focusValue);
+        row.baseNum.textContent = fmt(baseVal, 0);
+        row.baseCur.textContent = state.baseCurr;
+        row.targetNum.textContent = fmt(baseVal * effectiveRate, digits);
+        row.targetCur.textContent = state.targetCurr;
       }
 
       for (let i = used; i < rowPool.length; i++) {
         rowPool[i].el.style.display = 'none';
       }
     }
+
+    let swapAngle = 0;
 
     btnSwapEl.addEventListener('click', () => {
       const temp = state.baseCurr;
@@ -555,48 +1275,108 @@
       baseCurrEl.value = state.baseCurr;
       targetCurrEl.value = state.targetCurr;
 
-      if (state.bankRate > 0) {
-        state.bankRate = parseFloat((1 / state.bankRate).toFixed(4));
-        bankRateEl.value = state.bankRate;
-      }
+      swapAngle += 180;
+      btnSwapEl.style.setProperty('--swap-angle', `${swapAngle}deg`);
 
-      isManualRate = false;
-      saveState();
-      renderGrid();
-      fetchOnlineRate();
+      applyPairChange();
     });
 
     geoBadgeEl.addEventListener('click', () => detectLocationCurrency());
 
-    baseCurrEl.addEventListener('change', (e) => { 
-      state.baseCurr = e.target.value; 
-      isManualRate = false;
-      saveState(); 
-      fetchOnlineRate(); 
+    statusBadgeEl.addEventListener('click', () => {
+      setManualRate(false);
+      fetchOnlineRate();
     });
 
-    targetCurrEl.addEventListener('change', (e) => { 
-      state.targetCurr = e.target.value; 
-      isManualRate = false;
-      saveState(); 
-      fetchOnlineRate(); 
+    baseCurrEl.addEventListener('change', (e) => {
+      state.baseCurr = e.target.value;
+      applyPairChange();
     });
 
-    bankRateEl.addEventListener('input', (e) => { 
-      isManualRate = true;
-      state.bankRate = parseFloat(e.target.value) || 0; 
-      statusBadgeEl.textContent = 'ручной';
-      saveState(); 
-      scheduleRender(); 
+    targetCurrEl.addEventListener('change', (e) => {
+      state.targetCurr = e.target.value;
+      applyPairChange();
     });
 
-    bankFeeEl.addEventListener('input', (e) => { 
-      state.bankFee = parseFloat(e.target.value) || 0; 
-      saveState(); 
-      scheduleRender(); 
+    bankRateEl.addEventListener('input', (e) => {
+      setManualRate(true);
+      state.bankRate = parseFloat(e.target.value) || 0;
+      setStatus('manual', 'ручной');
+      saveState();
+      scheduleRender();
     });
 
-    // ── Жесты: один палец — прокрутка, два пальца — зум ───────────────
+    bankFeeEl.addEventListener('input', (e) => {
+      state.bankFee = parseFloat(e.target.value) || 0;
+      saveState();
+      scheduleRender();
+    });
+
+    function zoomToStep(direction) {
+      stopInertia();
+      const currentStep = getStepForScale(state.scale);
+      let idx = STEPS_PRESETS.indexOf(currentStep);
+      if (idx === -1) idx = 0;
+
+      const nextIdx = clamp(idx + direction, 0, STEPS_PRESETS.length - 1);
+      if (nextIdx === idx) return;
+
+      const height = gridContainer.clientHeight || window.innerHeight;
+      const centerValue = state.topValue + (height / 2) / state.scale;
+
+      state.scale = ROW_HEIGHT / STEPS_PRESETS[nextIdx];
+      state.topValue = Math.max(0, centerValue - (height / 2) / state.scale);
+      saveState();
+      renderGrid();
+    }
+
+    function resetView() {
+      stopInertia();
+      state.scale = ROW_HEIGHT / DEFAULT_STEP;
+      const height = gridContainer.clientHeight || window.innerHeight;
+      state.topValue = Math.max(0, DEFAULT_CENTER - (height / 2) / state.scale);
+      saveState();
+      renderGrid();
+    }
+
+    document.getElementById('btnZoomIn').addEventListener('click', () => zoomToStep(-1));
+    document.getElementById('btnZoomOut').addEventListener('click', () => zoomToStep(1));
+    document.getElementById('btnReset').addEventListener('click', resetView);
+
+    let toastTimer = null;
+
+    function showToast(message) {
+      toastEl.textContent = message;
+      toastEl.classList.add('is-visible');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('is-visible'), 1600);
+    }
+
+    async function copyFocusedValue() {
+      const rate = state.bankRate * (1 + state.bankFee / 100);
+      const text = `${fmt(state.focusValue, 0)} ${state.baseCurr} = ${fmt(state.focusValue * rate, digitsForRate(rate))} ${state.targetCurr}`;
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const area = document.createElement('textarea');
+          area.value = text;
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand('copy');
+          area.remove();
+        }
+        showToast('Скопировано');
+      } catch (e) {
+        showToast('Не удалось скопировать');
+      }
+    }
+
+    btnCopyEl.addEventListener('click', copyFocusedValue);
+
     const MIN_VELOCITY = 0.0004;
     let gesture = null;
     let inertiaFrame = null;
@@ -655,36 +1435,6 @@
       };
     }
 
-    function zoomToStep(direction) {
-      stopInertia();
-      const currentStep = getStepForScale(state.scale);
-      let idx = STEPS_PRESETS.indexOf(currentStep);
-      if (idx === -1) idx = 0;
-
-      const nextIdx = clamp(idx + direction, 0, STEPS_PRESETS.length - 1);
-      if (nextIdx === idx) return;
-
-      const height = gridContainer.clientHeight || window.innerHeight;
-      const centerValue = state.topValue + (height / 2) / state.scale;
-
-      state.scale = ROW_HEIGHT / STEPS_PRESETS[nextIdx];
-      state.topValue = Math.max(0, centerValue - (height / 2) / state.scale);
-      saveState();
-      renderGrid();
-    }
-
-    document.getElementById('btnZoomIn').addEventListener('click', () => zoomToStep(-1));
-    document.getElementById('btnZoomOut').addEventListener('click', () => zoomToStep(1));
-
-    document.getElementById('btnReset').addEventListener('click', () => {
-      stopInertia();
-      state.scale = ROW_HEIGHT / DEFAULT_STEP;
-      const height = gridContainer.clientHeight || window.innerHeight;
-      state.topValue = Math.max(0, DEFAULT_CENTER - (height / 2) / state.scale);
-      saveState();
-      renderGrid();
-    });
-
     gridContainer.addEventListener('touchstart', (e) => {
       e.preventDefault();
       stopInertia();
@@ -716,7 +1466,6 @@
           MIN_SCALE,
           MAX_SCALE
         );
-        // Значение под серединой пальцев остаётся на месте — оба пальца держат свои значения
         state.topValue = Math.max(0, gesture.midValue - midY / state.scale);
         renderGrid();
         return;
@@ -779,6 +1528,34 @@
       clearTimeout(wheelSaveTimer);
       wheelSaveTimer = setTimeout(saveState, 300);
     }, { passive: false });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target instanceof HTMLElement && e.target.closest('input, select, textarea, button')) return;
+
+      const page = ROW_HEIGHT / state.scale;
+      if (e.key === 'ArrowDown') {
+        state.topValue += page;
+      } else if (e.key === 'ArrowUp') {
+        state.topValue = Math.max(0, state.topValue - page);
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomToStep(-1);
+        return;
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomToStep(1);
+        return;
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        resetView();
+        return;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+      renderGrid();
+    });
 
     window.addEventListener('resize', () => scheduleRender());
     ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) => {
