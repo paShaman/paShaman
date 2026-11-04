@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Money Zoom</title>
+  <style>
+    :root {
+      --bg-color: #000000;
+      --card-bg: #1c1c1e;
+      --accent-color: #30d158;
+      --text-main: #ffffff;
+      --text-muted: #8e8e93;
+      --border-color: #2c2c2e;
+    }
+    
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+    }
+
+    .header {
+      flex-shrink: 0;
+      background-color: rgba(28, 28, 30, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 16px;
+      z-index: 100;
+    }
+
+    .currency-selector {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+
+    .curr-select {
+      background: #2c2c2e;
+      color: #fff;
+      border: none;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 8px;
+      outline: none;
+      flex: 1;
+    }
+
+    .swap-btn {
+      background: #2c2c2e;
+      color: var(--accent-color);
+      border: none;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .swap-btn:active {
+      background: #3a3a3c;
+      transform: scale(0.95);
+    }
+
+    .bank-inputs {
+      display: flex;
+      gap: 12px;
+    }
+
+    .input-group {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .input-group label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .input-group input {
+      background: #2c2c2e;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 6px 10px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      width: 100%;
+      outline: none;
+    }
+
+    .input-group input:focus {
+      border-color: var(--accent-color);
+    }
+
+    .status-badge {
+      font-size: 10px;
+      color: var(--accent-color);
+    }
+
+    .geo-badge {
+      font-size: 10px;
+      color: #0a84ff;
+      cursor: pointer;
+    }
+
+    .zoom-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .zoom-info {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .zoom-info span {
+      color: var(--accent-color);
+      font-weight: bold;
+    }
+
+    .zoom-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-btn {
+      background: #2c2c2e;
+      color: #fff;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .btn-btn:active {
+      background: #3a3a3c;
+    }
+
+    .btn-reset {
+      width: auto;
+      padding: 0 8px;
+      font-size: 11px;
+    }
+
+    .grid-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    #gridContent {
+      position: absolute;
+      inset: 0;
+    }
+
+    .grid-row {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 48px;
+      padding: 0 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      border-radius: 8px;
+      pointer-events: none;
+    }
+
+    .base-val {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .target-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent-color);
+    }
+
+    .hint-footer {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 8px;
+      color: #48484a;
+      font-size: 11px;
+      border-top: 1px solid rgba(255,255,255,0.03);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <div class="header">
+      <div class="currency-selector">
+        <select id="baseCurr" class="curr-select">
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="CNY">CNY (¥)</option>
+          <option value="THB">THB (฿)</option>
+          <option value="AED">AED (Dh)</option>
+          <option value="VND">VND (₫)</option>
+          <option value="TRY">TRY (₺)</option>
+          <option value="BYN">BYN (Br)</option>
+          <option value="GEL">GEL (₾)</option>
+          <option value="AMD">AMD (֏)</option>
+          <option value="KZT">KZT (₸)</option>
+          <option value="RUB">RUB (₽)</option>
+        </select>
+        
+        <button id="btnSwap" class="swap-btn" title="Развернуть направление">⇄</button>
+        
+        <select id="targetCurr" class="curr-select">
+          <option value="RUB">RUB (₽)</option>
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="CNY">CNY (¥)</option>
+          <option value="THB">THB (฿)</option>
+          <option value="VND">VND (₫)</option>
+        </select>
+      </div>
+
+      <div class="bank-inputs">
+        <div class="input-group">
+          <label>
+            Базовый курс 
+            <span>
+              <span id="geoBadge" class="geo-badge" title="Определить локацию">📍 geo</span>
+              <span id="statusBadge" class="status-badge"></span>
+            </span>
+          </label>
+          <input type="number" id="bankRate" step="0.0001" placeholder="Курс">
+        </div>
+        <div class="input-group">
+          <label>Наценка банка (%)</label>
+          <input type="number" id="bankFee" step="0.5" value="0" placeholder="0">
+        </div>
+      </div>
+
+      <div class="zoom-bar">
+        <div class="zoom-info">Шаг сетки: <span id="stepLabel">25</span></div>
+        <div class="zoom-controls">
+          <button class="btn-btn" id="btnZoomOut">−</button>
+          <button class="btn-btn" id="btnZoomIn">+</button>
+          <button class="btn-btn btn-reset" id="btnReset">Сброс</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-container" id="gridContainer">
+      <div id="gridContent"></div>
+    </div>
+
+    <div class="hint-footer">
+      Два пальца — зум шкалы • Один палец — прокрутка
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_STEP = 25;
+    const DEFAULT_CENTER = 250;
+    const ROW_HEIGHT = 48;
+    const STEPS_PRESETS = [1, 2, 5, 10, 20, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+    const MIN_SCALE = ROW_HEIGHT / STEPS_PRESETS[STEPS_PRESETS.length - 1];
+    const MAX_SCALE = ROW_HEIGHT / STEPS_PRESETS[0];
+    
+    const FALLBACK_RATES = {
+      USD: 1, EUR: 0.92, RUB: 92.5, CNY: 7.23, THB: 36.5, AED: 3.67, VND: 25400, TRY: 32.2, BYN: 3.25, GEL: 2.7, AMD: 388, KZT: 445
+    };
+
+    let isManualRate = false;
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function readInitialScale() {
+      const savedScale = parseFloat(localStorage.getItem('elk_scale'));
+      if (Number.isFinite(savedScale) && savedScale > 0) {
+        return clamp(savedScale, MIN_SCALE, MAX_SCALE);
+      }
+      const savedStep = parseFloat(localStorage.getItem('elk_step')) || DEFAULT_STEP;
+      return clamp(ROW_HEIGHT / savedStep, MIN_SCALE, MAX_SCALE);
+    }
+
+    const state = {
+      baseCurr: localStorage.getItem('elk_base') || 'USD',
+      targetCurr: localStorage.getItem('elk_target') || 'RUB',
+      bankRate: parseFloat(localStorage.getItem('elk_rate')) || 92.5,
+      bankFee: parseFloat(localStorage.getItem('elk_fee')) || 0,
+      scale: readInitialScale(),
+      topValue: 0
+    };
+
+    const baseCurrEl = document.getElementById('baseCurr');
+    const targetCurrEl = document.getElementById('targetCurr');
+    const bankRateEl = document.getElementById('bankRate');
+    const bankFeeEl = document.getElementById('bankFee');
+    const stepLabelEl = document.getElementById('stepLabel');
+    const statusBadgeEl = document.getElementById('statusBadge');
+    const geoBadgeEl = document.getElementById('geoBadge');
+    const btnSwapEl = document.getElementById('btnSwap');
+    const gridContainer = document.getElementById('gridContainer');
+    const gridContent = document.getElementById('gridContent');
+
+    function ensureOptionExists(selectEl, currCode) {
+      const exists = Array.from(selectEl.options).some(opt => opt.value === currCode);
+      if (!exists) {
+        const opt = document.createElement('option');
+        opt.value = currCode;
+        opt.textContent = currCode;
+        selectEl.appendChild(opt);
+      }
+    }
+
+    function initUI() {
+      ensureOptionExists(baseCurrEl, state.baseCurr);
+      ensureOptionExists(targetCurrEl, state.targetCurr);
+
+      baseCurrEl.value = state.baseCurr;
+      targetCurrEl.value = state.targetCurr;
+      bankRateEl.value = state.bankRate;
+      bankFeeEl.value = state.bankFee;
+
+      const height = gridContainer.clientHeight || window.innerHeight;
+      const savedTop = parseFloat(localStorage.getItem('elk_top'));
+      if (Number.isFinite(savedTop)) {
+        state.topValue = Math.max(0, savedTop);
+      } else {
+        const legacyCenter = parseFloat(localStorage.getItem('elk_center'));
+        const center = Number.isFinite(legacyCenter) ? legacyCenter : DEFAULT_CENTER;
+        state.topValue = Math.max(0, center - (height / 2) / state.scale);
+      }
+
+      renderGrid();
+
+      if (!state.bankRate || state.bankRate <= 0) {
+        calcFallbackRate();
+      }
+
+      fetchOnlineRate();
+    }
+
+    function calcFallbackRate() {
+      const baseUSD = FALLBACK_RATES[state.baseCurr] || 1;
+      const targetUSD = FALLBACK_RATES[state.targetCurr] || 1;
+      state.bankRate = parseFloat((targetUSD / baseUSD).toFixed(4));
+      bankRateEl.value = state.bankRate;
+      statusBadgeEl.textContent = 'офлайн';
+      renderGrid();
+    }
+
+    async function fetchOnlineRate() {
+      if (isManualRate) return;
+      statusBadgeEl.textContent = '...';
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        const res = await fetch(`https://open.er-api.com/v6/latest/${state.baseCurr}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        const data = await res.json();
+        
+        if (data && data.rates && data.rates[state.targetCurr]) {
+          const freshRate = data.rates[state.targetCurr];
+          state.bankRate = freshRate < 0.01 ? parseFloat(freshRate.toFixed(6)) : parseFloat(freshRate.toFixed(4));
+          bankRateEl.value = state.bankRate;
+          statusBadgeEl.textContent = '✓ авто';
+          saveState();
+          renderGrid();
+        } else {
+          calcFallbackRate();
+        }
+      } catch (e) {
+        calcFallbackRate();
+      }
+    }
+
+    async function detectLocationCurrency() {
+      try {
+        statusBadgeEl.textContent = 'GPS...';
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 3000);
+
+        const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+        const data = await res.json();
+        
+        if (data && data.currency) {
+          const detectedCurr = data.currency;
+          ensureOptionExists(baseCurrEl, detectedCurr);
+
+          if (state.baseCurr !== detectedCurr) {
+            state.baseCurr = detectedCurr;
+            baseCurrEl.value = detectedCurr;
+            saveState();
+            fetchOnlineRate();
+          }
+          statusBadgeEl.textContent = `📍 ${data.country_code}`;
+        }
+      } catch (e) {
+        statusBadgeEl.textContent = 'офлайн';
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem('elk_base', state.baseCurr);
+      localStorage.setItem('elk_target', state.targetCurr);
+      localStorage.setItem('elk_rate', state.bankRate);
+      localStorage.setItem('elk_fee', state.bankFee);
+      localStorage.setItem('elk_scale', state.scale);
+      localStorage.setItem('elk_top', state.topValue);
+    }
+
+    // Непрерывный масштаб (px на единицу валюты) → ближайший «красивый» шаг сетки
+    function getStepForScale(scale) {
+      const ideal = ROW_HEIGHT / scale;
+      let best = STEPS_PRESETS[0];
+      let bestDist = Infinity;
+      for (const preset of STEPS_PRESETS) {
+        const dist = Math.abs(Math.log(preset / ideal));
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = preset;
+        }
+      }
+      return best;
+    }
+
+    let renderPending = false;
+
+    function scheduleRender() {
+      if (renderPending) return;
+      renderPending = true;
+      requestAnimationFrame(() => {
+        renderPending = false;
+        renderGrid();
+      });
+    }
+
+    // Переиспользуем строки, чтобы не удалять DOM-узел под пальцем во время жеста
+    const rowPool = [];
+
+    function getRow(index) {
+      let row = rowPool[index];
+      if (!row) {
+        const el = document.createElement('div');
+        el.className = 'grid-row';
+
+        const base = document.createElement('div');
+        base.className = 'base-val';
+
+        const target = document.createElement('div');
+        target.className = 'target-val';
+
+        el.appendChild(base);
+        el.appendChild(target);
+        gridContent.appendChild(el);
+
+        row = { el, base, target };
+        rowPool[index] = row;
+      }
+      return row;
+    }
+
+    function renderGrid() {
+      const height = gridContainer.clientHeight || window.innerHeight;
+      const step = getStepForScale(state.scale);
+      stepLabelEl.textContent = `${step} ${state.baseCurr}`;
+
+      if (state.topValue < 0) state.topValue = 0;
+
+      const effectiveRate = state.bankRate * (1 + state.bankFee / 100);
+      const spacing = step * state.scale;
+      const firstValue = Math.floor(state.topValue / step) * step;
+      const startY = (firstValue - state.topValue) * state.scale;
+      const count = Math.ceil((height - startY) / spacing) + 1;
+
+      let used = 0;
+      for (let i = 0; i < count; i++) {
+        const baseVal = firstValue + i * step;
+        if (baseVal < 0) continue;
+
+        const y = startY + i * spacing;
+        if (y > height) break;
+
+        const targetVal = Math.round(baseVal * effectiveRate);
+        const row = getRow(used++);
+        row.el.style.display = '';
+        row.el.style.top = `${y}px`;
+        row.base.textContent = `${baseVal.toLocaleString()} ${state.baseCurr}`;
+        row.target.textContent = `${targetVal.toLocaleString()} ${state.targetCurr}`;
+      }
+
+      for (let i = used; i < rowPool.length; i++) {
+        rowPool[i].el.style.display = 'none';
+      }
+    }
+
+    btnSwapEl.addEventListener('click', () => {
+      const temp = state.baseCurr;
+      state.baseCurr = state.targetCurr;
+      state.targetCurr = temp;
+
+      ensureOptionExists(baseCurrEl, state.baseCurr);
+      ensureOptionExists(targetCurrEl, state.targetCurr);
+
+      baseCurrEl.value = state.baseCurr;
+      targetCurrEl.value = state.targetCurr;
+
+      if (state.bankRate > 0) {
+        state.bankRate = parseFloat((1 / state.bankRate).toFixed(4));
+        bankRateEl.value = state.bankRate;
+      }
+
+      isManualRate = false;
+      saveState();
+      renderGrid();
+      fetchOnlineRate();
+    });
+
+    geoBadgeEl.addEventListener('click', () => detectLocationCurrency());
+
+    baseCurrEl.addEventListener('change', (e) => { 
+      state.baseCurr = e.target.value; 
+      isManualRate = false;
+      saveState(); 
+      fetchOnlineRate(); 
+    });
+
+    targetCurrEl.addEventListener('change', (e) => { 
+      state.targetCurr = e.target.value; 
+      isManualRate = false;
+      saveState(); 
+      fetchOnlineRate(); 
+    });
+
+    bankRateEl.addEventListener('input', (e) => { 
+      isManualRate = true;
+      state.bankRate = parseFloat(e.target.value) || 0; 
+      statusBadgeEl.textContent = 'ручной';
+      saveState(); 
+      scheduleRender(); 
+    });
+
+    bankFeeEl.addEventListener('input', (e) => { 
+      state.bankFee = parseFloat(e.target.value) || 0; 
+      saveState(); 
+      scheduleRender(); 
+    });
+
+    // ── Жесты: один палец — прокрутка, два пальца — зум ───────────────
+    const MIN_VELOCITY = 0.0004;
+    let gesture = null;
+    let inertiaFrame = null;
+    let inertiaVelocity = 0;
+
+    function touchDistance(t1, t2) {
+      return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY) || 1;
+    }
+
+    function stopInertia() {
+      if (inertiaFrame) cancelAnimationFrame(inertiaFrame);
+      inertiaFrame = null;
+      inertiaVelocity = 0;
+    }
+
+    function startInertia(velocity) {
+      stopInertia();
+      inertiaVelocity = velocity;
+      let last = performance.now();
+
+      const tick = (now) => {
+        const dt = Math.min(now - last, 48);
+        last = now;
+
+        state.topValue += inertiaVelocity * dt;
+        if (state.topValue < 0) {
+          state.topValue = 0;
+          inertiaFrame = null;
+          inertiaVelocity = 0;
+          renderGrid();
+          saveState();
+          return;
+        }
+
+        inertiaVelocity *= Math.pow(0.97, dt / 16.67);
+        renderGrid();
+
+        if (Math.abs(inertiaVelocity) > MIN_VELOCITY) {
+          inertiaFrame = requestAnimationFrame(tick);
+        } else {
+          inertiaFrame = null;
+          inertiaVelocity = 0;
+          saveState();
+        }
+      };
+
+      inertiaFrame = requestAnimationFrame(tick);
+    }
+
+    function startPan(touch, rect) {
+      gesture = {
+        mode: 'pan',
+        lastY: touch.clientY - rect.top,
+        lastTime: performance.now(),
+        velocity: 0
+      };
+    }
+
+    function zoomToStep(direction) {
+      stopInertia();
+      const currentStep = getStepForScale(state.scale);
+      let idx = STEPS_PRESETS.indexOf(currentStep);
+      if (idx === -1) idx = 0;
+
+      const nextIdx = clamp(idx + direction, 0, STEPS_PRESETS.length - 1);
+      if (nextIdx === idx) return;
+
+      const height = gridContainer.clientHeight || window.innerHeight;
+      const centerValue = state.topValue + (height / 2) / state.scale;
+
+      state.scale = ROW_HEIGHT / STEPS_PRESETS[nextIdx];
+      state.topValue = Math.max(0, centerValue - (height / 2) / state.scale);
+      saveState();
+      renderGrid();
+    }
+
+    document.getElementById('btnZoomIn').addEventListener('click', () => zoomToStep(-1));
+    document.getElementById('btnZoomOut').addEventListener('click', () => zoomToStep(1));
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      stopInertia();
+      state.scale = ROW_HEIGHT / DEFAULT_STEP;
+      const height = gridContainer.clientHeight || window.innerHeight;
+      state.topValue = Math.max(0, DEFAULT_CENTER - (height / 2) / state.scale);
+      saveState();
+      renderGrid();
+    });
+
+    gridContainer.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      stopInertia();
+      const rect = gridContainer.getBoundingClientRect();
+
+      if (e.touches.length >= 2) {
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        gesture = {
+          mode: 'pinch',
+          startDist: touchDistance(e.touches[0], e.touches[1]),
+          startScale: state.scale,
+          midValue: state.topValue + midY / state.scale
+        };
+      } else if (e.touches.length === 1) {
+        startPan(e.touches[0], rect);
+      }
+    }, { passive: false });
+
+    gridContainer.addEventListener('touchmove', (e) => {
+      if (!gesture) return;
+      const rect = gridContainer.getBoundingClientRect();
+
+      if (gesture.mode === 'pinch' && e.touches.length >= 2) {
+        e.preventDefault();
+
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        state.scale = clamp(
+          gesture.startScale * (touchDistance(e.touches[0], e.touches[1]) / gesture.startDist),
+          MIN_SCALE,
+          MAX_SCALE
+        );
+        // Значение под серединой пальцев остаётся на месте — оба пальца держат свои значения
+        state.topValue = Math.max(0, gesture.midValue - midY / state.scale);
+        renderGrid();
+        return;
+      }
+
+      if (gesture.mode === 'pan' && e.touches.length === 1) {
+        e.preventDefault();
+
+        const touch = e.touches[0];
+        const y = touch.clientY - rect.top;
+        const dy = y - gesture.lastY;
+        gesture.lastY = y;
+
+        const now = performance.now();
+        const dt = Math.max(now - gesture.lastTime, 1);
+        gesture.lastTime = now;
+
+        state.topValue = Math.max(0, state.topValue - dy / state.scale);
+        gesture.velocity = -dy / state.scale / dt;
+        renderGrid();
+      }
+    }, { passive: false });
+
+    gridContainer.addEventListener('touchend', (e) => {
+      const rect = gridContainer.getBoundingClientRect();
+
+      if (e.touches.length === 1) {
+        startPan(e.touches[0], rect);
+      } else if (e.touches.length === 0) {
+        if (gesture && gesture.mode === 'pan' && Math.abs(gesture.velocity) > MIN_VELOCITY) {
+          startInertia(gesture.velocity);
+        } else {
+          saveState();
+        }
+        gesture = null;
+      }
+    }, { passive: false });
+
+    gridContainer.addEventListener('touchcancel', () => {
+      gesture = null;
+      saveState();
+    }, { passive: true });
+
+    let wheelSaveTimer = null;
+    gridContainer.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      stopInertia();
+
+      const rect = gridContainer.getBoundingClientRect();
+      if (e.ctrlKey || e.metaKey) {
+        const y = e.clientY - rect.top;
+        const valueAtCursor = state.topValue + y / state.scale;
+        state.scale = clamp(state.scale * Math.exp(-e.deltaY * 0.01), MIN_SCALE, MAX_SCALE);
+        state.topValue = Math.max(0, valueAtCursor - y / state.scale);
+      } else {
+        state.topValue = Math.max(0, state.topValue + e.deltaY / state.scale);
+      }
+
+      renderGrid();
+      clearTimeout(wheelSaveTimer);
+      wheelSaveTimer = setTimeout(saveState, 300);
+    }, { passive: false });
+
+    window.addEventListener('resize', () => scheduleRender());
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) => {
+      document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+    });
+
+    initUI();
+  </script>
+</body>
+</html>

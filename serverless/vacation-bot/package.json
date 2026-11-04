@@ -1,0 +1,14 @@
+{
+  "name": "vacation-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "tgcloud push",
+    "migrate": "tgcloud migrate",
+    "status": "tgcloud status",
+    "run": "tgcloud run"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "^0.2.0"
+  }
+}
