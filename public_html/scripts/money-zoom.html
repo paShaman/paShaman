@@ -7,7 +7,13 @@
   <meta name="color-scheme" content="dark">
   <meta name="application-name" content="Money Zoom">
   <meta name="apple-mobile-web-app-title" content="Money Zoom">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Money Zoom</title>
+  <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiPjxyZWN0IHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiIGZpbGw9IiMwNTA3MGIiIHJ4PSIyMjAiIHJ5PSIyMjAiLz48Y2lyY2xlIGN4PSI1MTIiIGN5PSI1NDAiIHI9IjMzMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM2VmMGE4IiBzdHJva2Utd2lkdGg9IjQwIi8+PGxpbmUgeDE9IjYyMCIgeTE9IjY0NSIgeDI9IjgwMCIgeTI9IjgyNSIgc3Ryb2tlPSIjM2VmMGE4IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSI1MTIiIGN5PSI1NDAiIHI9IjE3MCIgZmlsbD0iIzNlZjBhOCIvPjwvc3ZnPg==">
+  <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiPjxyZWN0IHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiIGZpbGw9IiMwNTA3MGIiIHJ4PSIyMjAiIHJ5PSIyMjAiLz48Y2lyY2xlIGN4PSI1MTIiIGN5PSI1NDAiIHI9IjMzMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM2VmMGE4IiBzdHJva2Utd2lkdGg9IjQwIi8+PGxpbmUgeDE9IjYyMCIgeTE9IjY0NSIgeDI9IjgwMCIgeTI9IjgyNSIgc3Ryb2tlPSIjM2VmMGE4IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSI1MTIiIGN5PSI1NDAiIHI9IjE3MCIgZmlsbD0iIzNlZjBhOCIvPjwvc3ZnPg==">
+  <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiTW9uZXkgWm9vbSIsInNob3J0X25hbWUiOiJNb25leSBab29tIiwic3RhcnRfdXJsIjoiL3NjcmlwdHMvbW9uZXktem9vbS5odG1sIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzA1MDcwYiIsInRoZW1lX2NvbG9yIjoiIzA1MDcwYiIsIm9yaWVudGF0aW9uIjoicG9ydHJhaXQiLCJpY29ucyI6W3sic3JjIjoiZGF0YTppbWFnZS9zdmcreG1sO2Jhc2U2NCxQSE4yWnlCNGJXeHVjejBpYUhSMGNEb3ZMM2QzZHk1M015NXZjbWN2TWpBd01DOXpkbWNpSUhacFpYZENiM2c5SWpBZ01DQXhNREkwSURFd01qUWlQanh5WldOMElIZHBaSFJvUFNJeE1ESTBJaUJvWldsbmFIUTlJakV3TWpRaUlHWnBiR3c5SWlNd05UQTNNR0lpSUhKNFBTSXlNakFpSUhKNVBTSXlNakFpTHo0OFkybHlZMnhsSUdONFBTSTFNVElpSUdONVBTSTFOREFpSUhJOUlqTXpNQ0lnWm1sc2JEMGlibTl1WlNJZ2MzUnliMnRsUFNJak0yVm1NR0U0SWlCemRISnZhMlV0ZDJsa2RHZzlJalF3SWk4K1BHeHBibVVnZURFOUlqWXlNQ0lnZVRFOUlqWTBOU0lnZURJOUlqZ3dNQ0lnZVRJOUlqZ3lOU0lnYzNSeWIydGxQU0lqTTJWbU1HRTRJaUJ6ZEhKdmEyVXRiR2x1WldOaGNEMGljbTkxYm1RaUx6NDhZMmx5WTJ4bElHTjRQU0kxTVRJaUlHTjVQU0kxTkRBaUlISTlJakUzTUNJZ1ptbHNiRDBpSXpObFpqQmhPQ0l2UGp3dmMzWm5QZz09Iiwic2l6ZXMiOiIxMDI0eDEwMjQiLCJ0eXBlIjoiaW1hZ2Uvc3ZnK3htbCJ9XX0=">
   <script>
     try {
       if (localStorage.getItem('moneyzoom_theme') === 'light') {
@@ -16,7 +22,20 @@
       }
     } catch (e) { }
   </script>
-  <style>
+    <style>
+/* ============================================================
+   При добавлении «На главный экран» (PWA / add-to-home-screen)
+   приложение открывается без браузера и адресной строки:
+     • моби-web-app-capable / apple-mobile-web-app-capable — убрать UI браузера
+     • apple-mobile-web-app-status-bar-style — тёмная строка состояния iOS
+     • manifest + apple-touch-icon — иконка на рабочем столе
+
+   Как добавить на рабочий стол:
+   • Android (Chrome): ⋮ → «Добавить на главный экран»
+   • iOS (Safari):     Поделиться → «На экран «Домой»»
+   • Desktop Chrome/Edge: 🔖 → «Установить Money Zoom…»
+============================================================ */
+
     :root {
       color-scheme: dark;
       --bg: #05070b;
@@ -1207,7 +1226,7 @@
           </div>
 
           <div class="rate__fee">
-            <label class="rate__label" for="bankFee">Наценка</label>
+            <label class="rate__label" for="bankFee">Наценка банка</label>
             <div class="rate__field">
               <input type="number" id="bankFee" inputmode="decimal" step="0.5" value="0" placeholder="0" aria-label="Наценка банка в процентах">
               <span class="rate__unit">%</span>
@@ -1229,6 +1248,9 @@
             </button>
             <button class="icon-btn icon-btn--ghost" id="btnReset" type="button" aria-label="Сбросить масштаб" title="Сброс">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            </button>
+            <button class="icon-btn icon-btn--ghost" id="btnInstall" type="button" aria-label="Установить Money Zoom" title="Установить на рабочий стол" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             </button>
           </div>
         </div>
@@ -2067,6 +2089,38 @@
 
     initTheme();
     initUI();
+  </script>
+
+  <script>
+    /* PWA: установка на рабочий стол / главный экран, всё внутри одного файла */
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+
+      const swSource = 'self.addEventListener("install",(e)=>e.waitUntil(self.skipWaiting()));self.addEventListener("activate",(e)=>e.waitUntil(self.clients.claim()));';
+      const blob = new Blob([swSource], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+
+      navigator.serviceWorker.register(swUrl).catch(function () { });
+
+      let deferredPrompt = null;
+      const btnInstall = document.getElementById('btnInstall');
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (btnInstall) btnInstall.style.display = '';
+      });
+
+      if (btnInstall) {
+        btnInstall.addEventListener('click', function () {
+          if (!deferredPrompt) return;
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then(function () {
+            deferredPrompt = null;
+            if (btnInstall) btnInstall.style.display = 'none';
+          });
+        });
+      }
+    })();
   </script>
 </body>
 </html>
