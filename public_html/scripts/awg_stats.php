@@ -49,6 +49,9 @@ if (file_exists($historyFile)) {
                 'last_total_rx'  => (int)$data[5],
                 'last_total_tx'  => (int)$data[6],
                 'prev_run_total' => (int)$data[5] + (int)$data[6],
+                'prev_run_rx'    => (int)$data[5],
+                'prev_run_tx'    => (int)$data[6],
+                'prev_sym_total' => 0,
             ];
         }
         file_put_contents($historyFile, json_encode($history));
@@ -80,6 +83,7 @@ if (file_exists($serverConfig)) {
 // 4. Обработка данных
 $message = "📊 *Отчет AmneziaWG ($providerName) за " . date('F') . "*\n" . date('d.m.Y H:i') . "\n\n";
 $totalServerTraffic = 0;
+$limitServerTraffic = 0;
 $activeCount = 0;
 
 foreach ($lines as $line) {
@@ -93,7 +97,7 @@ foreach ($lines as $line) {
     $currentRawTotal = $currentRx + $currentTx;
 
     if (!isset($history[$pubKey])) {
-        $history[$pubKey] = ['rx' => 0, 'tx' => 0, 'last_total_rx' => $currentRx, 'last_total_tx' => $currentTx, 'prev_run_total' => $currentRawTotal];
+        $history[$pubKey] = ['rx' => 0, 'tx' => 0, 'last_total_rx' => $currentRx, 'last_total_tx' => $currentTx, 'prev_run_total' => $currentRawTotal, 'prev_run_rx' => $currentRx, 'prev_run_tx' => $currentTx, 'prev_sym_total' => 0];
     }
 
     // Если интерфейс перезагрузился (счетчики в дампе обнулились)
@@ -104,6 +108,9 @@ foreach ($lines as $line) {
         $history[$pubKey]['last_total_rx'] = $currentRx;
         $history[$pubKey]['last_total_tx'] = $currentTx;
         $history[$pubKey]['prev_run_total'] = $currentRawTotal;
+        $history[$pubKey]['prev_run_rx'] = $currentRx;
+        $history[$pubKey]['prev_run_tx'] = $currentTx;
+        $history[$pubKey]['prev_sym_total'] = 0;
     }
 
     // Трафик за этот месяц = (Текущий дамп - Дамп на начало месяца) + Накопленное при перезагрузках
@@ -112,14 +119,35 @@ foreach ($lines as $line) {
     // Упростим: для отчета используем дельту между запусками
     $totalCumulative = $totalRx + $totalTx;
 
-    $delta = 0;
+    $rxDelta = 0;
+    $txDelta = 0;
+    $totalDelta = 0;
+    $symTotal = max($totalRx, $totalTx) * 2;
+    $symDelta = 0;
     if ($history[$pubKey]['prev_run_total'] > 0) {
-        $delta = $currentRawTotal - $history[$pubKey]['prev_run_total'];
-        if ($delta < 0) $delta = $currentRawTotal;
+        // Инициализируем prev_sym_total для старых записей, в которых его нет
+        $prevSymTotal = $history[$pubKey]['prev_sym_total'] ?? 0;
+
+        $rxDelta = $currentRx - ($history[$pubKey]['prev_run_rx'] ?? $currentRx);
+        if ($rxDelta < 0) $rxDelta = $currentRx;
+
+        $txDelta = $currentTx - ($history[$pubKey]['prev_run_tx'] ?? $currentTx);
+        if ($txDelta < 0) $txDelta = $currentTx;
+
+        $totalDelta = $currentRawTotal - $history[$pubKey]['prev_run_total'];
+        if ($totalDelta < 0) $totalDelta = $currentRawTotal;
+
+        $symDelta = $symTotal - $prevSymTotal;
+        if ($symDelta < 0) $symDelta = $symTotal;
     }
 
     $history[$pubKey]['prev_run_total'] = $currentRawTotal;
+    $history[$pubKey]['prev_run_rx'] = $currentRx;
+    $history[$pubKey]['prev_run_tx'] = $currentTx;
+    $history[$pubKey]['prev_sym_total'] = $symTotal;
     $totalServerTraffic += $totalCumulative;
+    // VPS считает трафик симметрично:max(rx,tx)*2 — только для расчета месячного лимита
+    $limitServerTraffic += $symTotal;
 
     $lastHandshake = (int)$data[4];
     $isOnline = (time() - $lastHandshake < 300) && ($lastHandshake > 0);
@@ -127,21 +155,31 @@ foreach ($lines as $line) {
 
     if ($totalCumulative > 0) {
         $message .= ($isOnline ? "🟢" : "⚪") . " *$name*\n";
-        $message .= "├ 📥 " . formatBytes($totalTx) . " | 📤 " . formatBytes($totalRx) . "\n";
+        $message .= "├ 📥 " . formatBytes($totalTx);
+        if ($txDelta > 10240) $message .= " (+" . formatBytes($txDelta) . ")";
+        $message .= " | 📤 " . formatBytes($totalRx);
+        if ($rxDelta > 10240) $message .= " (+" . formatBytes($rxDelta) . ")";
+        $message .= "\n";
         $message .= "└ 🔄 Всего: " . formatBytes($totalCumulative);
-        if ($delta > 10240) $message .= " (📈 +" . formatBytes($delta) . ")";
-        $message .= "\n\n";
+        if ($totalDelta > 10240) $message .= " (📈 +" . formatBytes($totalDelta) . ")";
+        $message .= "\n";
+        if ($monthlyLimitGB !== false) {
+            $message .= "└ 🖥️ VPS: " . formatBytes($symTotal);
+            if ($symDelta > 10240) $message .= " (📈 +" . formatBytes($symDelta) . ")";
+            $message .= "\n";
+        }
+        $message .= "\n";
     }
 }
 
 file_put_contents($historyFile, json_encode($history));
 
 // Итоги
-$totalGB = $totalServerTraffic / (1024 ** 3);
 
 if ($monthlyLimitGB !== false) {
-    $percentUsed = round(($totalGB / $monthlyLimitGB) * 100, 1);
-    $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic) . "\n🔋 Лимит: $percentUsed% из {$monthlyLimitGB}GB";
+    $limitGB = $limitServerTraffic / (1024 ** 3);
+    $percentUsed = round(($limitGB / $monthlyLimitGB) * 100, 1);
+    $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic) . "\n🖥️ VPS трафика: " . formatBytes($limitServerTraffic) . "\n📊 Лимит: $percentUsed% из {$monthlyLimitGB}GB";
 } else {
     $message .= "---\n🌍 Общий трафик: " . formatBytes($totalServerTraffic);
 }

@@ -968,7 +968,7 @@ class SmartChecklistAIBot
             if ($this->logTgErrors) {
                 file_put_contents(
                     'tg_api_errors.log',
-                    sprintf("%s | %s | proxy: %s | Error: %s\n%s\n", date('Y-m-d H:i:s'), $method, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', $e->getMessage(), print_r($payload, true)),
+                    sprintf("%s | %s | proxy: %s | Error: %s\n%s\n", date('Y-m-d H:i:s'), $method, proxyCurlOptions() ? 'PROXY' : 'direct', $e->getMessage(), print_r($payload, true)),
                     FILE_APPEND
                 );
             }
@@ -979,7 +979,7 @@ class SmartChecklistAIBot
             if ($this->logTgErrors) {
                 file_put_contents(
                     'tg_api_errors.log',
-                    sprintf("%s | %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $method, tgProxyCurlOptions() ? 'TG_PROXY' : 'direct', json_encode($result->raw(), JSON_UNESCAPED_UNICODE), print_r($payload, true)),
+                    sprintf("%s | %s | proxy: %s | Response: %s\n%s\n", date('Y-m-d H:i:s'), $method, proxyCurlOptions() ? 'PROXY' : 'direct', json_encode($result->raw(), JSON_UNESCAPED_UNICODE), print_r($payload, true)),
                     FILE_APPEND
                 );
             }

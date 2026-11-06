@@ -5,25 +5,22 @@ declare(strict_types=1);
 require_once __DIR__ . '/../_env.php';
 
 /**
- * JevClient — клиент TypeSafe Jev с переключаемым провайдером.
+ * JevClient — клиент TypeSafe Jev (прямые запросы к System One).
  *
  * Jev — это decision-модель TypeSafe: на вход подаётся `state` (текст или
  * структура) и набор типизированных вопросов (noul / choice / score), на выходе
  * — типизированные ответы с вероятностями. Это не чат-модель, поэтому
  * сообщение отправляется как `state`, а не как «промпт».
  *
- * Поддерживаются два маршрута, переключаемые одной строкой:
- *   - openrouter : https://openrouter.ai/api/alpha/decisions   (по умолчанию)
- *   - typesafe   : https://api.typesafe.ai/v1/systemone        (прямые запросы)
+ * Запросы идут напрямую в TypeSafe System One:
+ *   https://api.typesafe.ai/v1/systemone
  *
- * Тела запроса и ответа у обоих маршрутов одинаковые, поэтому переключение
- * провайдера не меняет остальной код — только хост, путь и ключ.
+ * Как и остальные AI-клиенты, запросы проходят через прокси (PROXY).
  *
  * Пример:
  *   require_once __DIR__ . '/clients/jev_client.php';
  *
- *   $jev = new JevClient();                 // OpenRouter
- *   // $jev->useTypeSafe();                 // позже — напрямую в TypeSafe
+ *   $jev = new JevClient();
  *
  *   $res = $jev->state('Оплата не проходит 3 дня, теряю продажи')
  *             ->choice('team', 'Какая команда должна обработать обращение?', [
@@ -39,15 +36,13 @@ require_once __DIR__ . '/../_env.php';
  *   var_dump($res->isYes('urgent', 0.9));  // bool
  *
  * Переменные окружения (читаются через _env.php, файл .env в корне проекта):
- *   JEV_PROVIDER      openrouter|typesafe   (по умолчанию openrouter)
- *   JEV_MODEL         модель, по умолчанию jev-latest (работает на обоих)
+ *   TYPESAFE_API_KEY  ключ TypeSafe
+ *   JEV_TYPESAFE_URL  переопределение эндпоинта
+ *   JEV_MODEL         модель, по умолчанию jev-latest
  *   JEV_TIMEOUT       общий таймаут запроса, сек (по умолчанию 30)
  *   JEV_CONNECT_TIMEOUT  таймаут соединения, сек (по умолчанию 10)
  *   JEV_MAX_RETRIES   повторы при 408/429/5xx, по умолчанию 2
- *   JEV_OPENROUTER_URL / JEV_TYPESAFE_URL — переопределение эндпоинта
- *   OPENROUTER_JEV_KEY — ключ для openrouter
- *   TYPESAFE_API_KEY — ключ для typesafe
- *   OPENROUTER_PROXY — прокси для маршрута openrouter (по умолчанию TG_PROXY)
+ *   PROXY             прокси для запросов
  *   LOG_JEV, JEV_LOG_FILE — логирование запросов/ответов (по умолчанию выкл.)
  */
 final class JevException extends RuntimeException
@@ -255,34 +250,19 @@ final class JevResult
 }
 
 /**
- * Клиент запросов к Jev (OpenRouter decisions API или TypeSafe System One).
+ * Клиент запросов к Jev (TypeSafe System One).
  */
 final class JevClient
 {
-    public const OPENROUTER = 'openrouter';
     public const TYPESAFE = 'typesafe';
 
-    /**
-     * @var array<string, array{endpoint: string, url_env: string, key_env: list<string>, default_model: string}>
-     */
-    private const PROVIDERS = [
-        self::OPENROUTER => [
-            'endpoint' => 'https://openrouter.ai/api/alpha/decisions',
-            'url_env' => 'JEV_OPENROUTER_URL',
-            'key_env' => ['OPENROUTER_JEV_KEY'],
-            'default_model' => 'jev-latest',
-        ],
-        self::TYPESAFE => [
-            'endpoint' => 'https://api.typesafe.ai/v1/systemone',
-            'url_env' => 'JEV_TYPESAFE_URL',
-            'key_env' => ['TYPESAFE_API_KEY'],
-            'default_model' => 'jev-latest',
-        ],
-    ];
+    private const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
+    private const URL_ENV = 'JEV_TYPESAFE_URL';
+    private const KEY_ENV = 'TYPESAFE_API_KEY';
+    private const DEFAULT_MODEL = 'jev-latest';
 
     private const RETRY_STATUSES = [408, 409, 429, 500, 502, 503, 504, 529];
 
-    private string $provider;
     private ?string $apiKey;
     private ?string $model;
     private ?string $endpoint = null;
@@ -302,14 +282,8 @@ final class JevClient
     private bool $log;
     private string $logFile;
 
-    public function __construct(
-        ?string $apiKey = null,
-        ?string $provider = null,
-        ?string $model = null,
-    ) {
-        $this->provider = self::normalizeProvider(
-            $provider ?? (string) (getenv('JEV_PROVIDER') ?: self::OPENROUTER)
-        );
+    public function __construct(?string $apiKey = null, ?string $model = null)
+    {
         $this->apiKey = $apiKey;
         $this->model = $model;
 
@@ -321,37 +295,9 @@ final class JevClient
         $this->logFile = (string) (getenv('JEV_LOG_FILE') ?: (__DIR__ . '/../jev_debug.log'));
     }
 
-    public static function openRouter(?string $apiKey = null, ?string $model = null): self
-    {
-        return new self($apiKey, self::OPENROUTER, $model);
-    }
-
-    public static function typeSafe(?string $apiKey = null, ?string $model = null): self
-    {
-        return new self($apiKey, self::TYPESAFE, $model);
-    }
-
-    /** Переключение провайдера: 'openrouter' | 'typesafe'. */
-    public function useProvider(string $provider): self
-    {
-        $this->provider = self::normalizeProvider($provider);
-
-        return $this;
-    }
-
-    public function useOpenRouter(): self
-    {
-        return $this->useProvider(self::OPENROUTER);
-    }
-
-    public function useTypeSafe(): self
-    {
-        return $this->useProvider(self::TYPESAFE);
-    }
-
     public function provider(): string
     {
-        return $this->provider;
+        return self::TYPESAFE;
     }
 
     // ----------------------------------------------------------------
@@ -513,7 +459,7 @@ final class JevClient
 
         $this->log(sprintf(
             ">>> TO JEV [%s / %s]\n%s\n<<< FROM JEV [HTTP %d]%s\n%s",
-            $this->provider,
+            self::TYPESAFE,
             $this->resolvedModel(),
             $json,
             $status,
@@ -544,51 +490,28 @@ final class JevClient
             throw new JevException('В ответе Jev нет поля answers.', $status, $body);
         }
 
-        return new JevResult($data, $this->provider, $responseHeaders);
+        return new JevResult($data, self::TYPESAFE, $responseHeaders);
     }
 
     // ----------------------------------------------------------------
-    // Разрешение параметров из провайдера и окружения
+    // Разрешение параметров из окружения
     // ----------------------------------------------------------------
-
-    private static function normalizeProvider(string $provider): string
-    {
-        $normalized = match (strtolower(trim($provider))) {
-            'openrouter', 'open_router', 'or' => self::OPENROUTER,
-            'typesafe', 'type_safe', 'ts' => self::TYPESAFE,
-            default => '',
-        };
-
-        if (!isset(self::PROVIDERS[$normalized])) {
-            throw new JevException(sprintf(
-                'Неизвестный провайдер Jev: "%s" (доступны: %s).',
-                $provider,
-                implode(', ', array_keys(self::PROVIDERS))
-            ));
-        }
-
-        return $normalized;
-    }
 
     private function resolvedKey(): string
     {
         $key = $this->apiKey;
 
         if ($key === null || trim($key) === '') {
-            foreach (self::PROVIDERS[$this->provider]['key_env'] as $envName) {
-                $value = getenv($envName);
-                if ($value !== false && trim($value) !== '') {
-                    $key = $value;
-                    break;
-                }
+            $value = getenv(self::KEY_ENV);
+            if ($value !== false && trim($value) !== '') {
+                $key = $value;
             }
         }
 
         if ($key === null || trim($key) === '') {
             throw new JevException(sprintf(
-                'Не задан API-ключ для провайдера "%s" (ожидается %s).',
-                $this->provider,
-                implode(' или ', self::PROVIDERS[$this->provider]['key_env'])
+                'Не задан API-ключ для Jev (ожидается %s).',
+                self::KEY_ENV
             ));
         }
 
@@ -605,7 +528,7 @@ final class JevClient
 
         return $fromEnv !== false && trim($fromEnv) !== ''
             ? trim($fromEnv)
-            : self::PROVIDERS[$this->provider]['default_model'];
+            : self::DEFAULT_MODEL;
     }
 
     private function resolvedEndpoint(): string
@@ -614,11 +537,11 @@ final class JevClient
             return trim($this->endpoint);
         }
 
-        $fromEnv = getenv(self::PROVIDERS[$this->provider]['url_env']);
+        $fromEnv = getenv(self::URL_ENV);
 
         return $fromEnv !== false && trim($fromEnv) !== ''
             ? trim($fromEnv)
-            : self::PROVIDERS[$this->provider]['endpoint'];
+            : self::ENDPOINT;
     }
 
     private function headerId(array $responseHeaders): ?string
@@ -705,9 +628,7 @@ final class JevClient
             },
         ]);
 
-        if ($this->provider === self::OPENROUTER) {
-            curl_setopt_array($ch, openrouterProxyCurlOptions());
-        }
+        curl_setopt_array($ch, proxyCurlOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);

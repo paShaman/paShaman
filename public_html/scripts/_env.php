@@ -39,16 +39,16 @@ function loadEnv($path): void {
 }
 
 /**
- * Опции cURL для прокси, заданного URL-строкой.
+ * Опции cURL для прокси из переменной PROXY.
  *
- * Поддерживаются socks5h/socks5/socks4(a) и http(s). Пустая строка означает
- * «прокси не задан» — возвращается пустой массив (соединение прямое).
+ * Поддерживаются socks5h/socks5/socks4(a) и http(s). Пустая переменная
+ * означает «прокси не задан» — возвращается пустой массив (прямое соединение).
  *
  * @return array<int, mixed>
  */
-function proxyCurlOptionsFromUrl(string $proxy): array
+function proxyCurlOptions(): array
 {
-    $proxy = trim($proxy);
+    $proxy = trim((string) getenv('PROXY'));
     if ($proxy === '') {
         return [];
     }
@@ -58,55 +58,11 @@ function proxyCurlOptionsFromUrl(string $proxy): array
     return match ($scheme) {
         'socks4'          => [CURLOPT_PROXY => $proxy, CURLOPT_PROXYTYPE => CURLPROXY_SOCKS4],
         'socks4a'         => [CURLOPT_PROXY => $proxy, CURLOPT_PROXYTYPE => CURLPROXY_SOCKS4A],
-        // socks5h — DNS резолвится на стороне прокси (нужно, если api.telegram.org недоступен у хоста)
+        // socks5h — DNS резолвится на стороне прокси
         'socks5h'         => [CURLOPT_PROXY => $proxy, CURLOPT_PROXYTYPE => CURLPROXY_SOCKS5_HOSTNAME],
         'socks5', 'socks' => [CURLOPT_PROXY => $proxy, CURLOPT_PROXYTYPE => CURLPROXY_SOCKS5],
         // HTTP(S)-прокси: для https:// целевого сайта нужен CONNECT-туннель
         'http', 'https'   => [CURLOPT_PROXY => $proxy, CURLOPT_HTTPPROXYTUNNEL => true],
         default           => [CURLOPT_PROXY => $proxy],
     };
-}
-
-/**
- * Опции cURL для запросов к Telegram Bot API через прокси.
- *
- * Прокси задаётся одной переменной TG_PROXY с полным URL, напр.:
- *   socks5h://user:pass@proxy.example:1080
- *   http://proxy.example:3128
- *
- * Пустой массив в ответе означает «TG_PROXY не задан» — соединение прямое.
- *
- * @return array<int, mixed>
- */
-function tgProxyCurlOptions(): array
-{
-    return proxyCurlOptionsFromUrl((string) getenv('TG_PROXY'));
-}
-
-/**
- * Опции cURL прокси для запросов к OpenRouter (и другим AI-провайдерам).
- *
- * Прокси берётся из OPENROUTER_PROXY, а если он не задан — из общего TG_PROXY
- * (та же настройка, что использует TelegramClient). Пустой массив — прокси нет.
- *
- * @return array<int, mixed>
- */
-function openrouterProxyCurlOptions(): array
-{
-    $proxy = (string) getenv('OPENROUTER_PROXY');
-    if (trim($proxy) === '') {
-        $proxy = (string) getenv('TG_PROXY');
-    }
-
-    return proxyCurlOptionsFromUrl($proxy);
-}
-
-/**
- * Опции прокси только для адресов на api.telegram.org — остальные URL идут напрямую.
- *
- * @return array<int, mixed>
- */
-function tgProxyCurlOptionsForUrl(string $url): array
-{
-    return str_starts_with($url, 'https://api.telegram.org/') ? tgProxyCurlOptions() : [];
 }

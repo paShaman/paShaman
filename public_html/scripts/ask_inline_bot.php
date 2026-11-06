@@ -172,7 +172,7 @@ class DeepSeekInlineBot
         }
 
         $hasError = false;
-        $proxyLabel = tgProxyCurlOptions() ? 'TG_PROXY' : 'direct';
+        $proxyLabel = proxyCurlOptions() ? 'PROXY' : 'direct';
 
         try {
             $result = (new TelegramClient($this->tgToken))

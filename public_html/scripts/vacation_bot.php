@@ -24,8 +24,8 @@ require_once __DIR__ . '/clients/telegram_client.php';
  *   VACATION_TZ              — часовой пояс, по умолчанию Europe/Moscow
  *   VACATION_TYPES           — список типов "ключ:эмодзи,ключ:эмодзи" (опционально)
  *   VACATION_QUOTA_TYPES     — типы, списывающие остаток отпуска (по умолчанию "отпуск")
- *   TG_PROXY                 — прокси для запросов к api.telegram.org (опционально,
- *                              напр. socks5h://user:pass@host:1080; пусто — соединение прямое)
+ *   PROXY                    — прокси для запросов (опционально, напр.
+ *                              socks5h://user:pass@host:1080; пусто — соединение прямое)
  *
  * Хранение (public_html/scripts/logs/):
  *   vacations_users.json     — белый список / справочник (сидируется из glopro_users.json)
@@ -2488,10 +2488,10 @@ final class VacationBot
         return $this->telegramClient ??= new TelegramClient($this->tgToken);
     }
 
-    /** Пометка для логов: запрос шёл через TG_PROXY или напрямую. */
+    /** Пометка для логов: запрос шёл через PROXY или напрямую. */
     private function proxyHint(): string
     {
-        return trim((string)getenv('TG_PROXY')) !== '' ? ' [via TG_PROXY]' : '';
+        return trim((string)getenv('PROXY')) !== '' ? ' [via PROXY]' : '';
     }
 
     private function answerCallback(string $callbackId): void

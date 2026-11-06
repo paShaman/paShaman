@@ -8,7 +8,7 @@ require_once __DIR__ . '/../_env.php';
  * TelegramClient — единый клиент Telegram Bot API для скриптов.
  *
  * Оборачивает вызовы https://api.telegram.org/bot<token>/<method>, сам подставляет
- * прокси (через tgProxyCurlOptionsForUrl из _env.php), повторяет запросы при
+ * прокси (через proxyCurlOptions() из _env.php), повторяет запросы при
  * 408/429/5xx с учётом retry_after и умеет логировать обмен.
  *
  * Пример:
@@ -25,7 +25,7 @@ require_once __DIR__ . '/../_env.php';
  *   TG_TIMEOUT         — общий таймаут запроса, сек (по умолчанию 15)
  *   TG_CONNECT_TIMEOUT — таймаут соединения, сек (по умолчанию 10)
  *   TG_MAX_RETRIES     — повторы при 408/429/5xx (по умолчанию 2)
- *   TG_PROXY           — прокси для api.telegram.org (см. _env.php)
+ *   PROXY              — прокси для запросов (см. _env.php)
  *   LOG_TELEGRAM, TELEGRAM_LOG_FILE — логирование обмена (по умолчанию выкл.)
  */
 final class TelegramException extends RuntimeException
@@ -290,7 +290,7 @@ final class TelegramClient
             CURLOPT_TIMEOUT => max(1, (int) ceil($this->timeout)),
             CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
         ]);
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
+        curl_setopt_array($ch, proxyCurlOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);
@@ -411,7 +411,7 @@ final class TelegramClient
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }
 
-        curl_setopt_array($ch, tgProxyCurlOptionsForUrl($url));
+        curl_setopt_array($ch, proxyCurlOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);

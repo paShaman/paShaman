@@ -26,7 +26,7 @@ require_once __DIR__ . '/../_env.php';
  *   OPENROUTER_BALANCE_URL             — переопределение эндпоинта баланса
  *   OPENROUTER_TIMEOUT                 — таймаут запроса, сек (по умолчанию 30)
  *   OPENROUTER_CONNECT_TIMEOUT         — таймаут соединения, сек (по умолчанию 10)
- *   OPENROUTER_PROXY — прокси для запросов (по умолчанию берётся TG_PROXY)
+ *   PROXY         — прокси для запросов
  */
 final class OpenRouterException extends RuntimeException
 {
@@ -152,7 +152,7 @@ final class OpenRouterClient
             CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
         ]);
 
-        curl_setopt_array($ch, openrouterProxyCurlOptions());
+        curl_setopt_array($ch, proxyCurlOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);
