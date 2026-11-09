@@ -18,10 +18,10 @@ html,body{margin:0;background:#060a14;color:#e8ecff;font:600 14px system-ui,sans
 #t{margin:0;font-size:22px;letter-spacing:.08em;color:#ffd166}
 #s{margin:0;font-size:14px;color:#dfe7f7}
 button{margin-top:12px;padding:8px 14px;border:0;border-radius:10px;background:#2f81f7;color:#fff;font:inherit;font-size:14px}
-</style></head><body><div id="w"><div id="g"><div id="bg"></div><div id="sn"></div><div id="road"></div><div id="ps"></div><div id="car"><svg width="70" height="42" viewBox="0 0 70 42"><rect x="0" y="12" width="70" height="22" rx="6" fill="#0074dd"/><path d="M14 13 23 1h24l10 12z" fill="#0074dd"/><path d="M25 4h20l6 8H19z" fill="#9fd7ff"/><path d="M36 4v8" stroke="#0074dd" stroke-width="2"/><rect x="64" y="17" width="6" height="4" fill="#ffd166"/><circle cx="17" cy="34" r="8" fill="#0b1020"/><circle cx="17" cy="34" r="3.5" fill="#c9d3e8"/><circle cx="53" cy="34" r="8" fill="#0b1020"/><circle cx="53" cy="34" r="3.5" fill="#c9d3e8"/></svg><svg id="lg" width="28" height="12.17" viewBox="0 0 28 12.17"><path d="M 11.89 0.47 C 10.77 0.19 9.46 0 7.96 0 C 6.37 0 4.87 0.28 3.65 0.84 C 2.53 1.4 1.59 2.15 0.94 3.18 C 0.28 4.12 0 5.24 0 6.46 C 0 7.12 0.19 8.33 0.94 9.27 C 2.06 10.86 4.21 12.08 7.87 12.08 C 10.39 12.08 12.64 11.14 13.2 10.86 L 13.58 8.99 C 13.48 8.9 13.11 8.71 12.36 8.71 H 11.61 C 10.96 9.08 10.02 9.36 8.43 9.36 C 7.4 9.36 6.27 9.27 5.62 8.99 C 4.96 8.71 4.49 8.24 4.21 7.77 C 3.84 7.3 3.65 6.84 3.65 6.27 C 3.65 5.62 3.84 5.06 4.21 4.49 C 4.59 3.93 5.06 3.56 5.81 3.28 C 6.56 2.9 7.4 2.72 8.33 2.72 C 9.55 2.72 10.68 2.9 11.71 3.28 C 12.74 3.65 13.67 4.03 14.42 4.49 L 14.98 1.69 C 14.14 1.22 13.11 0.75 11.89 0.47 Z M 22.47 3 C 23.04 3 23.51 3 23.97 3.37 C 24.35 3.65 24.44 4.03 24.35 4.78 H 26.41 C 27.63 4.78 27.91 4.49 27.91 4.49 C 27.91 4.31 27.91 4.03 27.91 3.75 C 27.91 2.43 27.44 1.5 26.5 0.94 C 25.66 0.47 24.63 0.37 23.13 0.37 H 16.11 L 13.86 11.8 H 17.42 L 19.1 3 H 22.47 Z" fill="#fff"/><path d="M 5.9 5.34 H 11.05 C 12.92 5.34 14.23 6.18 13.67 8.52 C 13.67 8.52 13.3 8.24 12.36 8.24 H 8.99 C 7.02 8.24 5.53 7.02 5.9 5.34 Z M 26.69 5.34 H 22.76 C 20.98 5.34 19.67 6.56 19.38 8.24 H 24.16 C 25.85 8.24 27.44 6.84 27.81 5.06 C 27.81 5.06 27.44 5.34 26.69 5.34 Z" fill="#ec1c24"/></svg></div><div id="hud"><span id="sc">СЧЁТ 0000</span><span id="bs">РЕКОРД 0000</span></div><div id="hint">ТАП — ПОЕХАЛИ</div></div><div id="o" hidden><p id="t">АВАРИЯ!</p><p id="s"></p><button id="r" type="button">Ещё раз</button></div></div><script>
+</style></head><body><div id="w"><div id="g"><div id="bg"></div><div id="sn"></div><div id="road"></div><div id="ps"></div><div id="car"><svg width="70" height="42" viewBox="0 0 70 42"><rect x="0" y="12" width="70" height="22" rx="6" fill="#0074dd"/><path d="M14 13 23 1h24l10 12z" fill="#0074dd"/><path d="M25 4h20l6 8H19z" fill="#9fd7ff"/><path d="M36 4v8" stroke="#0074dd" stroke-width="2"/><rect x="64" y="17" width="6" height="4" fill="#ffd166"/><circle cx="17" cy="34" r="8" fill="#0b1020"/><circle cx="17" cy="34" r="3.5" fill="#c9d3e8"/><circle cx="53" cy="34" r="8" fill="#0b1020"/><circle cx="53" cy="34" r="3.5" fill="#c9d3e8"/></svg><svg id="lg" width="28" height="12.2" viewBox="0 0 28 12.2"><path d="M 11.9 0.5 C 10.8 0.2 9.5 0 8 0 C 6.4 0 4.9 0.3 3.7 0.8 C 2.5 1.4 1.6 2.2 0.9 3.2 C 0.3 4.1 0 5.2 0 6.5 C 0 7.1 0.2 8.3 0.9 9.3 C 2.1 10.9 4.2 12.1 7.9 12.1 C 10.4 12.1 12.6 11.1 13.2 10.9 L 13.6 9 C 13.5 8.9 13.1 8.7 12.4 8.7 H 11.6 C 11 9.1 10 9.4 8.4 9.4 C 7.4 9.4 6.3 9.3 5.6 9 C 5 8.7 4.5 8.2 4.2 7.8 C 3.8 7.3 3.7 6.8 3.7 6.3 C 3.7 5.6 3.8 5.1 4.2 4.5 C 4.6 3.9 5.1 3.6 5.8 3.3 C 6.6 2.9 7.4 2.7 8.3 2.7 C 9.6 2.7 10.7 2.9 11.7 3.3 C 12.7 3.7 13.7 4 14.4 4.5 L 15 1.7 C 14.1 1.2 13.1 0.7 11.9 0.5 Z M 22.5 3 C 23 3 23.5 3 24 3.4 C 24.3 3.7 24.4 4 24.3 4.8 H 26.4 C 27.6 4.8 27.9 4.5 27.9 4.5 C 27.9 4.3 27.9 4 27.9 3.7 C 27.9 2.4 27.4 1.5 26.5 0.9 C 25.7 0.5 24.6 0.4 23.1 0.4 H 16.1 L 13.9 11.8 H 17.4 L 19.1 3 H 22.5 Z" fill="#fff"/><path d="M 5.9 5.3 H 11.1 C 12.9 5.3 14.2 6.2 13.7 8.5 C 13.7 8.5 13.3 8.2 12.4 8.2 H 9 C 7 8.2 5.5 7 5.9 5.3 Z M 26.7 5.3 H 22.8 C 21 5.3 19.7 6.6 19.4 8.2 H 24.2 C 25.8 8.2 27.4 6.8 27.8 5.1 C 27.8 5.1 27.4 5.3 26.7 5.3 Z" fill="#ec1c24"/></svg></div><div id="hud"><span id="sc">СЧЁТ 0000</span><span id="bs">РЕКОРД 0000</span></div><div id="hint">ТАП — ПОЕХАЛИ</div></div><div id="o" hidden><p id="t">АВАРИЯ!</p><p id="s"></p><button id="r" type="button">Ещё раз</button></div></div><script>
 var W=document.getElementById('w'),G=document.getElementById('g'),bg=document.getElementById('bg'),sn=document.getElementById('sn'),rd=document.getElementById('road'),ps=document.getElementById('ps'),car=document.getElementById('car'),sc=document.getElementById('sc'),bs=document.getElementById('bs'),hint=document.getElementById('hint'),o=document.getElementById('o'),T=document.getElementById('t'),S=document.getElementById('s'),R=document.getElementById('r');
 var DW=360,DH=220,GY=176,CX=64,CW=70,CH=42;
-var phase=0,carY=GY-CH,vy=0,speed=280,score=0,best=0,record=0,obs=[],gap=540,since=0,t=0,road=0,last=0,lastS=-1,lastB=-1,lastW=0,i,pool=[],fc=99;
+var phase=0,carY=GY-CH,vy=0,speed=280,score=0,best=0,record=0,obs=[],gap=540,since=0,t=0,road=0,last=0,lastCarY=-1,lastS=-1,lastB=-1,lastW=0,i,pool=[],fc=99;
 var PUMP='<svg width="42" height="58" viewBox="0 0 42 58"><rect x="2" width="30" height="58" rx="4" fill="#dfe7f7"/><rect x="2" width="30" height="8" fill="#e5484d"/><rect x="6" y="12" width="22" height="13" fill="#101a2e"/><rect x="8" y="14" width="18" height="9" fill="#34d3c8"/><rect x="2" y="51" width="30" height="7" fill="#8a94ad"/><path d="M32 21Q41 31 35 44" stroke="#8a94ad" stroke-width="2" fill="none"/><rect x="33" y="42" width="5" height="7" fill="#8a94ad"/><text x="9" y="53" font-size="7" font-weight="700" fill="#0b1020">АЗС</text></svg>';
 try{record=parseInt(localStorage.getItem('ny27best'),10)||0}catch(e){record=0}
 best=record;
@@ -29,14 +29,14 @@ function rnd(n){return Math.random()*n|0}
 function pad(n){return(''+Math.floor(n)).padStart(4,'0')}
 function buildBg(){
   var h='<svg width="360" height="220" viewBox="0 0 360 220"><defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#060a14"/><stop offset=".5" stop-color="#0d1830"/><stop offset="1" stop-color="#1c2c4c"/></linearGradient></defs><rect width="360" height="176" fill="url(#gg)"/>',k;
-  for(i=0;i<22;i++)h+='<rect x="'+rnd(358)+'" y="'+rnd(140)+'" width="1.5" height="1.5" fill="#dfe7f7"/>';
+  for(i=0;i<16;i++)h+='<rect x="'+rnd(358)+'" y="'+rnd(140)+'" width="1.5" height="1.5" fill="#dfe7f7"/>';
   h+='<circle cx="282" cy="38" r="19" fill="#f4e7c3"/><circle cx="290" cy="33" r="17" fill="#0d1830"/>';
-  for(i=0;i<360;i+=24){k=16+rnd(20);var d=16+rnd(42);h+='<rect x="'+i+'" y="'+(176-d)+'" width="'+k+'" height="'+d+'" fill="#0a1224"/><rect x="'+(i+4)+'" y="'+(183-d)+'" width="3" height="4" fill="#ffd166"/><rect x="'+(i+k-8)+'" y="'+(188-d)+'" width="3" height="4" fill="#ffd166"/>'}
+  for(i=0;i<360;i+=30){k=16+rnd(20);var d=16+rnd(42);h+='<rect x="'+i+'" y="'+(176-d)+'" width="'+k+'" height="'+d+'" fill="#0a1224"/><rect x="'+(i+4)+'" y="'+(183-d)+'" width="3" height="4" fill="#ffd166"/><rect x="'+(i+k-8)+'" y="'+(188-d)+'" width="3" height="4" fill="#ffd166"/>'}
   h+='<rect y="176" width="360" height="44" fill="#141c2e"/><rect y="176" width="360" height="2" fill="#2b3652"/></svg>';
   bg.innerHTML=h;
 }
 function buildSnow(){
-  var h='';for(i=0;i<10;i++)h+='<i style="left:'+rnd(360)+'px;animation-duration:'+(5+rnd(4))+'s;animation-delay:-'+rnd(9)+'s"></i>';
+  var h='';for(i=0;i<6;i++)h+='<i style="left:'+rnd(360)+'px;animation-duration:'+(5+rnd(4))+'s;animation-delay:-'+rnd(9)+'s"></i>';
   sn.innerHTML=h;
 }
 function buildRoad(){
@@ -44,7 +44,7 @@ function buildRoad(){
   rd.innerHTML=h;
 }
 function buildPumps(){
-  for(i=0;i<7;i++){var d=document.createElement('div');d.className='p';d.innerHTML=PUMP;ps.appendChild(d);pool.push(d)}
+  for(i=0;i<5;i++){var d=document.createElement('div');d.className='p';d.style.display='none';d.innerHTML=PUMP;ps.appendChild(d);pool.push(d)}
 }
 function size(){
   var w=W.getBoundingClientRect().width||360;if(w===lastW)return;lastW=w;
@@ -61,27 +61,31 @@ function die(){
   if(f>record){record=f;try{localStorage.setItem('ny27best',''+record)}catch(e){}}
   best=Math.max(best,record);T.textContent='АВАРИЯ!';S.textContent='Счёт '+f+' · рекорд '+record;o.hidden=0;
 }
-function restart(){phase=1;carY=GY-CH;vy=0;speed=280;score=0;obs=[];since=0;gap=540;road=0;best=Math.max(best,record);o.hidden=1;hint.style.display='none'}
+function restart(){phase=1;carY=GY-CH;vy=0;speed=280;score=0;obs=[];since=0;gap=540;road=0;best=Math.max(best,record);o.hidden=1;hint.style.display='none';lastS=lastB=-1;fc=99;render()}
 function render(){
-  car.style.transform='translate('+CX+'px,'+(carY+(phase===1&&carY>=GY-CH-.5?Math.sin(t*26):0))+'px)';
+  var by=carY+(phase===1&&carY>=GY-CH-.5?Math.sin(t*22)*.5:0);
+  if(by!==lastCarY){lastCarY=by;car.style.transform='translate('+CX+'px,'+by+'px)'}
   rd.style.transform='translateX(-'+(road%54)+'px)';
   var pi=0,j,k,d;
   for(j=0;j<obs.length;j++)for(k=0;k<obs[j].n;k++){d=pool[pi++];if(d){if(d.style.display!=='block')d.style.display='block';d.style.transform='translate('+(obs[j].x+k*58)+'px,'+(GY-58)+'px)'}}
   for(;pi<pool.length;pi++){d=pool[pi];if(d.style.display!=='none')d.style.display='none'}
-  if(++fc>7){fc=0;var s=Math.floor(score),b=Math.floor(best);if(s!==lastS){lastS=s;sc.textContent='СЧЁТ '+pad(s)}if(b!==lastB){lastB=b;bs.textContent='РЕКОРД '+pad(b)}}
+  if(++fc>2){fc=0;var s=Math.floor(score),b=Math.floor(best);if(s!==lastS){lastS=s;sc.textContent='СЧЁТ '+pad(s)}if(b!==lastB){lastB=b;bs.textContent='РЕКОРД '+pad(b)}}
 }
 function loop(ts){
-  var dt=last?Math.min(.05,(ts-last)/1000):0;last=ts;t+=dt;
+  if(!last)last=ts;
+  var e=ts-last;if(e<32){requestAnimationFrame(loop);return}
+  var dt=Math.min(.05,e/1000);last=ts;t+=dt;
   if(phase===1){
     speed=Math.min(720,280+score*.2);score+=speed*dt/10;road+=speed*dt;
     if(carY<GY-CH||vy<0){vy+=2000*dt;carY+=vy*dt;if(carY>=GY-CH){carY=GY-CH;vy=0}}
     since+=speed*dt;if(since>=gap)spawn();
     for(i=0;i<obs.length;i++)obs[i].x-=speed*dt;
-    obs=obs.filter(function(q){return q.x+(q.n-1)*58+34>0});
+    for(i=obs.length-1;i>=0;i--)if(obs[i].x+(obs[i].n-1)*58+34<=0)obs.splice(i,1);
     if(hit())die();
     if(score>best)best=score;
+    render();
   }
-  render();requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
 G.addEventListener('pointerdown',function(e){e.preventDefault();if(phase===0){restart()}else if(phase===1&&carY>=GY-CH-.5){vy=-720}});
 R.addEventListener('click',restart);
