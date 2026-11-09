@@ -558,7 +558,7 @@ async function cmdSetCommands(chatId, userId) {
   await sendHtml(
     chatId,
     ok
-      ? '✅ Меню команд обновлено: /start, /my, /help, /cancel.'
+      ? '✅ Меню команд обновлено: /start, /my, /help, /cancel, /ticket.'
       : 'Не удалось обновить меню команд. Проверьте логи.',
   );
 }
