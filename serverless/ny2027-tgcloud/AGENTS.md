@@ -152,3 +152,9 @@ The platform manages the bot's webhook for you, derived from your deployed
 `handlers/*`, and refreshes it on `push`. If it ever drifts — e.g. someone called
 `setWebhook` with the raw bot token — `npx tgcloud webhook` shows the mismatch and
 `npx tgcloud webhook sync` repairs it.
+
+## Production safety
+
+The AI assistant **must not** run `tgcloud push`, `tgcloud migrate`, or any other
+command that modifies the deployed bot or its database without an explicit user
+request. Code changes are made locally only; the user decides when to deploy.

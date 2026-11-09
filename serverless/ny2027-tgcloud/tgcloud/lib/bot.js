@@ -1,3 +1,4 @@
+import { api } from 'sdk';
 import {
   ADMIN_IDS,
   BROADCAST_TEXT_MAX,
@@ -41,11 +42,13 @@ import {
   clearAllSessions,
   clearBroadcast,
   clearSession,
+  countTickets,
   deleteAllRecords,
   deleteRecord,
   findRecord,
   getBroadcast,
   getSession,
+  issueTicket,
   loadArchive,
   loadRegistrations,
   markUsersDelivery,
@@ -54,6 +57,10 @@ import {
   setBroadcast,
   setSession,
   statsData,
+  ticketStats,
+  addTicket,
+  clearTickets,
+  resetTickets,
 } from './store.js';
 
 const COMMANDS = new Set([
@@ -69,6 +76,10 @@ const COMMANDS = new Set([
   '/delete',
   '/deleteall',
   '/setcommands',
+  '/ticket',
+  '/tickets',
+  '/cleartickets',
+  '/resettickets',
 ]);
 
 function isAdmin(userId) {
@@ -101,6 +112,24 @@ export async function handleMessage(message) {
 
   await rememberUser(chatId, from);
 
+  // Админ загружает билет (PDF-документ) — сохраняем file_id в БД
+  if (message.document && isAdmin(userId)) {
+    const doc = message.document;
+    const mime = String(doc.mime_type ?? '');
+    const name = String(doc.file_name ?? 'ticket.pdf');
+    if (mime === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) {
+      await addTicket(String(doc.file_id), name, Number(doc.file_size ?? 0));
+      const remaining = await countTickets(true);
+      await sendHtml(
+        chatId,
+        `🎫 Билет загружен: <b>${esc(name)}</b>\nСвободных билетов: <b>${remaining}</b>`,
+      );
+    } else {
+      await sendHtml(chatId, 'Пришлите, пожалуйста, PDF-файл билета.');
+    }
+    return;
+  }
+
   if (!text) {
     const session = await getSession(userId);
     const draft = isAdmin(userId) ? await getBroadcast(userId) : null;
@@ -116,6 +145,68 @@ export async function handleMessage(message) {
 
   if (command === '/id') {
     await sendHtml(chatId, `🆔 Ваш Telegram ID: <code>${userId}</code>`);
+    return;
+  }
+
+  if (command === '/ticket') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    const target = String(arg).trim();
+    if (!target || !/^\d+$/.test(target)) {
+      await sendHtml(chatId, 'Использование: <code>/ticket &lt;Telegram ID пользователя&gt;</code>.');
+      return;
+    }
+    const ticket = await issueTicket(target);
+    if (!ticket) {
+      await sendHtml(chatId, 'Билеты на матч закончились.');
+      return;
+    }
+    try {
+      await api.sendDocument({
+        chat_id: Number(target),
+        document: ticket.fileId,
+        caption: `🎫 Ваш билет на матч\n${esc(ticket.fileName)}`,
+      });
+      await sendHtml(chatId, `Билет <b>${esc(ticket.fileName)}</b> отправлен пользователю <code>${target}</code>.`);
+    } catch (error) {
+      console.warn(`sendDocument ticket failed: ${error}`);
+      await sendHtml(chatId, 'Не удалось отправить билет пользователю.');
+    }
+    return;
+  }
+
+  if (command === '/tickets') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    const stats = await ticketStats();
+    await sendHtml(
+      chatId,
+      `🎫 <b>Билеты на матч</b>\n\nВсего: <b>${stats.total}</b>\nВыдано: <b>${stats.used}</b>\nОсталось: <b>${stats.unused}</b>`,
+    );
+    return;
+  }
+
+  if (command === '/cleartickets') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    await clearTickets();
+    await sendHtml(chatId, '🗑 Все билеты удалены из таблицы.');
+    return;
+  }
+
+  if (command === '/resettickets') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    await resetTickets();
+    await sendHtml(chatId, '🔄 Все билеты возвращены в свободное состояние (очищена выдача).');
     return;
   }
 
@@ -459,7 +550,7 @@ async function cmdHelp(chatId, userId) {
   let keyboard = null;
   if (isAdmin(userId)) {
     text +=
-      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд';
+      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/ticket &lt;Telegram ID&gt; — выдать билет пользователю\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
     keyboard = inline([[btn('✉️ Рассылка', 'bc:start')]]);
   }
 

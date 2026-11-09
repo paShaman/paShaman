@@ -45,3 +45,15 @@ export const broadcastDrafts = table('broadcast_drafts', {
   body: text('body').notNull().default(''),
   updatedAt: integer('updated_at').notNull(),
 });
+
+export const tickets = table('tickets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  fileId: text('file_id').notNull(),
+  fileName: text('file_name').notNull().default('ticket.pdf'),
+  fileSize: integer('file_size'),
+  used: boolean('used').notNull().default(false),
+  usedByChatId: integer('used_by_chat_id'),
+  usedAt: text('used_at'),
+}, (t) => ({
+  usedIdx: index('idx_tickets_used').on(t.used),
+}));

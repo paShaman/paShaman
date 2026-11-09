@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { and, asc, desc, eq } from 'sdk/db';
-import { broadcastDrafts, registrations, sessions, users } from '../schema.js';
+import { broadcastDrafts, registrations, sessions, tickets, users } from '../schema.js';
 import { SESSION_TTL, SIZES } from './config.js';
 import { nowMoscow } from './utils.js';
 
@@ -334,4 +334,79 @@ export async function markUsersDelivery(delivery) {
         .run();
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Билеты на матч
+// ---------------------------------------------------------------------------
+
+export async function addTicket(fileId, fileName, fileSize) {
+  await db.insert(tickets).values({
+    fileId,
+    fileName: fileName ?? 'ticket.pdf',
+    fileSize: fileSize ?? null,
+    used: false,
+    usedByChatId: null,
+    usedAt: null,
+  }).run();
+}
+
+export async function loadTickets(onlyUnused = true) {
+  const query = db.select().from(tickets).orderBy(asc(tickets.id));
+  if (onlyUnused) {
+    query.where(eq(tickets.used, false));
+  }
+  return query.all();
+}
+
+export async function countTickets(onlyUnused = true) {
+  if (onlyUnused) {
+    return db.$count(tickets, eq(tickets.used, false));
+  }
+  return db.$count(tickets);
+}
+
+export async function issueTicket(chatId) {
+  const id = Number(chatId);
+
+  // Пользователь уже получал билет — вернём существующий
+  const existing = await db.select().from(tickets)
+    .where(and(eq(tickets.used, true), eq(tickets.usedByChatId, id)))
+    .limit(1)
+    .get();
+  if (existing) return existing;
+
+  // Выдаём первый свободный билет и помечаем использованным
+  const ticket = await db.select().from(tickets)
+    .where(eq(tickets.used, false))
+    .orderBy(asc(tickets.id))
+    .limit(1)
+    .get();
+
+  if (!ticket) return null;
+
+  const now = nowMoscow();
+  await db.update(tickets)
+    .set({ used: true, usedByChatId: id, usedAt: now })
+    .where(eq(tickets.id, ticket.id))
+    .run();
+
+  return { ...ticket, used: true, usedByChatId: id, usedAt: now };
+}
+
+export async function ticketStats() {
+  const total = await db.$count(tickets);
+  const used = await db.$count(tickets, eq(tickets.used, true));
+  return { total, used: used ?? 0, unused: total - (used ?? 0) };
+}
+
+export async function clearTickets() {
+  await db.run('DELETE FROM tickets');
+}
+
+export async function resetTickets() {
+  await db
+    .update(tickets)
+    .set({ used: false, usedByChatId: null, usedAt: null })
+    .run();
 }
