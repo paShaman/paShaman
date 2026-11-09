@@ -84,6 +84,7 @@ export async function setBotCommands() {
         { command: 'start', description: 'Приглашение и анкета' },
         { command: 'my', description: 'Моя анкета' },
         { command: 'ticket', description: 'Билет на матч' },
+        { command: 'game', description: 'Мини-игра «Новогодний заезд»' },
         { command: 'help', description: 'Помощь' },
         { command: 'cancel', description: 'Отменить заполнение' },
       ],

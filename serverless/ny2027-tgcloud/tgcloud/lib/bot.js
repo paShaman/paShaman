@@ -37,6 +37,7 @@ import {
   sendWelcome,
   setBotCommands,
 } from './telegram.js';
+import { sendGame } from './game.js';
 import {
   broadcastRecipients,
   clearAllSessions,
@@ -80,6 +81,7 @@ const COMMANDS = new Set([
   '/tickets',
   '/cleartickets',
   '/resettickets',
+  '/game',
 ]);
 
 function isAdmin(userId) {
@@ -219,6 +221,9 @@ export async function handleMessage(message) {
       return;
     case '/help':
       await cmdHelp(chatId, userId);
+      return;
+    case '/game':
+      await cmdGame(chatId);
       return;
     case '/setcommands':
       await cmdSetCommands(chatId, userId);
@@ -535,6 +540,7 @@ async function cmdHelp(chatId, userId) {
     '/start — приглашение и анкета\n' +
     '/my — моя анкета\n' +
     '/ticket — получить билет на матч\n' +
+    '/game — новогодняя мини-игра\n' +
     '/cancel — отменить заполнение\n' +
     '/id — мой Telegram ID';
 
@@ -546,6 +552,13 @@ async function cmdHelp(chatId, userId) {
   }
 
   await sendHtml(chatId, text, keyboard);
+}
+
+async function cmdGame(chatId) {
+  const sent = await sendGame(chatId);
+  if (!sent) {
+    await sendHtml(chatId, 'Не удалось отправить игру. Попробуйте позже.');
+  }
 }
 
 async function cmdSetCommands(chatId, userId) {
