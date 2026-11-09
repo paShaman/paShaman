@@ -149,30 +149,20 @@ export async function handleMessage(message) {
   }
 
   if (command === '/ticket') {
-    if (!isAdmin(userId)) {
-      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
-      return;
-    }
-    const target = String(arg).trim();
-    if (!target || !/^\d+$/.test(target)) {
-      await sendHtml(chatId, 'Использование: <code>/ticket &lt;Telegram ID пользователя&gt;</code>.');
-      return;
-    }
-    const ticket = await issueTicket(target);
+    const ticket = await issueTicket(userId);
     if (!ticket) {
-      await sendHtml(chatId, 'Билеты на матч закончились.');
+      await sendHtml(chatId, 'Извините, билеты на матч закончились. Обратитесь к организатору.');
       return;
     }
     try {
       await api.sendDocument({
-        chat_id: Number(target),
+        chat_id: chatId,
         document: ticket.fileId,
         caption: `🎫 Ваш билет на матч\n${esc(ticket.fileName)}`,
       });
-      await sendHtml(chatId, `Билет <b>${esc(ticket.fileName)}</b> отправлен пользователю <code>${target}</code>.`);
     } catch (error) {
       console.warn(`sendDocument ticket failed: ${error}`);
-      await sendHtml(chatId, 'Не удалось отправить билет пользователю.');
+      await sendHtml(chatId, 'Не удалось отправить билет. Попробуйте позже.');
     }
     return;
   }
@@ -544,13 +534,14 @@ async function cmdHelp(chatId, userId) {
     '🐐 <b>Анкета на корпоратив</b>\n\n' +
     '/start — приглашение и анкета\n' +
     '/my — моя анкета\n' +
+    '/ticket — получить билет на матч\n' +
     '/cancel — отменить заполнение\n' +
     '/id — мой Telegram ID';
 
   let keyboard = null;
   if (isAdmin(userId)) {
     text +=
-      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/ticket &lt;Telegram ID&gt; — выдать билет пользователю\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
+      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
     keyboard = inline([[btn('✉️ Рассылка', 'bc:start')]]);
   }
 
