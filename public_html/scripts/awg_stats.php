@@ -119,32 +119,14 @@ foreach ($lines as $line) {
     // Упростим: для отчета используем дельту между запусками
     $totalCumulative = $totalRx + $totalTx;
 
-    $rxDelta = 0;
-    $txDelta = 0;
     $totalDelta = 0;
     $symTotal = max($totalRx, $totalTx) * 2;
-    $symDelta = 0;
     if ($history[$pubKey]['prev_run_total'] > 0) {
-        // Инициализируем prev_sym_total для старых записей, в которых его нет
-        $prevSymTotal = $history[$pubKey]['prev_sym_total'] ?? 0;
-
-        $rxDelta = $currentRx - ($history[$pubKey]['prev_run_rx'] ?? $currentRx);
-        if ($rxDelta < 0) $rxDelta = $currentRx;
-
-        $txDelta = $currentTx - ($history[$pubKey]['prev_run_tx'] ?? $currentTx);
-        if ($txDelta < 0) $txDelta = $currentTx;
-
         $totalDelta = $currentRawTotal - $history[$pubKey]['prev_run_total'];
         if ($totalDelta < 0) $totalDelta = $currentRawTotal;
-
-        $symDelta = $symTotal - $prevSymTotal;
-        if ($symDelta < 0) $symDelta = $symTotal;
     }
 
     $history[$pubKey]['prev_run_total'] = $currentRawTotal;
-    $history[$pubKey]['prev_run_rx'] = $currentRx;
-    $history[$pubKey]['prev_run_tx'] = $currentTx;
-    $history[$pubKey]['prev_sym_total'] = $symTotal;
     $totalServerTraffic += $totalCumulative;
     // VPS считает трафик симметрично:max(rx,tx)*2 — только для расчета месячного лимита
     $limitServerTraffic += $symTotal;
@@ -156,16 +138,13 @@ foreach ($lines as $line) {
     if ($totalCumulative > 0) {
         $message .= ($isOnline ? "🟢" : "⚪") . " *$name*\n";
         $message .= "├ 📥 " . formatBytes($totalTx);
-        if ($txDelta > 10240) $message .= " (+" . formatBytes($txDelta) . ")";
         $message .= " | 📤 " . formatBytes($totalRx);
-        if ($rxDelta > 10240) $message .= " (+" . formatBytes($rxDelta) . ")";
         $message .= "\n";
         $message .= "└ 🔄 Всего: " . formatBytes($totalCumulative);
         if ($totalDelta > 10240) $message .= " (📈 +" . formatBytes($totalDelta) . ")";
         $message .= "\n";
         if ($monthlyLimitGB !== false) {
             $message .= "└ 🖥️ VPS: " . formatBytes($symTotal);
-            if ($symDelta > 10240) $message .= " (📈 +" . formatBytes($symDelta) . ")";
             $message .= "\n";
         }
         $message .= "\n";
