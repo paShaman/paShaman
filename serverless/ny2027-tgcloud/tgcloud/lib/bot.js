@@ -333,6 +333,14 @@ export async function handleCallback(callbackQuery) {
     return;
   }
 
+  if (scope === 'game') {
+    const sent = await sendGame(chatId);
+    if (!sent) {
+      await sendHtml(chatId, 'Не удалось запустить игру. Попробуйте позже.');
+    }
+    return;
+  }
+
   if (scope !== 'reg') return;
 
   switch (parts[1] ?? '') {

@@ -100,13 +100,18 @@ export function registerKeyboard() {
 }
 
 export function welcomeKeyboard(registered) {
+  const gameRow = [btn('🎮 Сыграть в игру', 'game:start')];
   if (registered) {
     return inline([
       [btn('✏️ Изменить данные', 'reg:edit'), btn('📋 Моя анкета', 'reg:my')],
       [btn('🗑 Удалить анкету', 'reg:delete')],
+      gameRow,
     ]);
   }
-  return registerKeyboard();
+  return inline([
+    [btn('📝 Заполнить анкету', 'reg:start')],
+    gameRow,
+  ]);
 }
 
 export function editKeyboard() {
