@@ -18,11 +18,13 @@ class MoneyForm
                 TextInput::make('year')
                     ->label('Год')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->default(fn (): int => now()->year),
                 TextInput::make('month')
                     ->label('Месяц')
                     ->required()
-                    ->numeric(),
+                    ->numeric()
+                    ->default(fn (): int => now()->month),
                 Select::make('type')
                     ->label('Тип')
                     ->options([
