@@ -864,13 +864,18 @@ async function cmdUsers(chatId, requesterId) {
   const items = [...usersList].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
 
   const lines = ['<b>👥 Сотрудники</b>', '', 'Выберите сотрудника, чтобы посмотреть записи за текущий год:'];
+  const rows = [];
   for (const u of items) {
+    const id = String(u.id);
     const active = u.active === true ? '' : ' <i>(отключён)</i>';
     const uname = String(u.username ?? '').trim();
-    lines.push(`• ${esc(displayName(u))}${uname !== '' ? ` (@${esc(uname)})` : ''} <code>${esc(String(u.id))}</code>${active}`);
+    lines.push(`• ${esc(displayName(u))}${uname !== '' ? ` (@${esc(uname)})` : ''} <code>${esc(id)}</code>${active}`);
+    rows.push([btn(`${u.active === true ? '👤' : '🚫'} ${displayName(u)}`, `usr:${id}`)]);
   }
+  const mk = menuKeyboard(requesterId, await isAdmin(requesterId));
+  for (const mr of mk.inline_keyboard) rows.push(mr);
 
-  await sendHtml(chatId, lines.join('\n'), menuKeyboard(requesterId, await isAdmin(requesterId)));
+  await sendHtml(chatId, lines.join('\n'), inline(rows));
 }
 
 // ---------------------------------------------------------------------------
