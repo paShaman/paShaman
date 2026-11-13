@@ -151,6 +151,10 @@ export async function handleMessage(message) {
   }
 
   if (command === '/ticket') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
     const ticket = await issueTicket(userId);
     if (!ticket) {
       await sendHtml(chatId, 'Извините, билеты на матч закончились. Обратитесь к организатору.');
@@ -539,7 +543,6 @@ async function cmdHelp(chatId, userId) {
     '🐐 <b>Анкета на корпоратив</b>\n\n' +
     '/start — приглашение и анкета\n' +
     '/my — моя анкета\n' +
-    '/ticket — получить билет на матч\n' +
     '/game — новогодняя мини-игра\n' +
     '/cancel — отменить заполнение\n' +
     '/id — мой Telegram ID';
@@ -547,7 +550,7 @@ async function cmdHelp(chatId, userId) {
   let keyboard = null;
   if (isAdmin(userId)) {
     text +=
-      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
+      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/ticket — выдать билет на матч\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
     keyboard = inline([[btn('✉️ Рассылка', 'bc:start')]]);
   }
 
@@ -571,7 +574,7 @@ async function cmdSetCommands(chatId, userId) {
   await sendHtml(
     chatId,
     ok
-      ? '✅ Меню команд обновлено: /start, /my, /help, /cancel, /ticket.'
+      ? '✅ Меню команд обновлено: /start, /my, /help, /cancel.'
       : 'Не удалось обновить меню команд. Проверьте логи.',
   );
 }
