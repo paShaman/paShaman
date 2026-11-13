@@ -53,7 +53,8 @@ is deployed next to the bot and served as the Mini App at
   shorthand for `{ "source": "dist" }`.
   `"static": false` removes the deployed site on the next push.
 - **Build before you push.** `push` uploads the folder as it is on disk; it never
-  runs the build. `npm run deploy` (build + push) is the safe default.
+  runs the build. `npm run deploy` (build + push) is what the user runs by hand —
+  see *Production safety* below.
 - The front-end is ordinary browser code with npm packages — none of the
   `tgcloud/` module rules apply to it, and `tgcloud/` modules can't import it.
   It talks to the bot's code only through **endpoints** (below).
@@ -155,6 +156,7 @@ The platform manages the bot's webhook for you, derived from your deployed
 
 ## Production safety
 
-The AI assistant **must not** run `tgcloud push`, `tgcloud migrate`, or any other
-command that modifies the deployed bot or its database without an explicit user
-request. Code changes are made locally only; the user decides when to deploy.
+`npx tgcloud push` and `npx tgcloud migrate` are run **only by the user** — see
+[`../AGENTS.md`](../AGENTS.md) for the full rule (what the assistant may and may
+not run). This project adds one thing to it: `npm run deploy` runs `push`, so it
+is off-limits too.
