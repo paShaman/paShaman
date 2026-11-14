@@ -210,6 +210,57 @@ final class TelegramClient
         return $this->call('sendMessage', $params);
     }
 
+    /**
+     * Отправляет локальный файл как документ (multipart/form-data).
+     *
+     * @param array<string, mixed> $extra дополнительные поля payload
+     */
+    public function sendDocument(
+        int|string $chatId,
+        string $filePath,
+        ?string $caption = null,
+        ?string $parseMode = null,
+        array $extra = [],
+    ): TelegramResult {
+        if (!is_file($filePath) || !is_readable($filePath)) {
+            throw new TelegramException('Файл для отправки не найден или недоступен: ' . $filePath);
+        }
+
+        $params = array_merge([
+            'chat_id' => $chatId,
+            'document' => new CURLFile($filePath, 'application/octet-stream', basename($filePath)),
+        ], $extra);
+
+        if ($caption !== null && $caption !== '') {
+            $params['caption'] = $caption;
+        }
+        if ($parseMode !== null && $parseMode !== '') {
+            $params['parse_mode'] = $parseMode;
+        }
+
+        $url = $this->url('sendDocument');
+
+        [$status, $body, $error, $decoded] = $this->requestWithRetries($url, $params);
+
+        $this->log(sprintf(
+            ">>> TO TELEGRAM [sendDocument]\n%s\n<<< FROM TELEGRAM [HTTP %d]%s\n%s",
+            $filePath,
+            $status,
+            $error !== null ? ' cURL: ' . $error : '',
+            $body
+        ));
+
+        if ($error !== null) {
+            throw new TelegramException('Ошибка соединения с Telegram: ' . $error, null, $body === '' ? null : $body);
+        }
+
+        if (!is_array($decoded)) {
+            throw new TelegramException('Некорректный ответ Telegram.', $status, $body);
+        }
+
+        return new TelegramResult($decoded);
+    }
+
     /** @param array<string, mixed> $extra */
     public function editMessageText(
         int|string $chatId,
@@ -362,15 +413,16 @@ final class TelegramClient
     }
 
     /**
+     * @param string|array<string, mixed>|null $post JSON-строка или multipart-поля
      * @return array{0: int, 1: string, 2: ?string, 3: mixed}
      */
-    private function requestWithRetries(string $url, ?string $json): array
+    private function requestWithRetries(string $url, string|array|null $post): array
     {
         $attempt = 0;
         $backoff = 0.5;
 
         while (true) {
-            $result = $this->request($url, $json);
+            $result = $this->request($url, $post);
             [$status, , $error, $decoded] = $result;
 
             $retryable = $error !== null || in_array($status, self::RETRY_STATUSES, true);
@@ -394,24 +446,37 @@ final class TelegramClient
     }
 
     /**
+     * @param string|array<string, mixed>|null $post JSON-строка (application/json)
+     *        или массив полей (multipart/form-data, поддерживает CURLFile)
      * @return array{0: int, 1: string, 2: ?string, 3: mixed}
      */
-    private function request(string $url, ?string $json): array
+    private function request(string $url, string|array|null $post): array
     {
+        if (is_array($post)) {
+            foreach ($post as $key => $value) {
+                if ($value instanceof CURLFile) {
+                    continue;
+                }
+                $post[$key] = is_bool($value)
+                    ? ($value ? '1' : '0')
+                    : (is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : (string) $value);
+            }
+        }
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => $json !== null,
-            CURLOPT_POSTFIELDS => $json,
+            CURLOPT_POST => $post !== null,
+            CURLOPT_POSTFIELDS => $post,
             CURLOPT_TIMEOUT => max(1, (int) ceil($this->timeout)),
             CURLOPT_CONNECTTIMEOUT => $this->connectTimeout,
         ]);
 
-        if ($json !== null) {
+        if (is_string($post)) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }
 
-        curl_setopt_array($ch, proxyCurlOptions());
+        curl_setopt_array($ch, $this->proxyOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);

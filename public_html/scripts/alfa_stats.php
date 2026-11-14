@@ -4,6 +4,78 @@ include __DIR__.'/_env.php';
 require_once __DIR__ . '/clients/telegram_client.php';
 
 // =========================================================================
+// 0. CLI-ОПЦИИ
+// =========================================================================
+
+$cliOptions = [];
+if (PHP_SAPI === 'cli') {
+    foreach (array_slice($argv ?? [], 1) as $arg) {
+        if (str_starts_with($arg, '--')) {
+            $parts = explode('=', substr($arg, 2), 2);
+            $cliOptions[$parts[0]] = $parts[1] ?? true;
+        }
+    }
+}
+
+// Режим сырого дампа: забираем операции из API и складываем в JSON-файл,
+// без агрегации и без отправки в Telegram.
+define('ALFA_RAW', isset($cliOptions['raw']));
+
+if (isset($cliOptions['help'])) {
+    echo "Использование:\n";
+    echo "  php alfa_stats.php                        — обычный отчёт в Telegram\n";
+    echo "  php alfa_stats.php --raw                  — сырой дамп операций в JSON-файл\n\n";
+    echo "Опции режима --raw:\n";
+    echo "  --from=YYYY-MM-DD          начало периода (по умолчанию 1-е число текущего месяца)\n";
+    echo "  --to=YYYY-MM-DD            конец периода (по умолчанию сегодня)\n";
+    echo "  --direction=ALL|EXPENSE|INCOME  направление операций (по умолчанию ALL)\n";
+    echo "  --out=path/to/file.json    путь к файлу (по умолчанию scripts/alfa_raw/alfa_raw_<from>_<to>_<ts>.json)\n";
+    exit(0);
+}
+
+/**
+ * Возвращает строковое значение CLI-опции (null для флагов без значения).
+ */
+function cliOption(array $options, string $name): ?string
+{
+    $value = $options[$name] ?? null;
+    return is_string($value) && $value !== '' ? $value : null;
+}
+
+// Параметры сырого дампа проверяем сразу, до авторизации и запросов в API
+if (ALFA_RAW) {
+    $rawFrom = cliOption($cliOptions, 'from') ?? date('Y-m-01');
+    $rawTo   = cliOption($cliOptions, 'to') ?? date('Y-m-d');
+
+    foreach (['from' => $rawFrom, 'to' => $rawTo] as $label => $value) {
+        $parsedDate = DateTime::createFromFormat('!Y-m-d', $value);
+        if (!$parsedDate || $parsedDate->format('Y-m-d') !== $value) {
+            fwrite(STDERR, "❌ Неверная дата --{$label}={$value}. Ожидается формат YYYY-MM-DD.\n");
+            exit(1);
+        }
+    }
+
+    if ($rawFrom > $rawTo) {
+        fwrite(STDERR, "❌ --from ({$rawFrom}) больше --to ({$rawTo}).\n");
+        exit(1);
+    }
+
+    $rawDirectionName = strtoupper(cliOption($cliOptions, 'direction') ?? 'ALL');
+    $rawDirections = ['ALL' => null, 'EXPENSE' => 'EXPENSE', 'INCOME' => 'INCOME'];
+    if (!array_key_exists($rawDirectionName, $rawDirections)) {
+        fwrite(STDERR, "❌ Неверное --direction={$rawDirectionName}. Допустимо: ALL, EXPENSE, INCOME.\n");
+        exit(1);
+    }
+
+    $rawDump = [
+        'from'      => $rawFrom,
+        'to'        => $rawTo,
+        'direction' => $rawDirections[$rawDirectionName],
+        'out'       => cliOption($cliOptions, 'out'),
+    ];
+}
+
+// =========================================================================
 // 1. НАСТРОЙКИ ТЕЛЕГРАМА
 // =========================================================================
 define('TG_BOT_TOKEN', getenv('TG_TOKEN_STAT'));
@@ -121,6 +193,13 @@ if (date('d') === '01') {
 
 // Вчерашний день
 $yesterday = date('Y-m-d', strtotime('-1 day'));
+
+// =========================================================================
+// ШАГ 2.5: РЕЖИМ СЫРОГО ДАМПА (--raw)
+// =========================================================================
+if (ALFA_RAW) {
+    exit(dumpAlfaRaw($rawDump['from'], $rawDump['to'], $rawDump['direction'], $rawDump['out']));
+}
 
 /**
  * Выполняет запрос к API Альфа-Банка за операциями за указанный период
@@ -364,6 +443,125 @@ if ($sent) {
 // =========================================================================
 
 /**
+ * Забирает операции за период страницами и сохраняет их без изменений в JSON-файл.
+ * Ничего не агрегирует и не отправляет в Telegram.
+ *
+ * @param string      $dateFrom  начало периода (YYYY-MM-DD)
+ * @param string      $dateTo    конец периода (YYYY-MM-DD)
+ * @param string|null $direction направление операций (null — все)
+ * @param string|null $outPath   путь к файлу (null — scripts/alfa_raw/…)
+ * @return int код выхода процесса
+ */
+function dumpAlfaRaw(string $dateFrom, string $dateTo, ?string $direction, ?string $outPath): int
+{
+    global $apiUrl, $accessToken, $certPath, $keyPath, $passphrase, $caChainPath;
+
+    $limit      = 100;
+    $offset     = 0;
+    $pagesCount = 0;
+    $operations = [];
+    $error      = null;
+    $errorPage  = null;
+
+    do {
+        $queryParams = [
+            'dateFrom' => $dateFrom,
+            'dateTo'   => $dateTo,
+            'limit'    => $limit,
+            'offset'   => $offset,
+        ];
+        if ($direction !== null) {
+            $queryParams['operationDirection'] = $direction;
+        }
+
+        $queryApiUrl = $apiUrl . '?' . http_build_query($queryParams);
+
+        $apiResponse = alfaCurl($queryApiUrl, [
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Accept: application/json',
+            ],
+        ], $certPath, $keyPath, $passphrase, $caChainPath);
+
+        if ($apiResponse === null) {
+            $error = "cURL-ошибка при запросе {$queryApiUrl}";
+            break;
+        }
+
+        $pageData = json_decode($apiResponse, true);
+        if (!is_array($pageData)) {
+            $errorPage = ['raw' => $apiResponse];
+            $error = 'Ответ API не является JSON';
+            break;
+        }
+
+        if (!isset($pageData['operations']) || !is_array($pageData['operations'])) {
+            $errorPage = $pageData;
+            $error = 'Ответ API без ключа operations: '
+                . ($pageData['error_description'] ?? $pageData['error'] ?? 'подробности в error_page');
+            break;
+        }
+
+        $pagesCount++;
+        $operations = array_merge($operations, $pageData['operations']);
+        $offset += $limit;
+
+    } while (count($pageData['operations']) >= $limit);
+
+    $payload = [
+        'meta' => [
+            'fetched_at'  => date('c'),
+            'environment' => ALFA_PROD ? 'prod' : 'sandbox',
+            'date_from'   => $dateFrom,
+            'date_to'     => $dateTo,
+            'direction'   => $direction ?? 'ALL',
+            'pages'       => $pagesCount,
+            'operations'  => count($operations),
+            'api_url'     => $apiUrl,
+        ],
+        'operations' => $operations,
+    ];
+
+    if ($errorPage !== null) {
+        $payload['error_page'] = $errorPage;
+    }
+    if ($error !== null) {
+        $payload['error'] = $error;
+    }
+
+    if ($outPath === null) {
+        $outDir = __DIR__ . '/alfa_raw';
+        if (!is_dir($outDir) && !mkdir($outDir, 0775, true) && !is_dir($outDir)) {
+            fwrite(STDERR, "❌ Не удалось создать каталог {$outDir}\n");
+            return 1;
+        }
+        $outPath = $outDir . '/alfa_raw_' . $dateFrom . '_' . $dateTo . '_' . date('Ymd-His') . '.json';
+    }
+
+    $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        fwrite(STDERR, "❌ Не удалось сериализовать данные: " . json_last_error_msg() . "\n");
+        return 1;
+    }
+
+    if (file_put_contents($outPath, $json) === false) {
+        fwrite(STDERR, "❌ Не удалось записать файл {$outPath}\n");
+        return 1;
+    }
+
+    echo "✅ Сырой дамп сохранён: {$outPath}\n";
+    echo "   Период: {$dateFrom} – {$dateTo}, направление: " . ($direction ?? 'ALL') . "\n";
+    echo "   Страниц: {$pagesCount}, операций: " . count($operations) . "\n";
+
+    if ($error !== null) {
+        fwrite(STDERR, "⚠️ Ошибка API: {$error}\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
  * Выполняет cURL-запрос с mTLS-сертификатами Альфы.
  * Возвращает тело ответа или null при ошибке cURL.
  */
@@ -482,6 +680,12 @@ function sendRichMessageToTelegram($html) {
 }
 
 function sendToTelegram($text, $parseMode = 'Markdown') {
+    // В режиме сырого дампа Telegram не трогаем — всё выводим в консоль
+    if (ALFA_RAW) {
+        echo "ℹ️ [raw] Telegram отключён: " . strip_tags($text) . "\n";
+        return false;
+    }
+
     // Защита от превышения лимита ТГ (макс 4096 символов)
     if (mb_strlen($text) > 4000) {
         $text = mb_substr($text, 0, 3800) . "\n\n… [обрезано: превышен лимит Telegram в 4096 символов]";
