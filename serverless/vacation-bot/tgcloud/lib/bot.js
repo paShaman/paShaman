@@ -40,6 +40,7 @@ import {
 import {
   btn,
   daysInRange,
+  daysInYear,
   displayName,
   effectiveTo,
   esc,
@@ -141,6 +142,9 @@ export async function handleMessage(message, ctx) {
         return;
       case '/users':
         await cmdUsers(chatId, userId);
+        return;
+      case '/all':
+        await cmdAll(chatId, userId, arg);
         return;
       case '/adduser':
         await cmdAddUser(chatId, userId, arg);
@@ -333,8 +337,11 @@ async function cmdHelp(chatId, userId) {
     + '• /week — кто отсутствует на этой неделе\n'
     + '• /month [ММ.ГГГГ] — календарь на месяц\n'
     + '• /soon [N] — кто уходит в ближайшие N дней\n'
-    + '• /user <@username|имя|id> [год] — отсутствия сотрудника\n'
-    + '• /users — список сотрудников (кнопкой выбрать и посмотреть текущий год)\n\n'
+    + '• /user <@username|имя|id> [год] — отсутствия сотрудника '
+    + '(без года — текущий и будущие годы)\n'
+    + '• /users — список сотрудников (кнопкой выбрать и посмотреть текущий и будущие годы)\n'
+    + '• /all [год] — общий список отсутствий всех сотрудников '
+    + '(без года — текущий и будущие годы)\n\n'
     + 'Даты: <code>01.07.2026-14.07.2026</code>, <code>01.07-14.07</code>, '
     + '<code>01.07</code> или <code>01.07 +14</code> (старт и число дней).';
 
@@ -491,27 +498,13 @@ async function cmdMy(chatId, userId, arg) {
     let num = 0;
     for (const r of recordsList) {
       num++;
-      let line = `${num}. ${esc(typeLabel(r.type))} · ${esc(formatInterval(r.date_from, effectiveTo(r)))} (${effectiveDays(r)} к.д.)`;
-      if (r.finished_at) {
-        line += ` <i>· завершён ${esc(shortDate(r.finished_at))}</i>`;
-      }
-      lines.push(line);
-      const comment = String(r.comment ?? '').trim();
-      if (comment !== '') lines.push(`    💬 ${esc(comment)}`);
+      lines.push(formatRecordLine(num, r));
+      const commentLine = recordCommentLine(r);
+      if (commentLine !== null) lines.push(commentLine);
     }
   }
 
-  lines.push('');
-  if (explicitYear !== null) {
-    const balance = await balanceFor(userId, explicitYear);
-    lines.push(`🏖 Остаток отпуска: <b>${balance.remaining}</b> из ${balance.norm} (использовано ${balance.used})`);
-  } else {
-    lines.push('🏖 <b>Остаток отпуска:</b>');
-    for (const y of await planYears(userId)) {
-      const balance = await balanceFor(userId, y);
-      lines.push(`• ${y}: <b>${balance.remaining}</b> из ${balance.norm} (использовано ${balance.used})`);
-    }
-  }
+  await appendBalanceBlock(lines, userId, explicitYear);
 
   const rows = [];
   const slice = recordsList.slice(0, 8);
@@ -813,8 +806,6 @@ async function cmdUser(chatId, requesterId, arg) {
     arg = m[1].trim();
     year = Number(m[2]);
   }
-  if (year === null) year = new Date().getFullYear();
-
   const user = await resolveUser(arg);
   if (!user) {
     await sendHtml(chatId, 'Сотрудник не найден. Список: /users');
@@ -822,34 +813,26 @@ async function cmdUser(chatId, requesterId, arg) {
   }
 
   const targetId = String(user.id);
-  const isSelf = targetId === requesterId;
-  const recordsList = await recordsForUserYear(targetId, year);
+  const recordsList = year !== null
+    ? await recordsForUserYear(targetId, year)
+    : await plannedRecords(targetId, new Date().getFullYear());
 
-  const lines = [`<b>👤 ${esc(displayName(user))} · ${year}</b>`, ''];
+  const lines = year !== null
+    ? [`<b>👤 ${esc(displayName(user))} · ${year}</b>`, '']
+    : [`<b>👤 ${esc(displayName(user))} · текущий и будущие годы</b>`, ''];
   if (recordsList.length === 0) {
-    lines.push('Записей нет.');
+    lines.push(year !== null ? 'За этот год записей нет.' : 'Записей нет.');
   } else {
     let num = 0;
     for (const r of recordsList) {
       num++;
-      const interval = esc(formatInterval(r.date_from, effectiveTo(r)));
-      const days = effectiveDays(r);
-      lines.push(
-        isSelf
-          ? `${num}. ${esc(typeLabel(r.type))} · ${interval} (${days})`
-          : `${num}. ${interval} (${days})`,
-      );
-      if (isSelf && String(r.comment ?? '').trim() !== '') {
-        lines.push(`    💬 ${esc(r.comment)}`);
-      }
+      lines.push(formatRecordLine(num, r));
+      const commentLine = String(r.user_id) === String(requesterId) ? recordCommentLine(r) : null;
+      if (commentLine !== null) lines.push(commentLine);
     }
   }
 
-  if (isSelf) {
-    const balance = await balanceFor(targetId, year);
-    lines.push('');
-    lines.push(`🏖 Остаток отпуска: <b>${balance.remaining}</b> из ${balance.norm}`);
-  }
+  await appendBalanceBlock(lines, targetId, year);
 
   await sendHtml(chatId, lines.join('\n'), menuKeyboard(requesterId, await isAdmin(requesterId)));
 }
@@ -863,7 +846,7 @@ async function cmdUsers(chatId, requesterId) {
 
   const items = [...usersList].sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' }));
 
-  const lines = ['<b>👥 Сотрудники</b>', '', 'Выберите сотрудника, чтобы посмотреть записи за текущий год:'];
+  const lines = ['<b>👥 Сотрудники</b>', '', 'Выберите сотрудника, чтобы посмотреть записи за текущий и будущие годы:'];
   const rows = [];
   for (const u of items) {
     const id = String(u.id);
@@ -876,6 +859,53 @@ async function cmdUsers(chatId, requesterId) {
   for (const mr of mk.inline_keyboard) rows.push(mr);
 
   await sendHtml(chatId, lines.join('\n'), inline(rows));
+}
+
+async function cmdAll(chatId, requesterId, arg) {
+  const explicitYear = parseYear(arg);
+  const fromYear = explicitYear !== null ? explicitYear : new Date().getFullYear();
+  const start = `${String(fromYear).padStart(4, '0')}-01-01`;
+
+  const allRecords = await loadRecords();
+  const usersList = await loadUsers();
+
+  const items = [];
+  for (const r of allRecords.records) {
+    if (explicitYear !== null) {
+      if (daysInYear(r, explicitYear) <= 0) continue;
+    } else if (effectiveTo(r) < start) continue;
+    items.push(r);
+  }
+  items.sort((a, b) => String(a.date_from).localeCompare(String(b.date_from)));
+
+  const lines = explicitYear !== null
+    ? [`<b>🗂 Все отсутствия · ${explicitYear}</b>`, '']
+    : ['<b>🗂 Все отсутствия · текущий и будущие годы</b>', ''];
+
+  if (items.length === 0) {
+    lines.push(explicitYear !== null ? 'За этот год записей нет.' : 'Записей нет.');
+  } else {
+    let num = 0;
+    let lastMonth = '';
+    for (const r of items) {
+      num++;
+      const monthKey = String(r.date_from).slice(0, 7);
+      if (monthKey !== lastMonth) {
+        if (lastMonth !== '') lines.push('');
+        lines.push(`<b>📅 ${monthLabel(monthKey)}</b>`);
+        lastMonth = monthKey;
+      }
+      const u = usersList.find((uu) => String(uu.id) === String(r.user_id));
+      const name = u ? displayName(u) : `ID ${r.user_id}`;
+      lines.push(formatRecordLine(num, r, name));
+      const commentLine = String(r.user_id) === String(requesterId) ? recordCommentLine(r) : null;
+      if (commentLine !== null) lines.push(commentLine);
+    }
+    lines.push('');
+    lines.push(`📊 Всего записей: <b>${items.length}</b>`);
+  }
+
+  await sendHtml(chatId, lines.join('\n'), menuKeyboard(requesterId, await isAdmin(requesterId)));
 }
 
 // ---------------------------------------------------------------------------
@@ -1037,6 +1067,9 @@ async function menuAction(chatId, userId, action) {
       return;
     case 'users':
       await cmdUsers(chatId, userId);
+      return;
+    case 'all':
+      await cmdAll(chatId, userId, '');
       return;
     case 'admin':
       await cmdAdminUsers(chatId, userId);
@@ -1216,6 +1249,44 @@ async function resolveUser(query) {
   return null;
 }
 
+const MONTH_NAMES = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+];
+
+function monthLabel(key) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(key));
+  if (!m) return String(key);
+  return `${MONTH_NAMES[Number(m[2]) - 1] ?? m[2]} ${m[1]}`;
+}
+
+function formatRecordLine(num, record, name = '') {
+  let line = `${num}. ${esc(typeLabel(record.type))} · ${esc(formatInterval(record.date_from, effectiveTo(record)))} (${effectiveDays(record)} к.д.)`;
+  if (name !== '') line += ` — ${esc(name)}`;
+  if (record.finished_at) line += ` <i>· завершён ${esc(shortDate(record.finished_at))}</i>`;
+  return line;
+}
+
+function recordCommentLine(record, prefix = '') {
+  const comment = String(record.comment ?? '').trim();
+  if (comment === '') return null;
+  return `    💬 ${prefix}${esc(comment)}`;
+}
+
+async function appendBalanceBlock(lines, targetId, year) {
+  lines.push('');
+  if (year !== null) {
+    const balance = await balanceFor(targetId, year);
+    lines.push(`🏖 Остаток отпуска: <b>${balance.remaining}</b> из ${balance.norm} (использовано ${balance.used})`);
+    return;
+  }
+  lines.push('🏖 <b>Остаток отпуска:</b>');
+  for (const y of await planYears(targetId)) {
+    const balance = await balanceFor(targetId, y);
+    lines.push(`• ${y}: <b>${balance.remaining}</b> из ${balance.norm} (использовано ${balance.used})`);
+  }
+}
+
 function buildMonthTable(year, month, recordsList, usersList) {
   const first = new Date(`${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01T00:00:00`);
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -1233,8 +1304,7 @@ function buildMonthTable(year, month, recordsList, usersList) {
     }
   }
 
-  const mNames = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
-  const title = `🗓 <b>${mNames[month - 1].charAt(0).toUpperCase()}${mNames[month - 1].slice(1)} ${year}</b>`;
+  const title = `🗓 <b>${MONTH_NAMES[month - 1]} ${year}</b>`;
 
   if (Object.keys(marks).length === 0) {
     return `${title}\n\nЗа этот месяц отсутствий нет.`;

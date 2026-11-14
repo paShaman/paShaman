@@ -25,5 +25,5 @@ export const QUOTA_TYPES = ['отпуск'];
 export const COMMANDS = [
   '/start', '/help', '/add', '/my', '/left', '/cancel',
   '/edit', '/finish', '/today', '/week', '/month', '/soon', '/user',
-  '/users', '/adduser', '/deluser',
+  '/users', '/all', '/adduser', '/deluser',
 ];

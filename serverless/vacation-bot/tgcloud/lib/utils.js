@@ -218,6 +218,7 @@ export function menuKeyboard(requesterId, isAdmin) {
     [btn('🏖 Остаток', 'menu:left'), btn('📌 Сегодня', 'menu:today')],
     [btn('📅 Неделя', 'menu:week'), btn('🗓 Месяц', 'menu:month')],
     [btn('🔜 Скоро', 'menu:soon'), btn('👥 Сотрудники', 'menu:users')],
+    [btn('🗂 Все отсутствия', 'menu:all')],
   ];
   if (isAdmin) rows.push([btn('⚙️ Админ: сотрудники', 'menu:admin')]);
   rows.push([btn('❓ Помощь', 'menu:help')]);
