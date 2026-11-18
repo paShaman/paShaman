@@ -130,15 +130,20 @@ function alfaCooldownRemaining(): int
 }
 
 /** Отправляет текстовое сообщение в чат бота (ошибки только логируются). */
-function tgSend(string $text): void
+function tgSend(string $text, ?string $parseMode = null): void
 {
     global $tgToken, $tgChatId;
 
+    $payload = [
+        'chat_id' => $tgChatId,
+        'text'    => $text,
+    ];
+    if ($parseMode !== null) {
+        $payload['parse_mode'] = $parseMode;
+    }
+
     try {
-        $result = (new TelegramClient($tgToken))->call('sendMessage', [
-            'chat_id' => $tgChatId,
-            'text'    => $text,
-        ]);
+        $result = (new TelegramClient($tgToken))->call('sendMessage', $payload);
     } catch (TelegramException $e) {
         logMsg("⚠️ Ошибка отправки сообщения в Telegram: " . $e->getMessage());
         return;
@@ -177,7 +182,9 @@ function alfaHelpText(): string
         . "/alfa raw — сырой дамп операций из Альфа-API в JSON-файл\n"
         . "/alfa raw 2026-10-01 2026-10-31 — дамп за период\n"
         . "/alfa raw 2026-10-01 2026-10-31 EXPENSE — плюс фильтр направления\n"
-        . "Направление: ALL (по умолчанию), EXPENSE, INCOME";
+        . "Направление: ALL (по умолчанию), EXPENSE, INCOME\n"
+        . "/alfa debug — диагностический отчёт для поддержки Альфы\n"
+        . "/alfa debug 2026-10-01 2026-10-31 — за период";
 }
 
 /** Удаляет дампы старше указанного срока, чтобы не копить файлы на NAS. */
@@ -186,6 +193,19 @@ function cleanupAlfaRaw(string $dir, int $keepDays = 30): void
     $threshold = time() - $keepDays * 86400;
 
     foreach (glob($dir . '/alfa_raw_*.json') ?: [] as $file) {
+        $mtime = @filemtime($file);
+        if ($mtime !== false && $mtime < $threshold) {
+            @unlink($file);
+        }
+    }
+}
+
+/** Удаляет старые диагностические отчёты, чтобы не копить файлы на NAS. */
+function cleanupAlfaDebug(string $dir, int $keepDays = 30): void
+{
+    $threshold = time() - $keepDays * 86400;
+
+    foreach (glob($dir . '/alfa_debug_*.txt') ?: [] as $file) {
         $mtime = @filemtime($file);
         if ($mtime !== false && $mtime < $threshold) {
             @unlink($file);
@@ -310,6 +330,102 @@ function runAlfaRaw(array $args): void
     cleanupAlfaRaw($rawDir);
 }
 
+/**
+ * Выполняет `alfa_stats.php --debug` и отправляет отчёт в Telegram.
+ *
+ * Отчёт — обычный текст, поэтому отправляем его сообщением в `<pre>`
+ * (удобно копировать целиком), а при слишком большом размере — документом.
+ * Если отчёт не создан, показываем хвост вывода скрипта.
+ *
+ * @param list<string> $args аргументы после `debug`
+ */
+function runAlfaDebug(array $args): void
+{
+    $from = null;
+    $to = null;
+
+    foreach ($args as $arg) {
+        $arg = trim($arg);
+        if ($arg === '') {
+            continue;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $arg) === 1) {
+            $date = DateTime::createFromFormat('!Y-m-d', $arg);
+            if (!$date || $date->format('Y-m-d') !== $arg) {
+                tgSend("❌ Неверная дата: {$arg}. Ожидается YYYY-MM-DD.");
+                return;
+            }
+            if ($from === null) {
+                $from = $arg;
+            } elseif ($to === null) {
+                $to = $arg;
+            } else {
+                tgSend("❌ Слишком много дат.\n\n" . alfaHelpText());
+                return;
+            }
+            continue;
+        }
+
+        tgSend("❌ Не понял аргумент «{$arg}».\n\n" . alfaHelpText());
+        return;
+    }
+
+    $from ??= date('Y-m-01');
+    $to ??= date('Y-m-d');
+
+    if ($from > $to) {
+        tgSend("❌ Начало периода ({$from}) позже конца ({$to}).");
+        return;
+    }
+
+    $debugDir  = dirname(ALFA_SCRIPT) . '/alfa_debug';
+    $outFile   = $debugDir . '/alfa_debug_' . date('Ymd-His') . '.txt';
+
+    if (!is_dir($debugDir) && !@mkdir($debugDir, 0775, true) && !is_dir($debugDir)) {
+        logMsg("❌ Не удалось создать каталог {$debugDir}");
+        tgSend("❌ Не удалось создать каталог для отчёта на сервере.");
+        return;
+    }
+
+    $cmd = escapeshellarg(ALFA_PHP_BIN) . ' ' . escapeshellarg(ALFA_SCRIPT) . ' --debug'
+        . ' --from=' . escapeshellarg($from)
+        . ' --to=' . escapeshellarg($to)
+        . ' --out=' . escapeshellarg($outFile);
+
+    logMsg("/alfa debug — запуск: {$cmd}");
+    tgSend("⏳ Собираю диагностический отчёт за {$from} – {$to}…");
+
+    $output = [];
+    $exitCode = 1;
+    exec($cmd . ' 2>&1', $output, $exitCode);
+
+    $outputText = trim(implode("\n", $output));
+    logMsg("/alfa debug завершён, exitCode={$exitCode}" . ($outputText !== '' ? "\n{$outputText}" : ''));
+
+    if (!is_file($outFile)) {
+        $details = $outputText !== '' ? "\n\n" . mb_substr($outputText, -1500) : '';
+        tgSend("❌ Отчёт не создан (exitCode={$exitCode})." . $details);
+        return;
+    }
+
+    $report = (string) @file_get_contents($outFile);
+
+    // В <pre> отчёт удобно копировать целиком; лимит Telegram — 4096 символов.
+    if (mb_strlen($report) <= 3500) {
+        tgSend("<pre>" . htmlspecialchars($report, ENT_QUOTES | ENT_HTML5) . "</pre>", 'HTML');
+    } else {
+        $caption = "🩺 Диагностика Альфа-API\n"
+            . "Период: {$from} – {$to}\n"
+            . "Отчёт: " . basename($outFile);
+        if (!tgSendDocument($outFile, $caption)) {
+            tgSend("⚠️ Отчёт сохранён на сервере ({$outFile}), но отправить файл не удалось.");
+        }
+    }
+
+    cleanupAlfaDebug($debugDir);
+}
+
 logMsg("🚀 Бот запущен, ожидание /alfa от TG_CHAT_ID={$tgChatId}, offset={$lastUpdateId}");
 
 while ($running) {
@@ -378,8 +494,9 @@ while ($running) {
 
             $subCommand = strtolower($args[0] ?? '');
 
-            // Справка и неизвестные подкоманды не расходуют cooldown
-            if ($subCommand === 'help' || ($subCommand !== '' && $subCommand !== 'raw')) {
+            // Справка и неизвестные подкоманды не расходуют cooldown.
+            // Пустая подкоманда — это обычный запрос /alfa, а не help.
+            if ($subCommand === 'help' || ($subCommand !== '' && !in_array($subCommand, ['raw', 'debug'], true))) {
                 tgSend(alfaHelpText());
                 logMsg("/alfa {$subCommand} — отправлена справка");
                 continue;
@@ -395,6 +512,12 @@ while ($running) {
             if ($subCommand === 'raw') {
                 logMsg("/alfa raw — сырой дамп");
                 runAlfaRaw(array_slice($args, 1));
+                continue;
+            }
+
+            if ($subCommand === 'debug') {
+                logMsg("/alfa debug — диагностический отчёт");
+                runAlfaDebug(array_slice($args, 1));
                 continue;
             }
 

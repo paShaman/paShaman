@@ -21,15 +21,31 @@ if (PHP_SAPI === 'cli') {
 // без агрегации и без отправки в Telegram.
 define('ALFA_RAW', isset($cliOptions['raw']));
 
+// Режим диагностики (--debug): выполняем один запрос к API и собираем полный
+// отчёт об обмене (дата/время с часовым поясом, метод, URI, заголовки и тело
+// запроса, код и заголовки ответа включая X-TraceId, IP-адреса) — чтобы
+// отправить эти детали в техподдержку Альфа-Банка.
+define('ALFA_DIAG', isset($cliOptions['debug']));
+
+// Маскировать секреты (Bearer-токены, client_secret, коды авторизации) в
+// отчёте --debug. Отключается флагом --no-mask, если поддержка просит «как есть».
+define('ALFA_MASK', !isset($cliOptions['no-mask']));
+
 if (isset($cliOptions['help'])) {
     echo "Использование:\n";
     echo "  php alfa_stats.php                        — обычный отчёт в Telegram\n";
-    echo "  php alfa_stats.php --raw                  — сырой дамп операций в JSON-файл\n\n";
+    echo "  php alfa_stats.php --raw                  — сырой дамп операций в JSON-файл\n";
+    echo "  php alfa_stats.php --debug                — диагностический отчёт для поддержки Альфы\n\n";
     echo "Опции режима --raw:\n";
     echo "  --from=YYYY-MM-DD          начало периода (по умолчанию 1-е число текущего месяца)\n";
     echo "  --to=YYYY-MM-DD            конец периода (по умолчанию сегодня)\n";
     echo "  --direction=ALL|EXPENSE|INCOME  направление операций (по умолчанию ALL)\n";
     echo "  --out=path/to/file.json    путь к файлу (по умолчанию scripts/alfa_raw/alfa_raw_<from>_<to>_<ts>.json)\n";
+    echo "\nОпции режима --debug:\n";
+    echo "  --from=YYYY-MM-DD          начало периода запроса (по умолчанию 1-е число месяца)\n";
+    echo "  --to=YYYY-MM-DD            конец периода запроса (по умолчанию сегодня)\n";
+    echo "  --out=path/to/file.txt     путь к отчёту (по умолчанию scripts/alfa_debug/alfa_debug_<ts>.txt)\n";
+    echo "  --no-mask                  не маскировать токены и client_secret в отчёте\n";
     exit(0);
 }
 
@@ -93,6 +109,7 @@ $redirectUri  = 'https://pashaman.dev/alfa/connect/';
 $scope        = 'openid accounts cards operations-history';
 $state        = uniqid('', true);
 
+// Окружение, сертификаты и адреса эндпоинтов
 if (ALFA_PROD) {
     $certPath = __DIR__ . '/cert/alfa/prod/IP_Nikitin_PV_2026.cer';
     $keyPath = __DIR__ . '/cert/alfa/prod/ip_nikitin_pavel_viktorovich.key';
@@ -150,6 +167,48 @@ if (!$accessToken && !empty(getenv('ALFA_AUTH_CODE'))) {
         'redirect_uri' => $redirectUri,
         'scope'        => $scope,
     ]);
+}
+
+// =========================================================================
+// 2.5. ДИАГНОСТИКА ИСХОДЯЩЕГО СОЕДИНЕНИЯ (--debug)
+// =========================================================================
+// Выполняем ровно один обмен с API и формируем отчёт для техподдержки:
+// дата/время с часовым поясом, метод и URI, заголовки и тело запроса,
+// полученная ошибка, заголовки ответа (в первую очередь X-TraceId) и IP-адрес,
+// с которого ушёл запрос. Выполняется после авторизации, но до сценария 3
+// (ручная авторизация), чтобы диагностировать именно сбойный обмен.
+if (ALFA_DIAG) {
+    $diagFrom = cliOption($cliOptions, 'from') ?? date('Y-m-01');
+    $diagTo   = cliOption($cliOptions, 'to') ?? date('Y-m-d');
+
+    foreach (['from' => $diagFrom, 'to' => $diagTo] as $label => $value) {
+        $parsedDate = DateTime::createFromFormat('!Y-m-d', $value);
+        if (!$parsedDate || $parsedDate->format('Y-m-d') !== $value) {
+            fwrite(STDERR, "❌ Неверная дата --{$label}={$value}. Ожидается формат YYYY-MM-DD.\n");
+            exit(1);
+        }
+    }
+
+    if ($diagFrom > $diagTo) {
+        fwrite(STDERR, "❌ --from ({$diagFrom}) больше --to ({$diagTo}).\n");
+        exit(1);
+    }
+
+    exit(runAlfaDiag(
+        $cliOptions,
+        $diagFrom,
+        $diagTo,
+        $accessToken,
+        $tokenUrl,
+        $apiUrl,
+        $tokenStorage,
+        $clientId,
+        $clientSecret,
+        $certPath,
+        $keyPath,
+        $passphrase,
+        $caChainPath
+    ));
 }
 
 // Сценарий 3: Если вообще ничего нет — генерируем ссылку для ручного получения кода
@@ -567,6 +626,51 @@ function dumpAlfaRaw(string $dateFrom, string $dateTo, ?string $direction, ?stri
  */
 function alfaCurl($url, array $extraOptions, $certPath, $keyPath, $passphrase, $caChainPath): ?string
 {
+    $diag = diagRequest('GET', $url, $extraOptions, $certPath, $keyPath, $passphrase, $caChainPath, 'alfaCurl');
+
+    if ($diag['curl_errno'] !== 0) {
+        $msg = "❌ Ошибка cURL [{$url}]: {$diag['curl_error']}";
+        echo $msg . "\n";
+        sendToTelegram($msg);
+        return null;
+    }
+
+    return $diag['body'];
+}
+
+/**
+ * Выполняет диагностический cURL-запрос и возвращает все детали обмена:
+ * время с часовым поясом, метод/URI, заголовки и тело запроса, код и
+ * заголовки ответа (включая X-TraceId), IP-адреса соединения и ошибку cURL.
+ *
+ * @param string $method HTTP-метод (GET или POST)
+ * @param string $url    полный URL запроса
+ * @param array<int, mixed> $extraOptions  опции cURL (CURLOPT_*)
+ * @param string      $certPath    путь к mTLS-сертификату
+ * @param string      $keyPath     путь к приватному ключу
+ * @param string      $passphrase  пароль ключа
+ * @param string      $caChainPath путь к цепочке CA
+ * @param string      $label       метка для заголовка блока в отчёте
+ * @return array{
+ *     label: string, timestamp: string, method: string, url: string,
+ *     req_headers: array<int, string>, req_body: ?string,
+ *     http_code: int, curl_errno: int, curl_error: ?string,
+ *     resp_headers: array<int, string>, trace_id: ?string,
+ *     body: ?string, remote_ip: ?string, local_ip: ?string, total_time: float
+ * }
+ */
+function diagRequest(string $method, string $url, array $extraOptions, $certPath, $keyPath, $passphrase, $caChainPath, string $label = 'request'): array
+{
+    $requestHeaders = [];
+    $requestBody    = null;
+
+    // Метод определяем по фактическим опциям cURL: CURLOPT_POST надёжнее
+    // переданного параметра (alfaCurl() может отправить и POST, и GET).
+    $method = strtoupper($method);
+    if (!empty($extraOptions[CURLOPT_POST])) {
+        $method = 'POST';
+    }
+
     $baseOptions = [
         CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
@@ -574,25 +678,355 @@ function alfaCurl($url, array $extraOptions, $certPath, $keyPath, $passphrase, $
         CURLOPT_SSLKEY         => $keyPath,
         CURLOPT_SSLKEYPASSWD   => $passphrase,
         CURLOPT_CAINFO         => $caChainPath,
-        CURLOPT_SSL_VERIFYPEER => false, // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
-        CURLOPT_SSL_VERIFYHOST => 0,     // <-- ОТКЛЮЧИЛИ ДЛЯ ПЕСОЧНИЦЫ
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HEADER         => true,
+        CURLOPT_NOBODY         => false,
     ];
 
+    if (!empty($extraOptions[CURLOPT_POST])) {
+        $method = 'POST';
+    }
+
+    // Заголовки запроса собираем отдельно, чтобы зафиксировать их в отчёте
+    if (isset($extraOptions[CURLOPT_HTTPHEADER]) && is_array($extraOptions[CURLOPT_HTTPHEADER])) {
+        $requestHeaders = $extraOptions[CURLOPT_HTTPHEADER];
+    }
+
+    if (isset($extraOptions[CURLOPT_POSTFIELDS])) {
+        $requestBody = $extraOptions[CURLOPT_POSTFIELDS];
+        if (is_string($requestBody)) {
+            parse_str($requestBody, $parsedBody);
+            $requestBody = $parsedBody ?: $requestBody;
+        }
+    }
+
+    // Заголовки ответа перехватываем через header-функцию
+    $responseHeaders = [];
+    $baseOptions[CURLOPT_HEADERFUNCTION] = function ($ch, $header) use (&$responseHeaders) {
+        $trimmed = trim($header);
+        if ($trimmed !== '') {
+            $responseHeaders[] = $trimmed;
+        }
+        return strlen($header);
+    };
+
+    $options = $extraOptions + $baseOptions;
+
     $ch = curl_init();
-    curl_setopt_array($ch, $extraOptions + $baseOptions); // $extraOptions имеют приоритет
+    curl_setopt_array($ch, $options);
+
+    $rawResponse = curl_exec($ch);
+
+    $curlErrno   = curl_errno($ch);
+    $curlError   = $curlErrno !== 0 ? curl_error($ch) : null;
+    $httpCode    = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $remoteIp    = curl_getinfo($ch, CURLINFO_PRIMARY_IP) ?: null;
+    $localIp     = curl_getinfo($ch, CURLINFO_LOCAL_IP) ?: null;
+    $totalTime   = (float) curl_getinfo($ch, CURLINFO_TOTAL_TIME);
+    $headerSize  = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    unset($ch);
+
+    // Отделяем тело от заголовков: при CURLOPT_HEADER=true cURL отдаёт
+    // заголовки вместе с телом, CURLINFO_HEADER_SIZE говорит, сколько байт
+    // занимают заголовки (включая финальный \r\n\r\n).
+    $body = $rawResponse;
+    if ($rawResponse !== false && $headerSize > 0) {
+        $body = substr($rawResponse, $headerSize);
+    } elseif ($rawResponse === false) {
+        $body = null;
+    }
+
+    // Ищем X-TraceId среди заголовков ответа (регистронезависимо)
+    $traceId = null;
+    foreach ($responseHeaders as $h) {
+        if (preg_match('/^x-traceid\s*:\s*(.+)$/i', $h, $m)) {
+            $traceId = trim($m[1]);
+            break;
+        }
+    }
+
+    return [
+        'label'        => $label,
+        'timestamp'    => date('c'),
+        'method'       => $method,
+        'url'          => $url,
+        'req_headers'  => array_map(
+            static fn(string $h) => ALFA_MASK ? maskSensitiveHeader($h) : $h,
+            $requestHeaders
+        ),
+        'req_body'     => $requestBody === null ? null : (ALFA_MASK ? maskSensitiveBody($requestBody) : $requestBody),
+        'http_code'    => $httpCode,
+        'curl_errno'   => $curlErrno,
+        'curl_error'   => $curlError,
+        'resp_headers' => $responseHeaders,
+        'trace_id'     => $traceId,
+        'body'         => $body,
+        'remote_ip'    => $remoteIp,
+        'local_ip'     => $localIp,
+        'total_time'   => $totalTime,
+    ];
+}
+
+/**
+ * Режим --debug: выполняет один диагностический обмен с API Альфы и
+ * печатает (и при --out сохраняет) отчёт для техподдержки.
+ *
+ * Если access_token недоступен — диагностируется запрос токена, чтобы
+ * зафиксировать фактическую ошибку авторизации.
+ *
+ * @param array<string, mixed> $cliOptions  разобранные CLI-опции
+ * @param string $accessToken текущий токен или null
+ * @return int код выхода процесса
+ */
+function runAlfaDiag(
+    array $cliOptions,
+    string $diagFrom,
+    string $diagTo,
+    ?string $accessToken,
+    string $tokenUrl,
+    string $apiUrl,
+    string $tokenStorage,
+    $clientId,
+    $clientSecret,
+    $certPath,
+    $keyPath,
+    $passphrase,
+    $caChainPath
+): int {
+    if ($accessToken !== null && $accessToken !== '') {
+        $diagMode = 'operations';
+        $diagResult = diagRequest('GET', $apiUrl . '?' . http_build_query([
+            'dateFrom' => $diagFrom,
+            'dateTo'   => $diagTo,
+            'limit'    => 1,
+        ]), [
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $accessToken,
+                'Accept: application/json',
+            ],
+        ], $certPath, $keyPath, $passphrase, $caChainPath);
+    } else {
+        // Токена нет — диагностируем запрос токена. Если в хранилище есть
+        // refresh_token, используем его, иначе — authorization_code из ENV.
+        $savedTokens = [];
+        if (is_file($tokenStorage)) {
+            $savedTokens = json_decode((string) file_get_contents($tokenStorage), true) ?: [];
+        }
+
+        $diagMode   = 'token';
+        $tokenGrant = [
+            'grant_type' => 'refresh_token',
+        ];
+        if (!empty($savedTokens['refresh_token'])) {
+            $tokenGrant['refresh_token'] = $savedTokens['refresh_token'];
+        } else {
+            $tokenGrant = [
+                'grant_type'   => 'authorization_code',
+                'code'         => getenv('ALFA_AUTH_CODE') ?: '<нет ALFA_AUTH_CODE>',
+                'redirect_uri' => 'https://pashaman.dev/alfa/connect/',
+                'scope'        => 'openid accounts cards operations-history',
+            ];
+        }
+
+        $diagResult = diagRequest('POST', $tokenUrl, [
+            CURLOPT_POST       => true,
+            CURLOPT_POSTFIELDS => http_build_query($tokenGrant + [
+                'client_id'     => $clientId,
+                'client_secret' => $clientSecret,
+            ]),
+            CURLOPT_HTTPHEADER => [
+                'Accept: application/json',
+                'Content-Type: application/x-www-form-urlencoded',
+            ],
+        ], $certPath, $keyPath, $passphrase, $caChainPath);
+    }
+
+    $diagReport = buildDiagReport($diagResult, $diagMode, (string) $clientId);
+    echo $diagReport;
+
+    $diagOutPath = cliOption($cliOptions, 'out');
+    if ($diagOutPath === null) {
+        $diagOutDir = __DIR__ . '/alfa_debug';
+        if (!is_dir($diagOutDir) && !mkdir($diagOutDir, 0775, true) && !is_dir($diagOutDir)) {
+            fwrite(STDERR, "❌ Не удалось создать каталог {$diagOutDir}\n");
+            return 1;
+        }
+        $diagOutPath = $diagOutDir . '/alfa_debug_' . date('Ymd-His') . '.txt';
+    }
+
+    $diagDir = dirname($diagOutPath);
+    if (!is_dir($diagDir) && !mkdir($diagDir, 0775, true) && !is_dir($diagDir)) {
+        fwrite(STDERR, "❌ Не удалось создать каталог {$diagDir}\n");
+        return 1;
+    }
+
+    if (file_put_contents($diagOutPath, $diagReport) === false) {
+        fwrite(STDERR, "❌ Не удалось записать файл {$diagOutPath}\n");
+        return 1;
+    }
+
+    echo "\n✅ Отчёт сохранён: {$diagOutPath}\n";
+
+    return ($diagResult['curl_errno'] === 0 && $diagResult['http_code'] < 400) ? 0 : 1;
+}
+
+/**
+ * Маскирует Bearer-токен в заголовке Authorization.
+ */
+function maskSensitiveHeader(string $header): string
+{
+    if (stripos($header, 'authorization:') === 0) {
+        return preg_replace('/^(authorization:\s*bearer\s+).+$/i', '$1<*>' , $header);
+    }
+    return $header;
+}
+
+/**
+ * Маскирует секретные поля в теле запроса (client_secret, refresh_token, code).
+ *
+ * @param array<string, mixed>|string $body
+ * @return array<string, mixed>|string
+ */
+function maskSensitiveBody(array|string $body): array|string
+{
+    if (!is_array($body)) {
+        return $body;
+    }
+
+    $secretKeys = ['client_secret', 'refresh_token', 'code', 'assertion'];
+    foreach ($secretKeys as $key) {
+        if (isset($body[$key]) && is_string($body[$key]) && $body[$key] !== '') {
+            $body[$key] = '<*>';
+        }
+    }
+
+    return $body;
+}
+
+/**
+ * Формирует человеко-читаемый отчёт для отправки в техподдержку Альфа-Банка.
+ *
+ * @param array<string, mixed> $result результат diagRequest()
+ * @param string $mode   'operations' или 'token'
+ * @param string $clientId идентификатор клиента (для контекста)
+ */
+function buildDiagReport(array $result, string $mode, string $clientId): string
+{
+    $lines = [];
+    $lines[] = '=== ДИАГНОСТИКА ЗАПРОСА К АЛЬФА-БАНКУ ===';
+    $lines[] = 'Режим: ' . ($mode === 'token' ? 'запрос токена' : 'операции (выписка)');
+    $lines[] = 'Окружение: ' . (ALFA_PROD ? 'PROD' : 'SANDBOX');
+    $lines[] = 'Клиент ID: ' . $clientId;
+    $lines[] = '';
+
+    $lines[] = '--- 1. ДАТА И ВРЕМЯ ЗАПРОСА ---';
+    $lines[] = $result['timestamp'] . ' (' . date_default_timezone_get() . ', UTC' . date('P') . ')';
+    $lines[] = '';
+
+    $lines[] = '--- 2. МЕТОД И URI ---';
+    $lines[] = $result['method'] . ' ' . $result['url'];
+    $lines[] = '';
+
+    $lines[] = '--- 3. ЗАГОЛОВКИ И ТЕЛО ЗАПРОСА ---';
+    if (empty($result['req_headers'])) {
+        $lines[] = '(заголовки не заданы явно — cURL добавит стандартные)';
+    } else {
+        foreach ($result['req_headers'] as $h) {
+            $lines[] = $h;
+        }
+    }
+    $lines[] = '';
+    $lines[] = 'Тело запроса:';
+    if ($result['req_body'] === null) {
+        $lines[] = '(тело отсутствует)';
+    } elseif (is_array($result['req_body'])) {
+        $lines[] = http_build_query($result['req_body']);
+    } else {
+        $lines[] = $result['req_body'];
+    }
+    $lines[] = '';
+
+    $lines[] = '--- 4. ПОЛУЧЕННАЯ ОШИБКА / КОД ОТВЕТА ---';
+    $lines[] = 'HTTP-код: ' . ($result['http_code'] ?: 'нет ответа');
+    if ($result['curl_errno'] !== 0) {
+        $lines[] = 'Ошибка cURL [' . $result['curl_errno'] . ']: ' . $result['curl_error'];
+    }
+    if ($result['body'] !== null && $result['body'] !== '') {
+        $lines[] = 'Тело ответа:';
+        $lines[] = prettyJson($result['body']);
+    }
+    $lines[] = '';
+
+    $lines[] = '--- 5. ЗАГОЛОВКИ ОТВЕТА (включая X-TraceId) ---';
+    if (empty($result['resp_headers'])) {
+        $lines[] = '(заголовки ответа не получены)';
+    } else {
+        foreach ($result['resp_headers'] as $h) {
+            $lines[] = $h;
+        }
+    }
+    $lines[] = '';
+    $lines[] = 'X-TraceId: ' . ($result['trace_id'] ?? '(не найден)');
+    $lines[] = '';
+
+    $lines[] = '--- 6. IP-АДРЕСА СОЕДИНЕНИЯ ---';
+    $publicIp = resolveEgressIp();
+    $lines[] = 'Внешний IP (с которого уходит запрос в интернет): ' . ($publicIp ?? '—');
+    $lines[] = 'Локальный IP (внутренний интерфейс, источник запроса): ' . ($result['local_ip'] ?? '—');
+    $lines[] = 'Удалённый IP (Альфа-Банк): ' . ($result['remote_ip'] ?? '—');
+    $lines[] = 'Время выполнения: ' . round($result['total_time'], 3) . ' сек';
+    $lines[] = '';
+
+    return implode("\n", $lines);
+}
+
+/**
+ * Форматирует тело ответа: JSON — с отступами, остальное — как есть.
+ */
+function prettyJson(string $body): string
+{
+    $decoded = json_decode($body, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        return $body;
+    }
+
+    $pretty = json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    return $pretty === false ? $body : $pretty;
+}
+
+/**
+ * Определяет внешний (публичный) IP, с которого уходят запросы.
+ * Используется тот же прокси, что и для запросов к Альфе, поэтому адрес
+ * отражает реальный egress-маршрут. При недоступности сервиса — null.
+ */
+function resolveEgressIp(): ?string
+{
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://api.ipify.org?format=json',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_FOLLOWLOCATION => false,
+    ]);
+    foreach (proxyCurlOptions() as $option => $value) {
+        curl_setopt($ch, $option, $value);
+    }
 
     $response = curl_exec($ch);
-    $error    = curl_errno($ch) ? curl_error($ch) : null;
-    curl_close($ch);
+    $errno    = curl_errno($ch);
+    unset($ch);
 
-    if ($error) {
-        $msg = "❌ Ошибка cURL [{$url}]: {$error}";
-        echo $msg . "\n";
-        sendToTelegram($msg);
+    if ($errno !== 0 || !is_string($response)) {
         return null;
     }
 
-    return $response;
+    $data = json_decode($response, true);
+    $ip   = $data['ip'] ?? null;
+
+    return is_string($ip) && $ip !== '' ? $ip : null;
 }
 
 function requestTokens($postFields) {
@@ -680,9 +1114,10 @@ function sendRichMessageToTelegram($html) {
 }
 
 function sendToTelegram($text, $parseMode = 'Markdown') {
-    // В режиме сырого дампа Telegram не трогаем — всё выводим в консоль
-    if (ALFA_RAW) {
-        echo "ℹ️ [raw] Telegram отключён: " . strip_tags($text) . "\n";
+    // В режиме диагностики и сырого дампа Telegram не трогаем — всё выводим в консоль
+    if (ALFA_RAW || ALFA_DIAG) {
+        $tag = ALFA_DIAG ? 'debug' : 'raw';
+        echo "ℹ️ [{$tag}] Telegram отключён: " . strip_tags($text) . "\n";
         return false;
     }
 
