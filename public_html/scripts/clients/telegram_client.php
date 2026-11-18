@@ -476,7 +476,7 @@ final class TelegramClient
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         }
 
-        curl_setopt_array($ch, $this->proxyOptions());
+        curl_setopt_array($ch, proxyCurlOptions());
 
         $body = curl_exec($ch);
         $error = curl_error($ch);
