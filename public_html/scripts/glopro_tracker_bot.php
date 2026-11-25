@@ -1495,13 +1495,13 @@ final class GloProTrackerBot
      * Пишет строку в stdout и в дневной файл лога (glopro_<prefix>_<дата>.log),
      * если задан logPrefix.
      *
-     * Файл всегда в UTF-8, а в консоль строка уходит в её кодовой странице —
-     * иначе в cmd.exe/PowerShell кириллица превращается в «кракозябры».
+     * stdout и файл — в UTF-8; консоль переводится в UTF-8 через `chcp 65001`
+     * в glopro_tracker.bat (см. там).
      */
     private function log(string $msg): void
     {
         $line = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $msg);
-        echo $this->toConsole($line);
+        echo $line;
         if ($this->logPrefix !== null) {
             $file = __DIR__ . '/logs/' . $this->logPrefix . '_' . date('Y-m-d') . '.log';
             file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
@@ -1511,35 +1511,7 @@ final class GloProTrackerBot
     /** Печать в stdout без доп. форматирования (для режимов --users и т.п.). */
     private function out(string $text): void
     {
-        echo $this->toConsole($text);
-    }
-
-    /**
-     * Перекодирует UTF-8 текст в кодовую страницу консоли Windows.
-     *
-     * PHP CLI отдаёт в stdout сырые UTF-8 байты, а cmd.exe/PowerShell читают их
-     * в своей кодовой странице (обычно CP866) — кириллица ломается. Если stdout
-     * не консоль (пайп, файл, задача планировщика) — байты не трогаем.
-     */
-    private function toConsole(string $text): string
-    {
-        if (PHP_OS_FAMILY !== 'Windows' || !function_exists('sapi_windows_cp_get')) {
-            return $text;
-        }
-        if (function_exists('stream_isatty') && !@stream_isatty(STDOUT)) {
-            return $text;
-        }
-
-        $cp = sapi_windows_cp_get('oem');
-        if ($cp === 65001 || $cp < 1) {
-            return $text;
-        }
-
-        // Эмодзи в OEM-кодировку не влезают — убираем их вместе с пробелом после.
-        // Битый UTF-8 (например, обрезанный лимитом) не трогаем: preg_replace вернёт null.
-        $plain = preg_replace('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]+ ?/u', '', $text);
-
-        return sapi_windows_cp_conv(65001, $cp, is_string($plain) ? $plain : $text);
+        echo $text;
     }
 
     /** HTML-экранирование текста (защита от битых тегов в сообщениях от Telegram). */
