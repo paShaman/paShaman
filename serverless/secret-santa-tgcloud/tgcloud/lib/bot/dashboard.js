@@ -3,6 +3,7 @@ import { assertTransition } from '../domain/campaign.js';
 import { progress } from '../domain/membership.js';
 import {
   campaignStats,
+  getCampaign,
   getCampaignByCode,
   joinCampaign,
   listConfirmedMembers,
@@ -29,6 +30,7 @@ import {
 } from '../texts.js';
 import { render, sendHtml, sendMiniApp } from '../telegram.js';
 import { codeFromStartPayload, esc, normalizeCode } from '../utils.js';
+import { notifySuperAdminsCampaignFinished } from './admin-notify.js';
 import { isSuperAdmin, loadCampaignFor, loadOrganizerCampaign } from './common.js';
 import { clear, setStep } from './session.js';
 
@@ -37,7 +39,11 @@ function appLink() {
 }
 
 export async function openCampaign(chatId, userId, campaignId, messageId = null, prefix = '') {
-  const loaded = await loadCampaignFor(userId, campaignId);
+  let loaded = await loadCampaignFor(userId, campaignId);
+  if (loaded.error && isSuperAdmin(userId)) {
+    const campaign = await getCampaign(campaignId);
+    if (campaign) loaded = { campaign, member: { status: 'joined' } };
+  }
   if (loaded.error) {
     await sendHtml(chatId, loaded.error);
     return false;
@@ -299,6 +305,7 @@ export async function handleFinal(chatId, userId, campaignId, kind, token) {
     await purgeClaims(campaignId);
     await revealAssignments(campaignId);
     await logAudit(campaignId, userId, 'campaign.complete', {});
+    await notifySuperAdminsCampaignFinished(campaign, await campaignStats(campaignId));
     for (const member of members) {
       await sendMiniApp(
         member.userId,

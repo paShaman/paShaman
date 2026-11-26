@@ -7,6 +7,7 @@ import {
 import {
   createCampaign,
   getCampaignByCode,
+  getUser,
   logAudit,
 } from '../store.js';
 import { inline, btn } from '../keyboards.js';
@@ -20,6 +21,7 @@ import {
   parsePositiveInt,
 } from '../utils.js';
 import { sendHtml } from '../telegram.js';
+import { notifySuperAdminsNewCampaign } from './admin-notify.js';
 import { openCampaign } from './dashboard.js';
 import {
   clear,
@@ -317,6 +319,7 @@ export async function handleWizardCallback(chatId, userId, action, value, messag
       });
       await clear(userId);
       await logAudit(campaign.id, userId, 'campaign.create', { code: campaign.code });
+      await notifySuperAdminsNewCampaign(campaign, await getUser(userId));
       await openCampaign(chatId, userId, campaign.id, null, 'Кампания опубликована!');
       return true;
     } finally {
