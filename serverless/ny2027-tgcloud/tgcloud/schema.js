@@ -57,3 +57,18 @@ export const tickets = table('tickets', {
 }, (t) => ({
   usedIdx: index('idx_tickets_used').on(t.used),
 }));
+
+export const gameScores = table(
+  'game_scores',
+  {
+    userId: integer('user_id').primaryKey(),
+    name: text('name').notNull().default(''),
+    username: text('username').notNull().default(''),
+    best: integer('best').notNull().default(0),
+    plays: integer('plays').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => ({
+    bestIdx: index('idx_game_scores_best').on(t.best),
+  }),
+);

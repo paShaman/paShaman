@@ -11,8 +11,9 @@ Serverless-версия; она живёт в этом каталоге и об�
 
 - Проект привязан к `app9204350653`.
 - Мини-игра вынесена из HTML-виджета в Mini App: статика в `miniapp/`, бот
-  присылает кнопку `web_app`. После `push` проверь: `tgcloud status` — clean,
-  `tgcloud webhook` — in sync, `tgcloud migrate --dry-run` — no schema changes.
+  присылает кнопку `web_app`, общие рекорды — в `game_scores` через endpoint
+  `gameScore`. После `push` проверь: `tgcloud status` — clean, `tgcloud webhook` —
+  in sync; для новой таблицы — `npx tgcloud migrate --dry-run`, затем `migrate`.
 - Картинка приветствия встроена в код (`tgcloud/lib/goat-image.js`), внешних
   URL/file_id нет.
 - Меню команд: `/start`, `/my`, `/ticket`, `/game`, `/help`, `/cancel`.
@@ -29,12 +30,13 @@ Serverless-версия; она живёт в этом каталоге и об�
 - `tgcloud/lib/` — конфиг, утилиты, Telegram API, БД и логика бота;
 - `miniapp/index.html` — статический Mini App с мини-игрой;
 - `tgcloud/lib/game.js` — сообщение с кнопкой запуска Mini App;
+- `tgcloud/endpoints/gameScore.js` — общие рекорды Mini App (top-10 и личное место);
 - `tgcloud/lib/goat-image.js` — встроенная картинка приветствия (JPEG 720×900,
   base64, ~233 КБ модуля);
 - `assets/goat.jpg` — та же картинка отдельным файлом для просмотра (не деплоится);
 - `assets/goat-source.png` — исходный PNG, сохранённый из удалённой PHP-версии;
 - `tgcloud/schema.js` — таблицы SQLite (`users`, `registrations`, `sessions`,
-  `broadcast_drafts`, `tickets`);
+  `broadcast_drafts`, `tickets`, `game_scores`);
 - `docs/tgcloud-sdk.md` — официальный справочник SDK;
 - `AGENTS.md` — правила проекта от Telegram.
 
@@ -165,13 +167,20 @@ npx tgcloud migrate
 - Прохождение смягчено: прыжок по `pointerdown` без задержки `click`, выше
   прыжок, меньше хитбоксы и длиннее пауза между колонками. На десктопе работают
   пробел и стрелка вверх.
-- Игре не нужен сетевой обмен: рекорд хранится в `localStorage` origin'а Mini App
-  и переживает сворачивание и перезапуск.
+- Игре не нужен сетевой обмен для самой игры: локальный рекорд хранится в
+  `localStorage` origin'а Mini App и переживает сворачивание и перезапуск.
+- Общие рекорды: после аварии Mini App отправляет счёт в endpoint `gameScore`
+  (`Telegram.WebApp.Serverless.call`), тот пишет таблицу `game_scores` (Telegram
+  ID, имя, лучший счёт, число игр). В ответ приходят top-10 и личное место.
+  Кнопка 🏆 в HUD и «🏆 Рекорды» на экране аварии открывают таблицу; имена
+  выводятся через `textContent`, счёт валидируется (0…1 000 000), лучший
+  результат только растёт, `plays` увеличивается на каждую игру.
 - Кнопка `web_app` в клавиатуре приветствия открывает игру сразу, `/game`
   присылает отдельное сообщение с кнопкой. Старые кнопки `game:start` из уже
   отправленных сообщений продолжают работать.
-- Схема БД не меняется, `migrate` не нужен. После `push` выполни админский
-  `/setcommands`, чтобы `/game` появился в меню «/».
+- Схема БД меняется: добавлена `game_scores`. После `push` выполни
+  `npx tgcloud migrate` (сначала `--dry-run`), затем админский `/setcommands`,
+  чтобы `/game` появился в меню «/».
 
 ## Меню команд
 
@@ -195,8 +204,11 @@ node node_modules\@tgcloud\cli\bin\tgcloud.js run handlers/message "{chat:{id:В
 телефонном (390×844) и десктопном (660×900) размере. Поле масштабируется
 целиком и центрируется, машина с логотипом, старт, прыжок через колонку и
 светофор, полное приземление, столкновение, game over и «Ещё раз» работают,
-ошибок в консоли нет. `node --check` проходит для `game.js`, `bot.js`,
-`telegram.js`, `utils.js`, `config.js`.
+ошибок в консоли нет. Таблица рекордов проверена с mock-данными: top-10,
+подсветка своей строки, склонения «игра/игры/игр», имя с HTML выводится как
+текст (XSS-safe), кнопка 🏆 не запускает игру. `node --check` проходит для
+`game.js`, `bot.js`, `telegram.js`, `utils.js`, `config.js`,
+`endpoints/gameScore.js`.
 
 `run` выполняет модуль в облаке без деплоя, использует реальные API и БД и
 отправляет настоящие сообщения в указанный чат. На Windows PowerShell обычный
