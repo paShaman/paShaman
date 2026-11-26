@@ -1,11 +1,13 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { call } from '../api/client.js';
 import { useCampaign } from '../composables/useCampaign.js';
 import { toast } from '../composables/useSession.js';
 import { state } from '../composables/useSession.js';
 import CampaignStatus from '../components/campaign/CampaignStatus.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
+import { shareLink } from '../telegram/webapp.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -13,6 +15,9 @@ const { campaign, loading, error, busy, act } = useCampaign(route.params.id);
 const rulesOpen = ref(false);
 const leaving = ref(false);
 const deliveryOpen = ref(false);
+const avatars = reactive({});
+const AVATAR_LIMIT = 50;
+const logo = ref('');
 const deliveryForm = reactive({
   method: 'hybrid',
   recipientName: '',
@@ -22,6 +27,7 @@ const deliveryForm = reactive({
 });
 
 const me = computed(() => campaign.value?.me);
+const deliveryRequired = computed(() => campaign.value?.deliveryMode === 'shipping');
 const progress = computed(() => campaign.value?.progress ?? { total: 0, confirmed: 0 });
 const percent = computed(() => {
   if (!progress.value.total) return 0;
@@ -33,6 +39,7 @@ const hint = computed(() => {
     {
       RULES_NOT_ACCEPTED: 'Примите правила, чтобы подтвердить участие.',
       WISHLIST_EMPTY: 'Добавьте хотя бы одно желание в вишлист.',
+      DELIVERY_REQUIRED: 'Заполните адрес доставки и укажите почту или пункт выдачи.',
       CAMPAIGN_LOCKED: 'Набор уже закрыт.',
       NOT_MEMBER: 'Вы не участвуете в кампании.',
     }[code] ?? ''
@@ -59,6 +66,59 @@ function formatBudget(budget) {
   return budget.max === budget.min ? min : `${min} — ${formatter.format(budget.max)}`;
 }
 
+function invite() {
+  if (!campaign.value?.inviteUrl) {
+    toast(`Код кампании: ${campaign.value?.code ?? '—'}`);
+    return;
+  }
+  shareLink(campaign.value.inviteUrl, `Присоединяйтесь к «${campaign.value.title}» — Тайный Санта!`);
+}
+
+function avatarFor(member) {
+  if (member.isMe && state.boot?.user?.photoUrl) return state.boot.user.photoUrl;
+  return member.id != null ? avatars[member.id] || '' : '';
+}
+
+async function loadAvatars() {
+  const members = campaign.value?.members ?? [];
+  await Promise.all(
+    members.slice(0, AVATAR_LIMIT).map(async (member) => {
+      if (member.id == null || avatars[member.id] !== undefined) return;
+      if (member.isMe && state.boot?.user?.photoUrl) return;
+      avatars[member.id] = '';
+      try {
+        const result = await call('getMemberAvatar', {
+          campaignId: Number(route.params.id),
+          memberId: member.id,
+        });
+        avatars[member.id] = result?.photo ?? '';
+      } catch {
+        // без фото показываем инициал
+      }
+    }),
+  );
+}
+
+async function loadLogo() {
+  if (!campaign.value?.hasLogo) {
+    logo.value = '';
+    return;
+  }
+  try {
+    const result = await call('getCampaignLogo', { campaignId: Number(route.params.id) });
+    logo.value = result?.photo ?? '';
+  } catch {
+    logo.value = '';
+  }
+}
+
+watch(campaign, (value) => {
+  if (value) {
+    loadAvatars();
+    loadLogo();
+  }
+});
+
 async function acceptRules() {
   await act('acceptRules', { rulesVersion: campaign.value.rulesVersion }, 'Правила приняты.');
 }
@@ -83,7 +143,7 @@ async function leave() {
 function openDelivery() {
   const saved = campaign.value?.myDelivery;
   Object.assign(deliveryForm, {
-    method: saved?.method ?? campaign.value?.me?.deliveryMethod ?? 'hybrid',
+    method: saved?.method ?? campaign.value?.deliveryMode ?? 'hybrid',
     recipientName: saved?.recipientName ?? '',
     address: saved?.address ?? '',
     phone: saved?.phone ?? '',
@@ -142,6 +202,7 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
             <CampaignStatus :status="campaign.status" />
           </div>
         </div>
+        <img v-if="logo" :src="logo" alt="" class="campaign-logo" />
         <h1 class="display">{{ campaign.title }}</h1>
         <p v-if="campaign.description" class="lede">{{ campaign.description }}</p>
       </div>
@@ -169,12 +230,32 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
         </div>
       </div>
 
+      <div v-if="campaign.status === 'recruiting'" class="card stack">
+        <h2 class="h2">Пригласить друзей</h2>
+        <p class="small muted">
+          Отправьте ссылку или код — новый участник вступит в боте и появится в списке.
+        </p>
+        <p class="small">Код кампании: <b>{{ campaign.code }}</b></p>
+        <button class="btn btn--secondary btn--block" type="button" @click="invite">
+          Поделиться приглашением
+        </button>
+      </div>
+
       <div v-if="me && !me.confirmed" class="card stack">
         <h2 class="h2">Ваше участие</h2>
         <p class="small muted">
           Статус: {{ me.status === 'rules_accepted' ? 'правила приняты' : 'нужно подтвердить' }}.
           {{ hint }}
         </p>
+        <button
+          v-if="deliveryRequired"
+          class="btn btn--secondary btn--block"
+          type="button"
+          :disabled="busy"
+          @click="openDelivery"
+        >
+          {{ me.deliveryFilled ? 'Изменить адрес доставки' : 'Заполнить адрес доставки' }}
+        </button>
         <button
           v-if="campaign.can.acceptRules"
           class="btn btn--primary btn--block"
@@ -257,7 +338,10 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
         </div>
         <div class="list">
           <div v-for="(member, index) in campaign.members" :key="`${member.name}-${index}`" class="tile">
-            <span class="avatar" aria-hidden="true">{{ member.name.slice(0, 1) }}</span>
+            <span class="avatar" aria-hidden="true">
+              <img v-if="avatarFor(member)" :src="avatarFor(member)" :alt="member.name" />
+              <template v-else>{{ member.name.slice(0, 1) }}</template>
+            </span>
             <span class="tile__body">
               <span class="tile__title">{{ member.name }}<template v-if="member.isMe"> (вы)</template></span>
               <span class="tile__meta">{{ member.role === 'organizer' ? 'Организатор' : 'Участник' }}</span>
@@ -275,7 +359,11 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
 
       <AppSheet :open="deliveryOpen" title="Доставка подарка" @close="deliveryOpen = false">
         <form class="stack" @submit.prevent="saveDelivery">
-          <div class="field">
+          <div v-if="campaign.deliveryMode === 'shipping'" class="row row--between">
+            <span class="muted small">Передача</span>
+            <b>Доставка</b>
+          </div>
+          <div v-else class="field">
             <label for="delivery-method">Как передаём подарок</label>
             <select id="delivery-method" v-model="deliveryForm.method" class="input">
               <option value="meetup">Встреча</option>
@@ -294,15 +382,18 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
             />
           </div>
           <div class="field">
-            <label for="delivery-address">Адрес</label>
+            <label for="delivery-address">Адрес или пункт самовывоза</label>
             <textarea
               id="delivery-address"
               v-model="deliveryForm.address"
               class="input"
               maxlength="500"
-              placeholder="Улица, дом, квартира, индекс"
+              placeholder="Город, улица, дом, квартира, индекс — или адрес отделения почты / ПВЗ"
             />
-            <p class="hint">Для доставки адрес обязателен. Данные видит только ваш Санта.</p>
+            <p class="hint">
+              Укажите отделение почты или пункт выдачи. Для доставки адрес обязателен, его видит
+              только ваш Санта.
+            </p>
           </div>
           <div class="field">
             <label for="delivery-phone">Телефон</label>
@@ -328,6 +419,12 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
 </template>
 
 <style scoped>
+.campaign-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  object-fit: cover;
+}
 .bar {
   height: 8px;
   background: var(--paper-sunken);

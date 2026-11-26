@@ -1,5 +1,10 @@
+import { BOT_USERNAME } from './config.js';
 import { canConfirm } from './domain/membership.js';
 import { displayName } from './utils.js';
+
+export function inviteUrlFor(code) {
+  return BOT_USERNAME && code ? `https://t.me/${BOT_USERNAME}?start=join_${code}` : '';
+}
 
 export function iso(date) {
   return date ? new Date(date).toISOString() : null;
@@ -7,6 +12,7 @@ export function iso(date) {
 
 export function serializeMember(member, user, viewerId) {
   return {
+    id: member.id,
     name: displayName(user),
     status: member.status,
     role: member.role,
@@ -31,11 +37,12 @@ export function serializeCampaign(campaign, {
     confirmed: visibleMembers.filter((member) => member.status === 'confirmed').length,
   };
   const confirmation = membership
-    ? canConfirm({ campaign, member: membership, wishlistCount })
+    ? canConfirm({ campaign, member: membership, wishlistCount, delivery })
     : { ok: false, code: 'NOT_MEMBER' };
   return {
     id: campaign.id,
     code: campaign.code,
+    inviteUrl: inviteUrlFor(campaign.code),
     title: campaign.title,
     description: campaign.description,
     rules: campaign.rules,
@@ -47,6 +54,8 @@ export function serializeCampaign(campaign, {
       currency: campaign.currency,
     },
     deliveryMode: campaign.deliveryMode,
+    hasLogo: Boolean(campaign.logoFileId),
+    logoVersion: Number(campaign.logoVersion) || 0,
     revealSanta: Boolean(campaign.revealSanta),
     registrationEndsAt: iso(campaign.registrationEndsAt),
     giftDate: iso(campaign.giftDate),

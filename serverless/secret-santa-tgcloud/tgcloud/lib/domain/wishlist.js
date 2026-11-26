@@ -15,7 +15,7 @@ export class WishlistError extends Error {
   }
 }
 
-export function normalizeWishlistInput(input = {}) {
+export function normalizeWishlistInput(input = {}, budget = null) {
   const title = normalizeSpaces(input.title);
   if (title.length < 1) throw new WishlistError('TITLE_EMPTY');
   if (title.length > MAX_ITEM_TITLE) throw new WishlistError('TITLE_LONG');
@@ -35,6 +35,16 @@ export function normalizeWishlistInput(input = {}) {
   }
   if (priceMin != null && priceMax != null && priceMin > priceMax) {
     throw new WishlistError('PRICE_ORDER');
+  }
+  if (budget && budget.min != null && budget.max != null && priceMin != null) {
+    const min = Number(budget.min);
+    const max = Number(budget.max);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      const high = priceMax ?? priceMin;
+      if (priceMin < min || high > max) {
+        throw new WishlistError('PRICE_OUT_OF_BUDGET', { field: 'price', min, max });
+      }
+    }
   }
 
   const comment = String(input.comment ?? '').trim();

@@ -69,7 +69,17 @@ export async function viewMember(chatId, userId, campaignId, memberId, messageId
     '',
     'Это профиль участника. Переписка и вишлист не раскрываются организатору.',
   ].filter(Boolean);
-  await sendHtml(chatId, lines.join('\n'), memberProfileKeyboard(campaignId));
+  const canManage = loaded.campaign.organizerId === Number(userId) || isSuperAdmin(userId);
+  const canRemove =
+    canManage &&
+    loaded.campaign.status === 'recruiting' &&
+    member.role !== 'organizer' &&
+    !['removed', 'declined'].includes(member.status);
+  await sendHtml(
+    chatId,
+    lines.join('\n'),
+    memberProfileKeyboard(campaignId, { canRemove, memberId: Number(memberId) }),
+  );
 }
 
 export async function askRemove(chatId, userId, campaignId, memberId, messageId = null) {

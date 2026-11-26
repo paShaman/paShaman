@@ -42,6 +42,21 @@ test('checks participation confirmation', () => {
   assert.equal(canConfirm({ campaign, member, wishlistCount: 0 }).code, 'WISHLIST_EMPTY');
 });
 
+test('requires delivery details for shipping campaigns', () => {
+  const campaign = { status: 'recruiting', rulesVersion: 2, deliveryMode: 'shipping' };
+  const member = { status: 'rules_accepted', rulesVersionAccepted: 2 };
+  assert.equal(canConfirm({ campaign, member, wishlistCount: 1 }).code, 'DELIVERY_REQUIRED');
+  assert.equal(
+    canConfirm({
+      campaign,
+      member,
+      wishlistCount: 1,
+      delivery: { recipientName: 'Аня', address: 'ПВЗ, ул. Ленина, 1' },
+    }).ok,
+    true,
+  );
+});
+
 test('counts progress without removed members', () => {
   const result = progress([
     { status: 'confirmed' },

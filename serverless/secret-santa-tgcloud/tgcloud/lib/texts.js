@@ -122,19 +122,16 @@ export function campaignCard(campaign, { progress, stats, isOrganizer, isConfirm
       `📝 Вишлистов: ${stats?.wishlist ?? 0}`,
     );
   }
-  if (isOrganizer) {
-    if (stats) {
-      lines.push(
-        `📦 Отправлено: ${stats.sent ?? 0}, получено: ${stats.received ?? 0}`,
-        `⚠️ Жалоб: ${stats.reports ?? 0}`,
-      );
-    }
-    if (invite) {
-      lines.push('', `Приглашение: ${invite}`);
-    } else {
-      lines.push('', `Приглашение: код <code>${campaign.code}</code>`);
-    }
-  } else if (!isConfirmed) {
+  if (isOrganizer && stats) {
+    lines.push(
+      `📦 Отправлено: ${stats.sent ?? 0}, получено: ${stats.received ?? 0}`,
+      `⚠️ Жалоб: ${stats.reports ?? 0}`,
+    );
+  }
+  const canInvite = isOrganizer || (isConfirmed && campaign.status === 'recruiting');
+  if (canInvite) {
+    lines.push('', invite ? `Приглашение: ${invite}` : `Приглашение: код <code>${campaign.code}</code>`);
+  } else if (!isOrganizer && !isConfirmed) {
     lines.push('', 'Вы ещё не подтвердили участие. Откройте приложение и заполните вишлист.');
   }
   lines.push('', `<i>${campaignStatusHint(campaign, progress ?? { confirmed: 0 }, now)}</i>`);

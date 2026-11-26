@@ -12,6 +12,7 @@ import {
   purgeClaims,
   purgeDelivery,
   revealAssignments,
+  setCampaignLogo,
   updateCampaign,
 } from '../store.js';
 import {
@@ -29,6 +30,7 @@ import {
 import { render, sendHtml, sendMiniApp } from '../telegram.js';
 import { codeFromStartPayload, esc, normalizeCode } from '../utils.js';
 import { isSuperAdmin, loadCampaignFor, loadOrganizerCampaign } from './common.js';
+import { clear, setStep } from './session.js';
 
 function appLink() {
   return /^https:\/\//i.test(APP_URL) ? APP_URL : '';
@@ -96,6 +98,65 @@ export async function openRules(chatId, userId, campaignId, messageId = null) {
   await render(chatId, messageId, rulesText(loaded.campaign), rulesKeyboard(campaignId));
 }
 
+export async function askLogo(chatId, userId, campaignId) {
+  const loaded = await loadOrganizerCampaign(userId, campaignId);
+  if (loaded.error) {
+    await sendHtml(chatId, loaded.error);
+    return;
+  }
+  if (['completed', 'cancelled'].includes(loaded.campaign.status)) {
+    await sendHtml(chatId, 'Кампания уже завершена.');
+    return;
+  }
+  await setStep(userId, `logo:${loaded.campaign.id}`, { campaignId: loaded.campaign.id });
+  await sendHtml(
+    chatId,
+    `🖼 <b>Логотип кампании</b>\n\nПришлите фото-логотип или /skip, чтобы убрать текущий. /cancel — отмена.`,
+  );
+}
+
+export async function handleCampaignLogoPhoto(chatId, userId, session, message) {
+  const campaignId = Number(String(session?.step ?? '').split(':')[1]);
+  const loaded = await loadOrganizerCampaign(userId, campaignId);
+  if (loaded.error) {
+    await clear(userId);
+    await sendHtml(chatId, loaded.error);
+    return true;
+  }
+  if (['completed', 'cancelled'].includes(loaded.campaign.status)) {
+    await clear(userId);
+    await sendHtml(chatId, 'Кампания уже завершена.');
+    return true;
+  }
+  const photos = Array.isArray(message?.photo) ? message.photo : [];
+  if (photos.length === 0) return false;
+  const fileId = photos[photos.length - 1].file_id;
+  await setCampaignLogo(loaded.campaign.id, fileId);
+  await clear(userId);
+  await sendHtml(chatId, 'Логотип обновлён.');
+  await openCampaign(chatId, userId, loaded.campaign.id);
+  return true;
+}
+
+export async function handleCampaignLogoText(chatId, userId, session, text) {
+  const campaignId = Number(String(session?.step ?? '').split(':')[1]);
+  const loaded = await loadOrganizerCampaign(userId, campaignId);
+  if (loaded.error) {
+    await clear(userId);
+    await sendHtml(chatId, loaded.error);
+    return true;
+  }
+  if (String(text).trim().toLowerCase() === '/skip') {
+    await setCampaignLogo(loaded.campaign.id, '');
+    await clear(userId);
+    await sendHtml(chatId, 'Логотип убран.');
+    await openCampaign(chatId, userId, loaded.campaign.id);
+    return true;
+  }
+  await sendHtml(chatId, 'Пришлите фото-логотип или /skip, чтобы убрать текущий.');
+  return true;
+}
+
 export async function startFromPayload(chatId, userId, payload) {
   const code = codeFromStartPayload(payload);
   if (!code) {
@@ -117,13 +178,6 @@ export async function startFromPayload(chatId, userId, payload) {
   await joinCampaign(campaign.id, userId);
   await logAudit(campaign.id, userId, 'campaign.join', {});
   await openCampaign(chatId, userId, campaign.id, null, 'Вы вступили в кампанию.');
-  if (campaign.organizerId !== Number(userId)) {
-    await sendHtml(
-      campaign.organizerId,
-      `👋 Новый участник в «${esc(campaign.title)}». Откройте карточку кампании, чтобы увидеть состав.`,
-      campaignKeyboard({ campaign, isOrganizer: true, appUrl: appLink() }),
-    );
-  }
 }
 
 export async function handleLock(chatId, userId, campaignId, messageId = null) {

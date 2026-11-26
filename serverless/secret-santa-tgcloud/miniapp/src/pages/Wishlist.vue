@@ -16,7 +16,8 @@ const error = ref('');
 const busy = ref(false);
 const editorOpen = ref(false);
 const editingId = ref(null);
-const form = reactive({ title: '', url: '', priceMin: '', priceMax: '', comment: '' });
+const MAX_URL_LENGTH = 2048;
+const form = reactive({ title: '', url: '', price: '', comment: '' });
 const fileInput = ref(null);
 const photoTarget = ref(null);
 const photoBusy = ref(false);
@@ -25,6 +26,19 @@ const photos = reactive({});
 const canEdit = computed(() => Boolean(campaign.value?.can?.editWishlist));
 const limit = computed(() => state.boot?.limits?.wishlistItems ?? 50);
 const photoMax = computed(() => state.boot?.photoMaxBytes ?? 320 * 1024);
+const budget = computed(() => campaign.value?.budget ?? null);
+const budgetLabel = computed(() => {
+  const value = budget.value;
+  if (!value) return '';
+  const formatter = new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: value.currency || 'RUB',
+    maximumFractionDigits: 0,
+  });
+  const min = formatter.format(value.min);
+  return value.min === value.max ? min : `${min} — ${formatter.format(value.max)}`;
+});
+const pricePlaceholder = computed(() => (budget.value ? String(budget.value.min) : 'например 2000'));
 
 async function load() {
   loading.value = true;
@@ -44,7 +58,7 @@ async function load() {
 
 function openNew() {
   editingId.value = null;
-  Object.assign(form, { title: '', url: '', priceMin: '', priceMax: '', comment: '' });
+  Object.assign(form, { title: '', url: '', price: '', comment: '' });
   editorOpen.value = true;
 }
 
@@ -53,8 +67,7 @@ function openEdit(item) {
   Object.assign(form, {
     title: item.title,
     url: item.url ?? '',
-    priceMin: item.priceMin ?? '',
-    priceMax: item.priceMax ?? '',
+    price: item.priceMin ?? item.priceMax ?? '',
     comment: item.comment ?? '',
   });
   editorOpen.value = true;
@@ -65,15 +78,39 @@ async function save() {
     toast('Название не может быть пустым.');
     return;
   }
+  const url = form.url.trim();
+  if (url) {
+    let valid = false;
+    try {
+      const parsed = new URL(url);
+      valid = (parsed.protocol === 'http:' || parsed.protocol === 'https:') && url.length <= MAX_URL_LENGTH;
+    } catch {
+      valid = false;
+    }
+    if (!valid) {
+      toast(`Ссылка должна начинаться с http:// или https:// и быть короче ${MAX_URL_LENGTH} символов.`);
+      return;
+    }
+  }
+  const rawPrice = String(form.price).trim();
+  const price = rawPrice === '' ? null : Number(rawPrice);
+  if (price !== null && (!Number.isInteger(price) || price < 0 || price > 1000000)) {
+    toast('Цена — целое число от 0 до 1 000 000 ₽.');
+    return;
+  }
+  if (price !== null && budget.value && (price < budget.value.min || price > budget.value.max)) {
+    toast(`Цена должна быть в бюджете кампании: ${budgetLabel.value}.`);
+    return;
+  }
   busy.value = true;
   try {
     await call('saveWishlistItem', {
       campaignId: Number(route.params.id),
       itemId: editingId.value || undefined,
       title: form.title,
-      url: form.url,
-      priceMin: form.priceMin === '' ? null : Number(form.priceMin),
-      priceMax: form.priceMax === '' ? null : Number(form.priceMax),
+      url,
+      priceMin: price,
+      priceMax: price,
       comment: form.comment,
     });
     editorOpen.value = false;
@@ -328,17 +365,18 @@ onMounted(load);
         </div>
         <div class="field">
           <label for="url">Ссылка</label>
-          <input id="url" v-model="form.url" class="input" type="url" maxlength="500" placeholder="https://" />
+          <input id="url" v-model="form.url" class="input" type="url" :maxlength="MAX_URL_LENGTH" placeholder="https://" />
         </div>
-        <div class="row">
-          <div class="field" style="flex: 1">
-            <label for="min">Цена от</label>
-            <input id="min" v-model="form.priceMin" class="input" inputmode="numeric" placeholder="1000" />
-          </div>
-          <div class="field" style="flex: 1">
-            <label for="max">до</label>
-            <input id="max" v-model="form.priceMax" class="input" inputmode="numeric" placeholder="3000" />
-          </div>
+        <div class="field">
+          <label for="price">Цена, ₽</label>
+          <input
+            id="price"
+            v-model="form.price"
+            class="input"
+            inputmode="numeric"
+            :placeholder="pricePlaceholder"
+          />
+          <p v-if="budgetLabel" class="hint">Бюджет кампании: {{ budgetLabel }}.</p>
         </div>
         <div class="field">
           <label for="comment">Комментарий</label>

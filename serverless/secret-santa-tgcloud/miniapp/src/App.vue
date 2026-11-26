@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import mark from './assets/tree-192.png';
 import { call, ApiError } from './api/client.js';
-import { initTelegram, bindBackButton } from './telegram/webapp.js';
+import { initTelegram, bindBackButton, openLink } from './telegram/webapp.js';
 import { loadBoot, refreshBoot, state, toast } from './composables/useSession.js';
 
 const route = useRoute();
@@ -110,6 +110,18 @@ async function retry() {
     <main v-else>
       <RouterView />
     </main>
+
+    <footer class="app-footer">
+      <a
+        class="app-footer__link"
+        href="https://paShaman.dev"
+        target="_blank"
+        rel="noopener noreferrer"
+        @click.prevent="openLink('https://paShaman.dev')"
+      >
+        Сделано paShaman.dev
+      </a>
+    </footer>
 
     <div v-if="state.toast" class="toast" role="status" aria-live="polite">
       {{ state.toast }}

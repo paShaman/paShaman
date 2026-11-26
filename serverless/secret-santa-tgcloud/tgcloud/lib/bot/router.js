@@ -4,6 +4,9 @@ import { answerCallback, sendHtml, setBotCommands } from '../telegram.js';
 import { displayName, fromBase36 } from '../utils.js';
 import { rememberUser } from '../store.js';
 import {
+  askLogo,
+  handleCampaignLogoPhoto,
+  handleCampaignLogoText,
   handleCancelConfirm,
   handleCompleteConfirm,
   handleFinal,
@@ -15,7 +18,7 @@ import {
   openRules,
   startFromPayload,
 } from './dashboard.js';
-import { beginWizard, handleWizardCallback, handleWizardText } from './wizard.js';
+import { beginWizard, handleWizardCallback, handleWizardPhoto, handleWizardText } from './wizard.js';
 import { clear, getState } from './session.js';
 import {
   addPair,
@@ -73,6 +76,15 @@ export async function handleMessage(message, ctx) {
   const text = String(message.text ?? '').trim();
   if (!text) {
     if (message.photo) {
+      const photoSession = await getState(userId);
+      if (photoSession?.step === 'wizard:logo') {
+        await handleWizardPhoto(chatId, userId, photoSession, message);
+        return;
+      }
+      if (String(photoSession?.step ?? '').startsWith('logo:')) {
+        await handleCampaignLogoPhoto(chatId, userId, photoSession, message);
+        return;
+      }
       await sendHtml(
         chatId,
         'Фото загружается в приложении при редактировании желания. Откройте вишлист в Mini App.',
@@ -159,6 +171,10 @@ export async function handleMessage(message, ctx) {
       await sendHtml(chatId, 'Осталось нажать «Отправить» или «Отмена» под превью.');
       return;
     }
+    if (String(session?.step ?? '').startsWith('logo:')) {
+      await handleCampaignLogoText(chatId, userId, session, text);
+      return;
+    }
 
     await sendHtml(chatId, 'Не понял команду. Откройте /help или выберите действие в меню.', welcomeKeyboard());
   } catch (error) {
@@ -219,6 +235,10 @@ export async function handleCallback(query, ctx) {
 
     if (action === 'co') {
       await openCampaign(chatId, userId, campaignId, messageId);
+      return;
+    }
+    if (action === 'lg') {
+      await askLogo(chatId, userId, campaignId);
       return;
     }
     if (action === 'cr') {

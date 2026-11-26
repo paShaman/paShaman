@@ -41,6 +41,8 @@ export const campaigns = table(
     currency: text('currency').notNull().default('RUB'),
     status: text('status').notNull().default('recruiting'),
     deliveryMode: text('delivery_mode').notNull().default('hybrid'),
+    logoFileId: text('logo_file_id').notNull().default(''),
+    logoVersion: integer('logo_version').notNull().default(0),
     revealSanta: boolean('reveal_santa').notNull().default(true),
     organizerId: integer('organizer_id').notNull(),
     registrationEndsAt: integer('registration_ends_at', { mode: 'timestamp' }).notNull(),

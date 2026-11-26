@@ -17,6 +17,7 @@ export default async function (input, ctx) {
   return {
     user: {
       name: displayName(auth.user),
+      photoUrl: ctx?.initData?.user?.photo_url ?? '',
       lang: auth.user.lang,
       isSuperAdmin: isSuperAdmin(auth.tgId),
     },
@@ -38,6 +39,8 @@ export default async function (input, ctx) {
       membershipStatus: membership.status,
       registrationEndsAt: campaign.registrationEndsAt?.toISOString?.() ?? null,
       giftDate: campaign.giftDate?.toISOString?.() ?? null,
+      hasLogo: Boolean(campaign.logoFileId),
+      logoVersion: Number(campaign.logoVersion) || 0,
       budget: { min: campaign.budgetMin, max: campaign.budgetMax, currency: campaign.currency },
       confirmed: membership.status === 'confirmed',
     })),

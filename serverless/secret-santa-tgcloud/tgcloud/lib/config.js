@@ -24,6 +24,7 @@ export const MAX_PHOTO_BYTES = 320 * 1024;
 export const PHOTO_MAX_DIMENSION = 1280;
 export const MAX_ITEM_TITLE = 120;
 export const MAX_ITEM_COMMENT = 500;
+export const MAX_URL_LENGTH = 2048;
 export const MAX_CAMPAIGN_DESCRIPTION = 1000;
 export const MAX_RULES = 3000;
 export const MIN_PARTICIPANTS = 3;

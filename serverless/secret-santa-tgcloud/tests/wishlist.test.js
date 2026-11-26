@@ -23,6 +23,22 @@ test('normalizes a wishlist item', () => {
   assert.equal(item.comment, 'Любая из серии');
 });
 
+test('accepts a fixed price within the campaign budget', () => {
+  const item = normalizeWishlistInput(
+    { title: 'Наушники', priceMin: '2000', priceMax: '2000' },
+    { min: 1500, max: 3000 },
+  );
+  assert.equal(item.priceMin, 2000);
+  assert.equal(item.priceMax, 2000);
+});
+
+test('rejects a price outside the campaign budget', () => {
+  assert.throws(
+    () => normalizeWishlistInput({ title: 'x', priceMin: 500, priceMax: 500 }, { min: 1500, max: 3000 }),
+    WishlistError,
+  );
+});
+
 test('rejects bad urls, prices and titles', () => {
   assert.throws(() => normalizeWishlistInput({ title: '' }), WishlistError);
   assert.throws(() => normalizeWishlistInput({ title: 'x', url: 'javascript:alert(1)' }), WishlistError);

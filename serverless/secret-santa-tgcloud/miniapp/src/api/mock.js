@@ -4,6 +4,7 @@ const state = {
   campaign: {
     id: 1,
     code: 'XMAS26',
+    inviteUrl: 'https://t.me/pod_elochku_bot?start=join_XMAS26',
     title: 'Тайный Санта 2027',
     description: 'Обмениваемся подарками в офисе и не раскрываем себя до вручения.',
     rules:
@@ -12,6 +13,8 @@ const state = {
     status: 'recruiting',
     budget: { min: 1500, max: 3000, currency: 'RUB' },
     deliveryMode: 'hybrid',
+    hasLogo: false,
+    logoVersion: 0,
     revealSanta: true,
     registrationEndsAt: new Date(Date.now() + 12 * 86400000).toISOString(),
     giftDate: new Date(Date.now() + 30 * 86400000).toISOString(),
@@ -24,18 +27,18 @@ const state = {
     delivery: null,
   },
   members: [
-    { userId: 900001, name: 'Аня', status: 'joined', role: 'organizer', isMe: true },
-    { userId: 900002, name: 'Борис', status: 'confirmed', role: 'participant', isMe: false },
-    { userId: 900003, name: 'Вера', status: 'confirmed', role: 'participant', isMe: false },
-    { userId: 900004, name: 'Гриша', status: 'rules_accepted', role: 'participant', isMe: false },
+    { id: 1, userId: 900001, name: 'Аня', status: 'joined', role: 'organizer', isMe: true },
+    { id: 2, userId: 900002, name: 'Борис', status: 'confirmed', role: 'participant', isMe: false },
+    { id: 3, userId: 900003, name: 'Вера', status: 'confirmed', role: 'participant', isMe: false },
+    { id: 4, userId: 900004, name: 'Гриша', status: 'rules_accepted', role: 'participant', isMe: false },
   ],
   wishlist: [
     {
       id: 1,
       title: 'Тёплый плед',
       url: 'https://example.com/plaid',
-      priceMin: 1500,
-      priceMax: 2500,
+      priceMin: 2000,
+      priceMax: 2000,
       currency: 'RUB',
       comment: 'Любой спокойный цвет',
       hasPhoto: false,
@@ -45,8 +48,8 @@ const state = {
       id: 2,
       title: 'Книга про космос',
       url: '',
-      priceMin: 900,
-      priceMax: 1400,
+      priceMin: 1600,
+      priceMax: 1600,
       currency: 'RUB',
       comment: '',
       hasPhoto: false,
@@ -152,7 +155,7 @@ function assignmentPayload() {
 
 function bootstrapPayload() {
   return {
-    user: { name: demoUser.name, lang: 'ru', isSuperAdmin: false },
+    user: { name: demoUser.name, photoUrl: '', lang: 'ru', isSuperAdmin: false },
     startParam: null,
     appUrl: '',
     photoMaxBytes: 320 * 1024,
@@ -167,6 +170,8 @@ function bootstrapPayload() {
         membershipStatus: state.me.status,
         registrationEndsAt: state.campaign.registrationEndsAt,
         giftDate: state.campaign.giftDate,
+        hasLogo: state.campaign.hasLogo,
+        logoVersion: state.campaign.logoVersion,
         budget: state.campaign.budget,
         confirmed: state.me.confirmed,
       },
@@ -179,6 +184,8 @@ export async function mockCall(name, input = {}) {
 
   if (name === 'bootstrap') return bootstrapPayload();
   if (name === 'getCampaign') return campaignPayload();
+  if (name === 'getMemberAvatar') return { photo: '' };
+  if (name === 'getCampaignLogo') return { photo: '', version: 0 };
   if (name === 'joinCampaign') {
     if (String(input.code || '').toUpperCase() !== state.campaign.code) {
       fail('NOT_FOUND', 'Кампания с таким кодом не найдена.');

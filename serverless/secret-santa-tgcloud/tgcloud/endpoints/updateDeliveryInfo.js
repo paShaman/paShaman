@@ -5,13 +5,15 @@ const METHODS = ['meetup', 'shipping', 'hybrid'];
 
 export default async function (input, ctx) {
   const auth = await requireMember(ctx, input?.campaignId);
-  if (auth.member.status !== 'confirmed') {
-    fail('NOT_CONFIRMED', 'Сначала подтвердите участие.');
-  }
   if (['completed', 'cancelled'].includes(auth.campaign.status)) {
     fail('CAMPAIGN_CLOSED', 'Кампания уже завершена.');
   }
-  const method = METHODS.includes(input?.method) ? input.method : auth.member.deliveryMethod;
+  const method =
+    auth.campaign.deliveryMode === 'shipping'
+      ? 'shipping'
+      : METHODS.includes(input?.method)
+        ? input.method
+        : auth.campaign.deliveryMode;
   if (!METHODS.includes(method)) fail('VALIDATION', 'Выберите способ получения подарка.');
 
   const recipientName = String(input?.recipientName ?? '').trim().slice(0, 120);

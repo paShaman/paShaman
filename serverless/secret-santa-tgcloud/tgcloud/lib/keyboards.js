@@ -56,6 +56,7 @@ export function campaignKeyboard({ campaign, isOrganizer, appUrl }) {
   }
   if (['recruiting', 'locked', 'drawn', 'gifting'].includes(campaign.status)) {
     rows.push([btn('Рассылка', `ss:bl:${id}`), btn('Статистика', `ss:st:${id}`)]);
+    rows.push([btn('Логотип', `ss:lg:${id}`)]);
     rows.push([btn('Завершить', `ss:cm:${id}`), btn('Отменить', `ss:cn:${id}`)]);
   } else {
     rows.push([btn('Статистика', `ss:st:${id}`)]);
@@ -98,9 +99,14 @@ export function membersKeyboard(campaignId, page, totalPages, members, isOrganiz
   return inline(rows);
 }
 
-export function memberProfileKeyboard(campaignId) {
+export function memberProfileKeyboard(campaignId, { canRemove = false, memberId = null } = {}) {
   const cid = toBase36(campaignId);
-  return inline([[btn('К участникам', `ss:mp:${cid}:1`)]]);
+  const rows = [];
+  if (canRemove && memberId != null) {
+    rows.push([btn('Удалить участника', `ss:mx:${cid}:${toBase36(memberId)}`)]);
+  }
+  rows.push([btn('К участникам', `ss:mp:${cid}:1`)]);
+  return inline(rows);
 }
 
 export function removeMemberConfirmKeyboard(campaignId, userId, version) {

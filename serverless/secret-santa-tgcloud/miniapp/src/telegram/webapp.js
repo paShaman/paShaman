@@ -72,6 +72,24 @@ export function openLink(url) {
   window.open(url, '_blank', 'noopener');
 }
 
+export function shareLink(url, text = '') {
+  if (!url) return false;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}${
+    text ? `&text=${encodeURIComponent(text)}` : ''
+  }`;
+  const tg = telegramApp();
+  try {
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(shareUrl);
+      return true;
+    }
+  } catch {
+    // fallthrough
+  }
+  window.open(shareUrl, '_blank', 'noopener');
+  return true;
+}
+
 export function bindBackButton(show, handler) {
   const tg = telegramApp();
   if (!tg?.BackButton) return () => {};

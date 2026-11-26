@@ -7,8 +7,7 @@ import {
   joinCampaign,
   logAudit,
 } from '../lib/store.js';
-import { normalizeCode, esc } from '../lib/utils.js';
-import { notifyUser } from '../lib/bot/common.js';
+import { normalizeCode } from '../lib/utils.js';
 
 export default async function (input, ctx) {
   const auth = await requireUser(ctx);
@@ -26,12 +25,6 @@ export default async function (input, ctx) {
 
   const member = await joinCampaign(campaign.id, auth.tgId);
   await logAudit(campaign.id, auth.tgId, 'campaign.join', {});
-  if (campaign.organizerId !== auth.tgId) {
-    await notifyUser(
-      campaign.organizerId,
-      `👋 В кампанию «${esc(campaign.title)}» вступил новый участник.`,
-    );
-  }
   return {
     campaignId: campaign.id,
     status: member?.status ?? 'joined',

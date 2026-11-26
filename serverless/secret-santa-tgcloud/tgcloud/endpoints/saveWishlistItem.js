@@ -1,6 +1,8 @@
 import { fail, requireMember } from '../lib/access.js';
+import { MAX_ITEM_COMMENT, MAX_ITEM_TITLE, MAX_URL_LENGTH } from '../lib/config.js';
 import { canEditWishlist } from '../lib/domain/campaign.js';
 import { canAddItem, nextSortOrder, normalizeWishlistInput, WishlistError } from '../lib/domain/wishlist.js';
+import { formatBudget } from '../lib/utils.js';
 import {
   countWishlist,
   createWishlistItem,
@@ -21,10 +23,29 @@ export default async function (input, ctx) {
 
   let value;
   try {
-    value = normalizeWishlistInput(input);
+    value = normalizeWishlistInput(input, {
+      min: auth.campaign.budgetMin,
+      max: auth.campaign.budgetMax,
+    });
   } catch (error) {
     if (error instanceof WishlistError) {
-      fail(error.code, 'Проверьте название, ссылку и цену.', { field: error.details?.field });
+      const messages = {
+        TITLE_EMPTY: 'Укажите название желания.',
+        TITLE_LONG: `Название — не длиннее ${MAX_ITEM_TITLE} символов.`,
+        URL_INVALID: `Ссылка должна начинаться с http:// или https:// и быть короче ${MAX_URL_LENGTH} символов.`,
+        PRICE_INVALID: 'Цена — целое число от 0 до 1 000 000 ₽.',
+        PRICE_ORDER: 'Минимальная цена не может быть больше максимальной.',
+        COMMENT_LONG: `Комментарий — не длиннее ${MAX_ITEM_COMMENT} символов.`,
+      };
+      const message =
+        error.code === 'PRICE_OUT_OF_BUDGET'
+          ? `Цена должна быть в бюджете кампании: ${formatBudget(
+              error.details.min,
+              error.details.max,
+              auth.campaign.currency,
+            )}.`
+          : messages[error.code] ?? 'Проверьте заполненные поля.';
+      fail(error.code, message, { field: error.details?.field });
     }
     throw error;
   }

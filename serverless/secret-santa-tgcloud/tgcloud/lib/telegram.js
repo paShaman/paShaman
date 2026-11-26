@@ -122,6 +122,14 @@ export async function photoDataUrl(fileId) {
   return `data:${mime};base64,${bytesToBase64(bytes)}`;
 }
 
+export async function profilePhotoDataUrl(userId) {
+  const result = await api.getUserProfilePhotos({ user_id: Number(userId), limit: 1 });
+  const photo = result?.photos?.[0];
+  if (!photo || photo.length === 0) return '';
+  const smallest = photo[0];
+  return photoDataUrl(smallest.file_id);
+}
+
 export async function sendBroadcastMessage(chatId, html) {
   try {
     await api.sendMessage({

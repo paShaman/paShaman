@@ -2,12 +2,16 @@
 import { computed, ref } from 'vue';
 import { call } from '../api/client.js';
 import { state, toast } from '../composables/useSession.js';
+import { telegramUser } from '../telegram/webapp.js';
 
 const saving = ref(false);
 const name = ref(state.boot?.user?.name ?? '');
 const error = ref('');
 
 const user = computed(() => state.boot?.user);
+const photoUrl = computed(
+  () => state.boot?.user?.photoUrl || telegramUser()?.photo_url || '',
+);
 const mockMode = computed(() => !window?.Telegram?.WebApp?.initData);
 
 async function save() {
@@ -38,7 +42,10 @@ async function save() {
 
     <div class="card stack">
       <div class="row">
-        <div class="avatar" aria-hidden="true">{{ (user?.name || 'С').slice(0, 1) }}</div>
+        <div class="avatar" aria-hidden="true">
+          <img v-if="photoUrl" :src="photoUrl" :alt="user?.name || 'Вы'" />
+          <template v-else>{{ (user?.name || 'С').slice(0, 1) }}</template>
+        </div>
         <div>
           <p style="font-weight: 700">{{ user?.name || 'Участник' }}</p>
           <p class="small muted">Имя видят участники кампании</p>

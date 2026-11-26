@@ -14,7 +14,7 @@ export function canAcceptRules(campaign, member) {
   return { ok: true };
 }
 
-export function canConfirm({ campaign, member, wishlistCount }) {
+export function canConfirm({ campaign, member, wishlistCount, delivery }) {
   if (!member) return { ok: false, code: 'NOT_MEMBER' };
   if (campaign.status !== 'recruiting') return { ok: false, code: 'CAMPAIGN_LOCKED' };
   if (member.status === 'removed' || member.status === 'declined') {
@@ -26,6 +26,13 @@ export function canConfirm({ campaign, member, wishlistCount }) {
   }
   if (Number(wishlistCount) < 1) {
     return { ok: false, code: 'WISHLIST_EMPTY' };
+  }
+  if (campaign.deliveryMode === 'shipping') {
+    const recipientName = String(delivery?.recipientName ?? '').trim();
+    const address = String(delivery?.address ?? '').trim();
+    if (recipientName.length < 2 || address.length < 5) {
+      return { ok: false, code: 'DELIVERY_REQUIRED' };
+    }
   }
   return { ok: true };
 }

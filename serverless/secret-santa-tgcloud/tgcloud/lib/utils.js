@@ -1,4 +1,4 @@
-import { TZ, TZ_OFFSET } from './config.js';
+import { MAX_URL_LENGTH, TZ, TZ_OFFSET } from './config.js';
 
 export function esc(value) {
   return String(value ?? '')
@@ -161,7 +161,7 @@ export function formatPriceRange(min, max, currency = 'RUB') {
 export function validUrl(value) {
   const text = String(value ?? '').trim();
   if (!text) return true;
-  if (text.length > 500) return false;
+  if (text.length > MAX_URL_LENGTH) return false;
   try {
     const url = new URL(text);
     return url.protocol === 'http:' || url.protocol === 'https:';

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import tree from '../assets/tree-192.png';
 import { call, ApiError } from '../api/client.js';
@@ -10,8 +10,27 @@ const router = useRouter();
 const loading = ref(false);
 const code = ref('');
 const error = ref('');
+const logos = reactive({});
 
 const campaigns = computed(() => state.boot?.campaigns ?? []);
+
+async function loadLogos() {
+  const list = state.boot?.campaigns ?? [];
+  await Promise.all(
+    list
+      .filter((campaign) => campaign.hasLogo)
+      .map(async (campaign) => {
+        try {
+          const result = await call('getCampaignLogo', { campaignId: campaign.id });
+          logos[campaign.id] = result?.photo ?? '';
+        } catch {
+          // без логотипа оставляем стандартную иконку
+        }
+      }),
+  );
+}
+
+onMounted(loadLogos);
 
 function formatDate(value) {
   if (!value) return '—';
@@ -46,6 +65,7 @@ async function refresh() {
   loading.value = true;
   try {
     await refreshBoot();
+    await loadLogos();
     toast('Список обновлён.');
   } catch {
     toast('Не удалось обновить.');
@@ -76,7 +96,8 @@ async function refresh() {
         @click="router.push(`/c/${campaign.id}`)"
       >
         <span class="tile__mark" aria-hidden="true">
-          <img :src="tree" alt="" width="44" height="44" />
+          <img v-if="logos[campaign.id]" :src="logos[campaign.id]" alt="" width="44" height="44" />
+          <img v-else :src="tree" alt="" width="44" height="44" />
         </span>
         <span class="tile__body">
           <span class="tile__title">{{ campaign.title }}</span>

@@ -144,6 +144,7 @@ export async function createCampaign({
   budgetMax,
   currency,
   deliveryMode,
+  logoFileId = '',
   revealSanta,
   organizerId,
   registrationEndsAt,
@@ -163,6 +164,8 @@ export async function createCampaign({
       currency,
       status: 'recruiting',
       deliveryMode,
+      logoFileId,
+      logoVersion: logoFileId ? 1 : 0,
       revealSanta,
       organizerId,
       registrationEndsAt,
@@ -186,6 +189,21 @@ export async function createCampaign({
     })
     .run();
   return getCampaign(id);
+}
+
+export async function setCampaignLogo(campaignId, fileId) {
+  const campaign = await getCampaign(campaignId);
+  if (!campaign) return null;
+  await db
+    .update(campaigns)
+    .set({
+      logoFileId: fileId ?? '',
+      logoVersion: Number(campaign.logoVersion) + 1,
+      updatedAt: new Date(),
+    })
+    .where(eq(campaigns.id, campaign.id))
+    .run();
+  return getCampaign(campaign.id);
 }
 
 export async function updateCampaign(campaignId, patch) {
@@ -272,6 +290,12 @@ export async function getMembership(campaignId, userId) {
       .where(and(eq(memberships.campaignId, cid), eq(memberships.userId, uid)))
       .get()) ?? null
   );
+}
+
+export async function getMembershipById(membershipId) {
+  const id = num(membershipId);
+  if (!id) return null;
+  return (await db.select().from(memberships).where(eq(memberships.id, id)).get()) ?? null;
 }
 
 export async function listMembers(campaignId) {
