@@ -1,0 +1,6 @@
+.tgcloud/
+node_modules/
+miniapp/node_modules/
+miniapp/dist/
+docs/screens/
+*.log

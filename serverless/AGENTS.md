@@ -9,6 +9,7 @@ platform, CLI `@tgcloud/cli`). Проектные детали — в `AGENTS.md
 |-------|---------|
 | `ny2027-tgcloud/` | Telegram Mini App (бот + статический фронтенд) |
 | `vacation-bot/` | Бот учёта отпусков/отсутствий, без Mini App |
+| `secret-santa-tgcloud/` | «Тайный Санта»: бот + Vue Mini App, жеребьёвка и анонимный чат |
 
 ## Как устроен tgcloud-проект
 

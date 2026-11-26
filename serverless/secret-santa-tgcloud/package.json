@@ -1,0 +1,17 @@
+{
+  "name": "secret-santa-tgcloud",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "status": "tgcloud status",
+    "diff": "tgcloud diff",
+    "test": "node --test \"tests/*.test.js\"",
+    "run": "tgcloud run",
+    "build:app": "npm --prefix miniapp run build",
+    "deploy": "npm run build:app && tgcloud push",
+    "migrate": "tgcloud migrate"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "^0.2.0"
+  }
+}
