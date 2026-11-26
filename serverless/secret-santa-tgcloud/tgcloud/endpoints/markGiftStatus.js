@@ -4,7 +4,7 @@ import { setAssignmentGift } from '../lib/store.js';
 import { sendMiniApp } from '../lib/telegram.js';
 
 export default async function (input, ctx) {
-  const auth = await requirePair(ctx, input?.campaignId);
+  const auth = await requirePair(ctx, input?.campaignId, input?.role);
   if (!['drawn', 'gifting'].includes(auth.campaign.status)) {
     fail('CAMPAIGN_CLOSED', 'Кампания уже завершена.');
   }

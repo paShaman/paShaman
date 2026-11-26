@@ -178,7 +178,7 @@ onMounted(load);
       <div class="row">
         <RouterLink
           v-if="data.chatAvailable"
-          :to="`/c/${campaignId}/chat`"
+          :to="`/c/${campaignId}/chat?role=santa`"
           class="btn btn--secondary"
           style="flex: 1"
         >

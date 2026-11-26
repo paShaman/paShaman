@@ -1,23 +1,48 @@
-import { requirePair } from '../lib/access.js';
+import { fail, pairRoles, requireMember } from '../lib/access.js';
 import { getUser } from '../lib/store.js';
 import { displayName } from '../lib/utils.js';
 
 export default async function (input, ctx) {
-  const auth = await requirePair(ctx, input?.campaignId);
-  const other = await getUser(auth.otherUserId);
+  const auth = await requireMember(ctx, input?.campaignId);
+  if (auth.campaign.status === 'cancelled') fail('CAMPAIGN_CANCELLED', 'Кампания отменена.');
+  const pairs = await pairRoles(auth.campaign.id, auth.tgId);
+  if (!pairs.santa && !pairs.recipient) {
+    fail('NO_ASSIGNMENT', 'Для этой кампании у вас нет пары.');
+  }
+
   const reveal = auth.campaign.status === 'completed' && auth.campaign.revealSanta;
+  const build = async (assignment, otherId, role, hideName) => {
+    if (!assignment) return null;
+    const other = await getUser(otherId);
+    return {
+      role,
+      giftStatus: assignment.giftStatus,
+      chatBlocked: Boolean(assignment.chatBlocked),
+      partnerName: hideName ? null : displayName(other),
+      revealAvailable: reveal,
+    };
+  };
+  const [santa, recipient] = await Promise.all([
+    build(pairs.santa, pairs.santa?.receiverId, 'santa', false),
+    build(pairs.recipient, pairs.recipient?.giverId, 'recipient', !reveal),
+  ]);
+  const primary = santa ?? recipient;
+
   return {
-    role: auth.role,
-    giftStatus: auth.assignment.giftStatus,
-    chatBlocked: Boolean(auth.assignment.chatBlocked),
+    role: primary.role,
+    giftStatus: primary.giftStatus,
+    chatBlocked: primary.chatBlocked,
     campaignStatus: auth.campaign.status,
     campaign: {
       id: auth.campaign.id,
       title: auth.campaign.title,
       status: auth.campaign.status,
+      revealSanta: Boolean(auth.campaign.revealSanta),
     },
-    partnerName:
-      auth.role === 'santa' || reveal ? displayName(other) : null,
+    partnerName: primary.partnerName,
     revealAvailable: reveal,
+    roles: { santa: Boolean(santa), recipient: Boolean(recipient) },
+    santa,
+    recipient,
   };
 }

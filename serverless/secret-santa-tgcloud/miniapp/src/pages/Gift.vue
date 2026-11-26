@@ -12,21 +12,37 @@ const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
 
-const steps = computed(() => {
-  const status = data.value?.giftStatus ?? 'pending';
+const santaSide = computed(() => data.value?.santa ?? null);
+const recipientSide = computed(() => data.value?.recipient ?? null);
+const chatAllowed = computed(() =>
+  ['drawn', 'gifting'].includes(data.value?.campaignStatus ?? ''),
+);
+
+const title = computed(() => {
+  const recipient = recipientSide.value;
+  if (recipient) {
+    if (recipient.giftStatus === 'received') return 'Подарок получен';
+    if (recipient.giftStatus === 'sent') return 'Подарок в пути';
+    return 'Ждём подарок';
+  }
+  const santa = santaSide.value;
+  if (santa?.giftStatus === 'received') return 'Подарок доставлен';
+  if (santa?.giftStatus === 'sent') return 'Подарок в пути';
+  return 'Выбираем подарок';
+});
+
+function stepsFor(side) {
+  const status = side?.giftStatus ?? 'pending';
   return [
-    { key: 'pending', label: 'Выбираем подарок', done: true },
+    {
+      key: 'pending',
+      label: side?.role === 'recipient' ? 'Ждём отправки' : 'Выбираем подарок',
+      done: true,
+    },
     { key: 'sent', label: 'Подарок отправлен', done: ['sent', 'received'].includes(status) },
     { key: 'received', label: 'Подарок получен', done: status === 'received' },
   ];
-});
-
-const title = computed(() => {
-  const status = data.value?.giftStatus ?? 'pending';
-  if (status === 'received') return 'Подарок получен';
-  if (status === 'sent') return 'Подарок в пути';
-  return data.value?.role === 'recipient' ? 'Ждём подарок' : 'Выбираем подарок';
-});
+}
 
 async function load() {
   loading.value = true;
@@ -40,10 +56,10 @@ async function load() {
   }
 }
 
-async function mark(status) {
+async function mark(status, role) {
   busy.value = true;
   try {
-    await call('markGiftStatus', { campaignId, status });
+    await call('markGiftStatus', { campaignId, status, role });
     toast(status === 'sent' ? 'Отправка отмечена.' : 'Получение отмечено.');
     await load();
   } catch (e) {
@@ -82,41 +98,34 @@ onMounted(load);
           <span class="muted small">Кампания</span>
           <b>{{ data.campaign.title }}</b>
         </div>
-        <div v-if="data.partnerName" class="row row--between">
-          <span class="muted small">
-            {{ data.role === 'santa' ? 'Получатель' : 'Санта' }}
-          </span>
-          <b>{{ data.partnerName }}</b>
+        <p v-if="data.campaignStatus === 'completed'" class="hint">
+          Кампания завершена. Если Санта разрешил раскрытие, его имя появилось в карточке.
+        </p>
+      </div>
+
+      <section v-if="recipientSide" class="card stack">
+        <div class="row row--between">
+          <h2 class="h2">Мой подарок</h2>
+          <span class="eyebrow">Мне</span>
+        </div>
+        <div class="row row--between">
+          <span class="muted small">Санта</span>
+          <b>{{ recipientSide.partnerName || 'Аноним' }}</b>
         </div>
         <div class="divider" />
         <ol class="steps">
-          <li v-for="step in steps" :key="step.key" class="step" :class="{ 'step--done': step.done }">
+          <li
+            v-for="step in stepsFor(recipientSide)"
+            :key="step.key"
+            class="step"
+            :class="{ 'step--done': step.done }"
+          >
             <span class="step__dot" aria-hidden="true">
               <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
             </span>
             <span>{{ step.label }}</span>
           </li>
         </ol>
-      </div>
-
-      <div v-if="data.role === 'santa'" class="card stack">
-        <h2 class="h2">Отметить отправку</h2>
-        <p class="small muted">
-          Нажмите, когда передадите подарок или отправите его доставкой. Получатель увидит
-          уведомление, но не ваше имя.
-        </p>
-        <button
-          class="btn btn--primary btn--block"
-          type="button"
-          :disabled="busy || data.giftStatus !== 'pending'"
-          @click="mark('sent')"
-        >
-          {{ data.giftStatus === 'pending' ? 'Я отправил(а) подарок' : 'Отправка отмечена' }}
-        </button>
-      </div>
-
-      <div v-else class="card stack">
-        <h2 class="h2">Подарок пришёл?</h2>
         <p class="small muted">
           Отметьте получение, чтобы Санта знал, что всё дошло. Это можно сделать, даже если
           Санта забыл отметить отправку.
@@ -124,30 +133,71 @@ onMounted(load);
         <button
           class="btn btn--primary btn--block"
           type="button"
-          :disabled="busy || data.giftStatus === 'received'"
-          @click="mark('received')"
+          :disabled="busy || recipientSide.giftStatus === 'received'"
+          @click="mark('received', 'recipient')"
         >
-          {{ data.giftStatus === 'received' ? 'Получение отмечено' : 'Я получил(а) подарок' }}
+          {{
+            recipientSide.giftStatus === 'received'
+              ? 'Получение отмечено'
+              : 'Я получил(а) подарок'
+          }}
         </button>
-      </div>
-
-      <div class="row">
         <RouterLink
-          v-if="!data.chatBlocked && data.campaignStatus !== 'completed'"
-          :to="`/c/${campaignId}/chat`"
-          class="btn btn--secondary"
-          style="flex: 1"
+          v-if="chatAllowed && !recipientSide.chatBlocked"
+          :to="`/c/${campaignId}/chat?role=recipient`"
+          class="btn btn--secondary btn--block"
         >
-          Чат
+          Чат с Сантой
         </RouterLink>
-        <RouterLink :to="`/c/${campaignId}`" class="btn btn--secondary" style="flex: 1">
-          В кампанию
-        </RouterLink>
-      </div>
+      </section>
 
-      <p v-if="data.campaignStatus === 'completed'" class="hint">
-        Кампания завершена. Если Санта разрешил раскрытие, его имя появилось в карточке.
-      </p>
+      <section v-if="santaSide" class="card stack">
+        <div class="row row--between">
+          <h2 class="h2">Подарок получателю</h2>
+          <span class="eyebrow">От меня</span>
+        </div>
+        <div v-if="santaSide.partnerName" class="row row--between">
+          <span class="muted small">Получатель</span>
+          <b>{{ santaSide.partnerName }}</b>
+        </div>
+        <div class="divider" />
+        <ol class="steps">
+          <li
+            v-for="step in stepsFor(santaSide)"
+            :key="step.key"
+            class="step"
+            :class="{ 'step--done': step.done }"
+          >
+            <span class="step__dot" aria-hidden="true">
+              <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
+            </span>
+            <span>{{ step.label }}</span>
+          </li>
+        </ol>
+        <p class="small muted">
+          Нажмите, когда передадите подарок или отправите его доставкой. Получатель увидит
+          уведомление, но не ваше имя.
+        </p>
+        <button
+          class="btn btn--primary btn--block"
+          type="button"
+          :disabled="busy || santaSide.giftStatus !== 'pending'"
+          @click="mark('sent', 'santa')"
+        >
+          {{ santaSide.giftStatus === 'pending' ? 'Я отправил(а) подарок' : 'Отправка отмечена' }}
+        </button>
+        <RouterLink
+          v-if="chatAllowed && !santaSide.chatBlocked"
+          :to="`/c/${campaignId}/chat?role=santa`"
+          class="btn btn--secondary btn--block"
+        >
+          Чат с получателем
+        </RouterLink>
+      </section>
+
+      <RouterLink :to="`/c/${campaignId}`" class="btn btn--secondary btn--block">
+        В кампанию
+      </RouterLink>
     </template>
   </div>
 </template>

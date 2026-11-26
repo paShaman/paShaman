@@ -88,16 +88,36 @@ export async function requireRecipient(ctx, campaignId) {
   return { ...auth, assignment, santa };
 }
 
-export async function requirePair(ctx, campaignId) {
+export async function requirePair(ctx, campaignId, role) {
   const auth = await requireMember(ctx, campaignId);
   if (auth.campaign.status === 'cancelled') fail('CAMPAIGN_CANCELLED', 'Кампания отменена.');
-  const asSanta = await getAssignmentForGiver(auth.campaign.id, auth.tgId);
-  if (asSanta) {
-    return { ...auth, assignment: asSanta, role: 'santa', otherUserId: asSanta.receiverId };
+  const wanted = role === 'santa' || role === 'recipient' ? role : null;
+  if (wanted !== 'recipient') {
+    const asSanta = await getAssignmentForGiver(auth.campaign.id, auth.tgId);
+    if (asSanta) {
+      return { ...auth, assignment: asSanta, role: 'santa', otherUserId: asSanta.receiverId };
+    }
   }
-  const asRecipient = await getAssignmentForReceiver(auth.campaign.id, auth.tgId);
-  if (asRecipient) {
-    return { ...auth, assignment: asRecipient, role: 'recipient', otherUserId: asRecipient.giverId };
+  if (wanted !== 'santa') {
+    const asRecipient = await getAssignmentForReceiver(auth.campaign.id, auth.tgId);
+    if (asRecipient) {
+      return {
+        ...auth,
+        assignment: asRecipient,
+        role: 'recipient',
+        otherUserId: asRecipient.giverId,
+      };
+    }
   }
+  if (wanted === 'santa') fail('NOT_SANTA', 'Вам не назначен получатель.');
+  if (wanted === 'recipient') fail('NOT_RECIPIENT', 'Вам не назначен Санта.');
   fail('NO_ASSIGNMENT', 'Для этой кампании у вас нет пары.');
+}
+
+export async function pairRoles(campaignId, userId) {
+  const [santa, recipient] = await Promise.all([
+    getAssignmentForGiver(campaignId, userId),
+    getAssignmentForReceiver(campaignId, userId),
+  ]);
+  return { santa, recipient };
 }

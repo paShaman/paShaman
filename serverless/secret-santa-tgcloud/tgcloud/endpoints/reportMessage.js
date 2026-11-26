@@ -4,7 +4,7 @@ import { getChatMessage, reportChatMessage } from '../lib/store.js';
 import { notifyNewReport } from '../lib/bot/moderation.js';
 
 export default async function (input, ctx) {
-  const auth = await requirePair(ctx, input?.campaignId);
+  const auth = await requirePair(ctx, input?.campaignId, input?.role);
   const message = await getChatMessage(input?.messageId);
   if (!message || Number(message.assignmentId) !== Number(auth.assignment.id)) {
     fail('NOT_FOUND', 'Сообщение не найдено.');

@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
@@ -8,6 +8,8 @@ import AppIcon from '../components/ui/AppIcon.vue';
 const route = useRoute();
 const campaignId = Number(route.params.id);
 const messages = ref([]);
+const roles = ref([]);
+const role = ref(route.query.role === 'santa' ? 'santa' : 'recipient');
 const chatBlocked = ref(false);
 const campaignStatus = ref('');
 const loading = ref(true);
@@ -16,6 +18,13 @@ const text = ref('');
 const sending = ref(false);
 const listRef = ref(null);
 let timer = null;
+let switched = false;
+
+const title = computed(() => (role.value === 'santa' ? 'Чат с получателем' : 'Санта на связи'));
+const placeholder = computed(() =>
+  role.value === 'santa' ? 'Написать получателю…' : 'Написать Санте…',
+);
+const roleLabel = (value) => (value === 'recipient' ? 'Мой Санта' : 'Мой получатель');
 
 function scrollBottom() {
   nextTick(() => {
@@ -35,9 +44,16 @@ async function load(silent = false) {
     const lastSeen = messages.value.length ? messages.value[messages.value.length - 1].id : null;
     const result = await call('getThread', {
       campaignId,
+      role: role.value,
       markRead: typeof document !== 'undefined' && document.visibilityState === 'visible',
       ...(lastSeen ? { upToId: lastSeen } : {}),
     });
+    roles.value = result.roles ?? [];
+    if (!roles.value.includes(role.value) && roles.value.length && !switched) {
+      switched = true;
+      role.value = roles.value[0];
+      return load(silent);
+    }
     mergeMessages(result.messages ?? []);
     chatBlocked.value = Boolean(result.chatBlocked);
     campaignStatus.value = result.campaignStatus;
@@ -48,6 +64,15 @@ async function load(silent = false) {
   } finally {
     if (!silent) loading.value = false;
   }
+}
+
+function switchRole(next) {
+  if (next === role.value) return;
+  role.value = next;
+  messages.value = [];
+  text.value = '';
+  error.value = '';
+  load();
 }
 
 async function send() {
@@ -61,6 +86,7 @@ async function send() {
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const result = await call('sendChatMessage', {
       campaignId,
+      role: role.value,
       text: body,
       clientMsgId: id,
     });
@@ -81,7 +107,12 @@ async function report(message) {
   }
   if (!window.confirm('Пожаловаться на сообщение организатору?')) return;
   try {
-    await call('reportMessage', { campaignId, messageId: message.id, reason: 'Жалоба из чата' });
+    await call('reportMessage', {
+      campaignId,
+      role: role.value,
+      messageId: message.id,
+      reason: 'Жалоба из чата',
+    });
     message.reported = true;
     toast('Жалоба отправлена. Организатор разберётся.');
   } catch (e) {
@@ -113,10 +144,25 @@ onUnmounted(() => {
   <div class="page chat-page">
     <div>
       <p class="eyebrow">Анонимный чат</p>
-      <h1 class="display" style="font-size: clamp(23px, 6vw, 28px)">Санта на связи</h1>
+      <h1 class="display" style="font-size: clamp(23px, 6vw, 28px)">{{ title }}</h1>
       <p class="small muted" style="margin-top: 6px">
         Не раскрывайте себя до завершения кампании. Организатор видит только жалобы.
       </p>
+    </div>
+
+    <div v-if="roles.length > 1" class="role-tabs" role="tablist" aria-label="Кому пишем">
+      <button
+        v-for="item in roles"
+        :key="item"
+        class="role-tabs__item"
+        :class="{ 'role-tabs__item--active': item === role }"
+        type="button"
+        role="tab"
+        :aria-selected="item === role"
+        @click="switchRole(item)"
+      >
+        {{ roleLabel(item) }}
+      </button>
     </div>
 
     <div v-if="loading" class="stack">
@@ -173,7 +219,7 @@ onUnmounted(() => {
           rows="1"
           maxlength="1000"
           :disabled="chatBlocked || campaignStatus === 'completed'"
-          placeholder="Написать Санте…"
+          :placeholder="placeholder"
           @keydown.enter.exact.prevent="send"
         />
         <button
@@ -189,6 +235,28 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.role-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper-raised);
+}
+.role-tabs__item {
+  flex: 1;
+  min-height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+.role-tabs__item--active {
+  background: var(--pine-700);
+  color: #fff8f0;
+}
 .chat-page {
   min-height: calc(100dvh - 90px);
 }

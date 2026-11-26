@@ -57,6 +57,7 @@ const state = {
     },
   ],
   assignment: {
+    giver: { name: 'Виктор' },
     receiver: { name: 'Борис' },
     delivery: {
       method: 'shipping',
@@ -280,6 +281,16 @@ export async function mockCall(name, input = {}) {
   }
   if (name === 'getAssignment') return assignmentPayload();
   if (name === 'getGiftStatus') {
+    const reveal = state.campaign.status === 'completed';
+    const side = (role, partnerName) => ({
+      role,
+      giftStatus: state.assignment.giftStatus,
+      chatBlocked: false,
+      partnerName,
+      revealAvailable: reveal,
+    });
+    const santa = side('santa', state.assignment.receiver.name);
+    const recipient = side('recipient', reveal ? state.assignment.giver.name : null);
     return {
       role: 'santa',
       giftStatus: state.assignment.giftStatus,
@@ -289,15 +300,20 @@ export async function mockCall(name, input = {}) {
         id: state.campaign.id,
         title: state.campaign.title,
         status: state.campaign.status,
+        revealSanta: true,
       },
-      partnerName: state.assignment.receiver.name,
-      revealAvailable: false,
+      partnerName: santa.partnerName,
+      revealAvailable: reveal,
+      roles: { santa: true, recipient: true },
+      santa,
+      recipient,
     };
   }
   if (name === 'setItemClaimed') return { claimed: Boolean(input.claimed) };
   if (name === 'getThread') {
     return {
-      role: 'santa',
+      role: input.role === 'recipient' ? 'recipient' : 'santa',
+      roles: ['santa', 'recipient'],
       chatBlocked: state.assignment.chatBlocked,
       campaignStatus: state.campaign.status,
       messages: state.messages.map((message) => ({ ...message })),
