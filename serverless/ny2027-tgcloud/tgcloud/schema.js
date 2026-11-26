@@ -46,6 +46,11 @@ export const broadcastDrafts = table('broadcast_drafts', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const settings = table('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull().default(''),
+});
+
 export const tickets = table('tickets', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   fileId: text('file_id').notNull(),

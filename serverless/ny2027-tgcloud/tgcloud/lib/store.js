@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { and, asc, desc, eq } from 'sdk/db';
-import { broadcastDrafts, registrations, sessions, tickets, users } from '../schema.js';
+import { broadcastDrafts, registrations, sessions, settings, tickets, users } from '../schema.js';
 import { SESSION_TTL, SIZES } from './config.js';
 import { nowMoscow } from './utils.js';
 
@@ -337,6 +337,36 @@ export async function markUsersDelivery(delivery) {
 }
 
 // ---------------------------------------------------------------------------
+// Настройки
+// ---------------------------------------------------------------------------
+
+const TICKETS_ENABLED_KEY = 'tickets_enabled';
+
+export async function getSetting(key, fallback = '') {
+  const row = await db.select().from(settings).where(eq(settings.key, String(key))).get();
+  return row ? String(row.value) : fallback;
+}
+
+export async function setSetting(key, value) {
+  const keyName = String(key);
+  const stringValue = String(value ?? '');
+  await db
+    .insert(settings)
+    .values({ key: keyName, value: stringValue })
+    .onConflictDoUpdate({ target: settings.key, set: { value: stringValue } })
+    .run();
+}
+
+// Выдача билетов обычным пользователям: по умолчанию выключена (решает админ).
+export async function isTicketsEnabled() {
+  return (await getSetting(TICKETS_ENABLED_KEY, '0')) === '1';
+}
+
+export async function setTicketsEnabled(enabled) {
+  await setSetting(TICKETS_ENABLED_KEY, enabled ? '1' : '0');
+}
+
+// ---------------------------------------------------------------------------
 // Билеты на матч
 // ---------------------------------------------------------------------------
 
@@ -366,14 +396,19 @@ export async function countTickets(onlyUnused = true) {
   return db.$count(tickets);
 }
 
+export async function findUserTicket(chatId) {
+  const id = Number(chatId);
+  return db.select().from(tickets)
+    .where(and(eq(tickets.used, true), eq(tickets.usedByChatId, id)))
+    .limit(1)
+    .get();
+}
+
 export async function issueTicket(chatId) {
   const id = Number(chatId);
 
   // Пользователь уже получал билет — вернём существующий
-  const existing = await db.select().from(tickets)
-    .where(and(eq(tickets.used, true), eq(tickets.usedByChatId, id)))
-    .limit(1)
-    .get();
+  const existing = await findUserTicket(id);
   if (existing) return existing;
 
   // Выдаём первый свободный билет и помечаем использованным

@@ -99,29 +99,51 @@ export function webBtn(text, url) {
   return { text, web_app: { url } };
 }
 
-export function registerKeyboard() {
-  return inline([[btn('📝 Заполнить анкету', 'reg:start')]]);
+function ticketButton() {
+  return btn('🎫 Получить билет', 'reg:ticket');
 }
 
-export function welcomeKeyboard(registered) {
+export function registerKeyboard(ticketEnabled = false) {
+  const rows = [[btn('📝 Заполнить анкету', 'reg:start')]];
+  if (ticketEnabled) rows.push([ticketButton()]);
+  return inline(rows);
+}
+
+export function welcomeKeyboard(registered, ticketEnabled = false) {
   const gameRow = [webBtn('🎮 Сыграть в игру', GAME_URL)];
   if (registered) {
-    return inline([
+    const rows = [
       [btn('✏️ Изменить данные', 'reg:edit'), btn('📋 Моя анкета', 'reg:my')],
       [btn('🗑 Удалить анкету', 'reg:delete')],
-      gameRow,
-    ]);
+    ];
+    if (ticketEnabled) rows.push([ticketButton()]);
+    rows.push(gameRow);
+    return inline(rows);
   }
-  return inline([
-    [btn('📝 Заполнить анкету', 'reg:start')],
-    gameRow,
-  ]);
+  const rows = [[btn('📝 Заполнить анкету', 'reg:start')]];
+  if (ticketEnabled) rows.push([ticketButton()]);
+  rows.push(gameRow);
+  return inline(rows);
 }
 
-export function editKeyboard() {
-  return inline([
+export function editKeyboard(ticketEnabled = false) {
+  const rows = [
     [btn('✏️ Изменить данные', 'reg:edit')],
     [btn('🗑 Удалить анкету', 'reg:delete')],
+  ];
+  if (ticketEnabled) rows.push([ticketButton()]);
+  return inline(rows);
+}
+
+export function adminTicketKeyboard(enabled) {
+  return inline([
+    [
+      btn(
+        enabled ? '⛔️ Отключить для пользователей' : '✅ Включить для пользователей',
+        'tk:toggle',
+      ),
+    ],
+    [btn('🔄 Обновить', 'tk:menu')],
   ]);
 }
 

@@ -8,6 +8,7 @@ import {
 import {
   adminDeleteAllKeyboard,
   adminDeleteKeyboard,
+  adminTicketKeyboard,
   broadcastConfirmKeyboard,
   buildCsv,
   btn,
@@ -47,8 +48,10 @@ import {
   deleteAllRecords,
   deleteRecord,
   findRecord,
+  findUserTicket,
   getBroadcast,
   getSession,
+  isTicketsEnabled,
   issueTicket,
   loadArchive,
   loadRegistrations,
@@ -57,6 +60,7 @@ import {
   saveRecord,
   setBroadcast,
   setSession,
+  setTicketsEnabled,
   statsData,
   ticketStats,
   addTicket,
@@ -79,6 +83,7 @@ const COMMANDS = new Set([
   '/setcommands',
   '/ticket',
   '/tickets',
+  '/toggleticket',
   '/cleartickets',
   '/resettickets',
   '/game',
@@ -151,25 +156,11 @@ export async function handleMessage(message) {
   }
 
   if (command === '/ticket') {
-    if (!isAdmin(userId)) {
-      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+    if (!(await canGetTicket(userId))) {
+      await sendHtml(chatId, TICKETS_CLOSED);
       return;
     }
-    const ticket = await issueTicket(userId);
-    if (!ticket) {
-      await sendHtml(chatId, 'Извините, билеты на матч закончились. Обратитесь к организатору.');
-      return;
-    }
-    try {
-      await api.sendDocument({
-        chat_id: chatId,
-        document: ticket.fileId,
-        caption: `🎫 Ваш билет на матч\n${esc(ticket.fileName)}`,
-      });
-    } catch (error) {
-      console.warn(`sendDocument ticket failed: ${error}`);
-      await sendHtml(chatId, 'Не удалось отправить билет. Попробуйте позже.');
-    }
+    await sendTicket(chatId, userId);
     return;
   }
 
@@ -178,11 +169,16 @@ export async function handleMessage(message) {
       await sendHtml(chatId, '⛔ Команда доступна только администратору.');
       return;
     }
-    const stats = await ticketStats();
-    await sendHtml(
-      chatId,
-      `🎫 <b>Билеты на матч</b>\n\nВсего: <b>${stats.total}</b>\nВыдано: <b>${stats.used}</b>\nОсталось: <b>${stats.unused}</b>`,
-    );
+    await showTicketPanel(chatId, 0);
+    return;
+  }
+
+  if (command === '/toggleticket') {
+    if (!isAdmin(userId)) {
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    await toggleTickets(chatId, userId);
     return;
   }
 
@@ -284,13 +280,16 @@ export async function handleCallback(callbackQuery) {
   const chatId = String(chat.id ?? userId);
   const messageId = Number(message.message_id ?? 0);
 
-  await answerCallback(callbackId);
+  const parts = data.split(':');
+  const scope = parts[0] ?? '';
+
+  // Для переключателя билетов ответ даём после записи настройки (с текстом-подсказкой).
+  if (!(scope === 'tk' && parts[1] === 'toggle')) {
+    await answerCallback(callbackId);
+  }
   if (!userId || !chatId) return;
 
   await rememberUser(chatId, from);
-
-  const parts = data.split(':');
-  const scope = parts[0] ?? '';
 
   if (scope === 'bc') {
     if (!isAdmin(userId)) {
@@ -333,6 +332,20 @@ export async function handleCallback(callbackQuery) {
     return;
   }
 
+  if (scope === 'tk') {
+    if (!isAdmin(userId)) {
+      await answerCallback(callbackId);
+      await sendHtml(chatId, '⛔ Команда доступна только администратору.');
+      return;
+    }
+    if ((parts[1] ?? '') === 'toggle') {
+      await toggleTickets(chatId, userId, callbackId);
+      return;
+    }
+    await showTicketPanel(chatId, messageId);
+    return;
+  }
+
   if (scope === 'game') {
     const sent = await sendGame(chatId);
     if (!sent) {
@@ -354,6 +367,13 @@ export async function handleCallback(callbackQuery) {
     case 'my':
       await cmdMy(chatId, userId);
       return;
+    case 'ticket':
+      if (!(await canGetTicket(userId))) {
+        await sendHtml(chatId, TICKETS_CLOSED);
+        return;
+      }
+      await sendTicket(chatId, userId);
+      return;
     case 'size':
       await chooseSize(chatId, userId, parts[2] ?? '', messageId);
       return;
@@ -374,6 +394,78 @@ export async function handleCallback(callbackQuery) {
       await editText(chatId, messageId, '❌ Заполнение отменено.');
       return;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Билеты на матч
+// ---------------------------------------------------------------------------
+
+const TICKETS_CLOSED =
+  '🎫 Получение билетов на матч сейчас закрыто. Следите за сообщениями организаторов.';
+
+async function canGetTicket(userId) {
+  if (isAdmin(userId)) return true;
+  if (await isTicketsEnabled()) return true;
+  // Уже выданный билет пользователь может запросить повторно в любой момент.
+  return Boolean(await findUserTicket(userId));
+}
+
+async function sendTicket(chatId, userId) {
+  const ticket = await issueTicket(userId);
+  if (!ticket) {
+    await sendHtml(chatId, 'Извините, билеты на матч закончились. Обратитесь к организатору.');
+    return;
+  }
+  try {
+    await api.sendDocument({
+      chat_id: chatId,
+      document: ticket.fileId,
+      caption: `🎫 Ваш билет на матч\n${esc(ticket.fileName)}`,
+    });
+  } catch (error) {
+    console.warn(`sendDocument ticket failed: ${error}`);
+    await sendHtml(chatId, 'Не удалось отправить билет. Попробуйте позже.');
+  }
+}
+
+async function ticketPanelHtml() {
+  const stats = await ticketStats();
+  const enabled = await isTicketsEnabled();
+  return [
+    '🎫 <b>Билеты на матч</b>',
+    '',
+    `Всего: <b>${stats.total}</b>`,
+    `Выдано: <b>${stats.used}</b>`,
+    `Осталось: <b>${stats.unused}</b>`,
+    '',
+    `Выдача пользователям: ${enabled ? '✅ <b>включена</b>' : '❌ <b>отключена</b>'}`,
+  ].join('\n');
+}
+
+async function showTicketPanel(chatId, messageId) {
+  const html = await ticketPanelHtml();
+  const keyboard = adminTicketKeyboard(await isTicketsEnabled());
+
+  if (messageId) {
+    try {
+      if (await editText(chatId, messageId, html, 'HTML', keyboard)) return;
+    } catch (error) {
+      console.warn(`showTicketPanel edit failed: ${error}`);
+    }
+  }
+
+  await sendHtml(chatId, html, keyboard);
+}
+
+async function toggleTickets(chatId, adminId, callbackId = '') {
+  const enabled = !(await isTicketsEnabled());
+  await setTicketsEnabled(enabled);
+  await setBotCommands(enabled);
+  console.log(`Билеты для пользователей: ${enabled ? 'включены' : 'отключены'} (админ ${adminId})`);
+
+  await answerCallback(callbackId, enabled ? '✅ Выдача включена' : '⛔️ Выдача отключена');
+
+  await sendHtml(chatId, await ticketPanelHtml(), adminTicketKeyboard(enabled));
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +592,11 @@ async function finishRegistration(chatId, userId, from, messageId) {
   if (!session) {
     const record = await findRecord(userId);
     if (record) {
-      await sendHtml(chatId, `✅ Вы уже заполнили анкету.\n\n${recordSummaryHtml(record)}`, editKeyboard());
+      await sendHtml(
+        chatId,
+        `✅ Вы уже заполнили анкету.\n\n${recordSummaryHtml(record)}`,
+        editKeyboard(await isTicketsEnabled()),
+      );
     } else {
       await sendHtml(chatId, 'Анкета устарела. Начните заново: /start');
     }
@@ -526,7 +622,7 @@ async function finishRegistration(chatId, userId, from, messageId) {
   const record = await saveRecord(userId, from, fio, company, size);
   await clearSession(userId);
   await editText(chatId, messageId, '✅ Анкета отправлена.');
-  await sendHtml(chatId, successHtml(record), editKeyboard());
+  await sendHtml(chatId, successHtml(record), editKeyboard(await isTicketsEnabled()));
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +634,7 @@ async function cmdStart(chatId, userId) {
   await clearBroadcast(userId);
 
   const record = await findRecord(userId);
-  const keyboard = welcomeKeyboard(Boolean(record));
+  const keyboard = welcomeKeyboard(Boolean(record), await isTicketsEnabled());
   await sendWelcome(chatId, Boolean(record), keyboard);
 
   if (record) {
@@ -551,6 +647,7 @@ async function cmdHelp(chatId, userId) {
     '🐐 <b>Анкета на корпоратив</b>\n\n' +
     '/start — приглашение и анкета\n' +
     '/my — моя анкета\n' +
+    '/ticket — получить билет на матч\n' +
     '/game — новогодняя мини-игра\n' +
     '/cancel — отменить заполнение\n' +
     '/id — мой Telegram ID';
@@ -558,8 +655,11 @@ async function cmdHelp(chatId, userId) {
   let keyboard = null;
   if (isAdmin(userId)) {
     text +=
-      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/ticket — выдать билет на матч\n/tickets — статистика билетов\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
-    keyboard = inline([[btn('✉️ Рассылка', 'bc:start')]]);
+      '\n\n<b>Админ:</b>\n/stats — статистика\n/list — список\n/export — CSV для Excel\n/broadcast — рассылка\n/delete &lt;номер|ID&gt; — удалить одну анкету\n/deleteall — удалить все анкеты\n/setcommands — обновить меню команд\n/ticket — получить билет на матч для себя\n/tickets — статистика и настройка билетов\n/toggleticket — включить/отключить выдачу билетов пользователям\n/cleartickets — удалить все билеты\n/resettickets — вернуть билеты в свободное состояние';
+    keyboard = inline([
+      [btn('✉️ Рассылка', 'bc:start')],
+      [btn('🎫 Билеты и доступ', 'tk:menu')],
+    ]);
   }
 
   await sendHtml(chatId, text, keyboard);
@@ -578,11 +678,13 @@ async function cmdSetCommands(chatId, userId) {
     return;
   }
 
-  const ok = await setBotCommands();
+  const ticketEnabled = await isTicketsEnabled();
+  const ok = await setBotCommands(ticketEnabled);
+  const ticketMenu = ticketEnabled ? ', /ticket' : '';
   await sendHtml(
     chatId,
     ok
-      ? '✅ Меню команд обновлено: /start, /my, /help, /cancel.'
+      ? `✅ Меню команд обновлено: /start, /my${ticketMenu}, /game, /help, /cancel.`
       : 'Не удалось обновить меню команд. Проверьте логи.',
   );
 }
@@ -593,11 +695,15 @@ async function cmdMy(chatId, userId) {
     await sendHtml(
       chatId,
       'Вы ещё не заполнили анкету.\n\nНажмите кнопку ниже или отправьте /start.',
-      registerKeyboard(),
+      registerKeyboard(await isTicketsEnabled()),
     );
     return;
   }
-  await sendHtml(chatId, `📋 <b>Ваша анкета</b>\n\n${recordSummaryHtml(record)}`, editKeyboard());
+  await sendHtml(
+    chatId,
+    `📋 <b>Ваша анкета</b>\n\n${recordSummaryHtml(record)}`,
+    editKeyboard(await isTicketsEnabled()),
+  );
 }
 
 async function cmdStats(chatId, userId) {
@@ -671,7 +777,11 @@ async function cmdExport(chatId, userId) {
 async function confirmDelete(chatId, userId) {
   const record = await findRecord(userId);
   if (!record) {
-    await sendHtml(chatId, 'Активной анкеты нет — удалять нечего.', registerKeyboard());
+    await sendHtml(
+      chatId,
+      'Активной анкеты нет — удалять нечего.',
+      registerKeyboard(await isTicketsEnabled()),
+    );
     return;
   }
 
@@ -687,21 +797,25 @@ async function confirmDelete(chatId, userId) {
 async function deleteApplication(chatId, userId, messageId) {
   const deleted = await deleteRecord(userId);
 
+  const ticketEnabled = await isTicketsEnabled();
+
   if (!deleted) {
     const edited = await editText(
       chatId,
       messageId,
       'Активной анкеты уже нет.',
       undefined,
-      registerKeyboard(),
+      registerKeyboard(ticketEnabled),
     );
-    if (!edited) await sendHtml(chatId, 'Активной анкеты уже нет.', registerKeyboard());
+    if (!edited) {
+      await sendHtml(chatId, 'Активной анкеты уже нет.', registerKeyboard(ticketEnabled));
+    }
     return;
   }
 
   await clearSession(userId);
   await editText(chatId, messageId, '🗑 <b>Анкета удалена.</b>', 'HTML');
-  await sendHtml(chatId, 'Вы можете заполнить анкету заново:', registerKeyboard());
+  await sendHtml(chatId, 'Вы можете заполнить анкету заново:', registerKeyboard(ticketEnabled));
 }
 
 // ---------------------------------------------------------------------------

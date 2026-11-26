@@ -66,10 +66,12 @@ export async function editText(chatId, messageId, text, parseMode, keyboard) {
   }
 }
 
-export async function answerCallback(callbackId) {
+export async function answerCallback(callbackId, text) {
   if (!callbackId) return;
+  const params = { callback_query_id: callbackId };
+  if (text) params.text = String(text).slice(0, 200);
   try {
-    await api.answerCallbackQuery({ callback_query_id: callbackId });
+    await api.answerCallbackQuery(params);
   } catch (error) {
     if (!(error instanceof BotApiError)) throw error;
     console.warn(`answerCallbackQuery failed: ${error.code} ${error.description}`);
@@ -77,17 +79,22 @@ export async function answerCallback(callbackId) {
 }
 
 // Меню «/» в Telegram — те же команды, что в PHP-версии.
-export async function setBotCommands() {
+export async function setBotCommands(ticketEnabled = false) {
+  const commands = [
+    { command: 'start', description: 'Приглашение и анкета' },
+    { command: 'my', description: 'Моя анкета' },
+  ];
+  if (ticketEnabled) {
+    commands.push({ command: 'ticket', description: 'Билет на матч' });
+  }
+  commands.push(
+    { command: 'game', description: 'Мини-игра «Новогодний заезд»' },
+    { command: 'help', description: 'Помощь' },
+    { command: 'cancel', description: 'Отменить заполнение' },
+  );
+
   try {
-    await api.setMyCommands({
-      commands: [
-        { command: 'start', description: 'Приглашение и анкета' },
-        { command: 'my', description: 'Моя анкета' },
-        { command: 'game', description: 'Мини-игра «Новогодний заезд»' },
-        { command: 'help', description: 'Помощь' },
-        { command: 'cancel', description: 'Отменить заполнение' },
-      ],
-    });
+    await api.setMyCommands({ commands });
     return true;
   } catch (error) {
     console.warn(
