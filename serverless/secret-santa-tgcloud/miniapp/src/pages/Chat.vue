@@ -189,26 +189,27 @@ onUnmounted(() => {
         <div v-if="messages.length === 0" class="empty">
           <p class="small">Сообщений пока нет. Напишите первым — это анонимно.</p>
         </div>
-        <div
-          v-for="message in messages"
-          :key="message.id"
-          class="bubble"
-          :class="{ 'bubble--mine': message.mine }"
-        >
-          <p class="bubble__text">{{ message.text }}</p>
-          <div class="bubble__meta">
-            <span>{{ time(message.createdAt) }}</span>
-            <button
-              v-if="!message.mine"
-              class="bubble__report"
-              type="button"
-              :aria-label="'Пожаловаться на сообщение'"
-              @click="report(message)"
-            >
-              <AppIcon name="flag" :size="11" :stroke-width="2.4" />
-            </button>
+        <template v-for="message in messages" :key="message.id">
+          <div v-if="message.system" class="thread__system" role="status">
+            <span>{{ message.text }}</span>
+            <span class="thread__system-time">{{ time(message.createdAt) }}</span>
           </div>
-        </div>
+          <div v-else class="bubble" :class="{ 'bubble--mine': message.mine }">
+            <p class="bubble__text">{{ message.text }}</p>
+            <div class="bubble__meta">
+              <span>{{ time(message.createdAt) }}</span>
+              <button
+                v-if="!message.mine"
+                class="bubble__report"
+                type="button"
+                :aria-label="'Пожаловаться на сообщение'"
+                @click="report(message)"
+              >
+                <AppIcon name="flag" :size="11" :stroke-width="2.4" />
+              </button>
+            </div>
+          </div>
+        </template>
       </div>
 
       <p v-if="chatBlocked" class="error" role="status">
@@ -281,6 +282,24 @@ onUnmounted(() => {
   line-height: 1;
   display: inline-grid;
   place-items: center;
+}
+.thread__system {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 2px auto;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: var(--paper-sunken);
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: center;
+}
+.thread__system-time {
+  font-size: 10px;
+  opacity: 0.7;
 }
 .chat-page {
   min-height: calc(100dvh - 90px);

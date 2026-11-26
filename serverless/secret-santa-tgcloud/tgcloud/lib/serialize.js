@@ -112,9 +112,11 @@ export function serializeItem(item, { claimed = false } = {}) {
 }
 
 export function serializeThreadMessage(message, viewerId) {
+  const system = message.senderRole === 'system';
   return {
     id: message.id,
-    mine: Number(message.senderUserId) === Number(viewerId),
+    system,
+    mine: !system && Number(message.senderUserId) === Number(viewerId),
     text: message.text,
     createdAt: iso(message.createdAt),
     readAt: iso(message.readAt),

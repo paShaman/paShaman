@@ -286,6 +286,7 @@ export async function mockCall(name, input = {}) {
       role,
       giftStatus: state.assignment.giftStatus,
       chatBlocked: false,
+      deliveryMethod: state.assignment.delivery?.method ?? null,
       partnerName,
       revealAvailable: reveal,
     });
@@ -342,7 +343,20 @@ export async function mockCall(name, input = {}) {
   if (name === 'reportMessage') return { ok: true };
   if (name === 'markThreadRead') return { ok: true };
   if (name === 'markGiftStatus') {
-    state.assignment.giftStatus = input.status;
+    if (state.assignment.delivery?.method !== 'shipping') {
+      fail('STATUS_NOT_REQUIRED', 'Для личной передачи статусы не нужны.');
+    }
+    if (state.assignment.giftStatus !== input.status) {
+      state.assignment.giftStatus = input.status;
+      state.messages.push({
+        id: state.messages.length + 1,
+        system: true,
+        mine: false,
+        text: input.status === 'sent' ? '🎁 Подарок отправлен' : '✅ Подарок получен',
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      });
+    }
     return { status: input.status };
   }
   if (name === 'updateProfile') return { profile: { name: input.firstName || demoUser.name, lang: 'ru' } };

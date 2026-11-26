@@ -1,5 +1,5 @@
 import { fail, pairRoles, requireMember } from '../lib/access.js';
-import { getUser } from '../lib/store.js';
+import { getDelivery, getUser } from '../lib/store.js';
 import { displayName } from '../lib/utils.js';
 
 export default async function (input, ctx) {
@@ -13,11 +13,17 @@ export default async function (input, ctx) {
   const reveal = auth.campaign.status === 'completed' && auth.campaign.revealSanta;
   const build = async (assignment, otherId, role, hideName) => {
     if (!assignment) return null;
-    const other = await getUser(otherId);
+    const [other, delivery] = await Promise.all([
+      getUser(otherId),
+      getDelivery(auth.campaign.id, assignment.receiverId),
+    ]);
+    const deliveryMethod =
+      delivery?.method ?? (auth.campaign.deliveryMode === 'shipping' ? 'shipping' : null);
     return {
       role,
       giftStatus: assignment.giftStatus,
       chatBlocked: Boolean(assignment.chatBlocked),
+      deliveryMethod,
       partnerName: hideName ? null : displayName(other),
       revealAvailable: reveal,
     };

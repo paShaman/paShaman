@@ -23,16 +23,24 @@ const chatAllowed = computed(() =>
 
 const title = computed(() => {
   const recipient = recipientSide.value;
-  if (recipient) {
-    if (recipient.giftStatus === 'received') return 'Подарок получен';
-    if (recipient.giftStatus === 'sent') return 'Подарок в пути';
+  const santa = santaSide.value;
+  const shippedRecipient = recipient?.deliveryMethod === 'shipping' ? recipient : null;
+  const shippedSanta = santa?.deliveryMethod === 'shipping' ? santa : null;
+  const tracked = shippedRecipient ?? shippedSanta;
+  if (!tracked) return 'Подарки при встрече';
+  if (tracked === shippedRecipient) {
+    if (tracked.giftStatus === 'received') return 'Подарок получен';
+    if (tracked.giftStatus === 'sent') return 'Подарок в пути';
     return 'Ждём подарок';
   }
-  const santa = santaSide.value;
-  if (santa?.giftStatus === 'received') return 'Подарок доставлен';
-  if (santa?.giftStatus === 'sent') return 'Подарок в пути';
+  if (tracked.giftStatus === 'received') return 'Подарок доставлен';
+  if (tracked.giftStatus === 'sent') return 'Подарок в пути';
   return 'Выбираем подарок';
 });
+
+function isShipping(side) {
+  return side?.deliveryMethod === 'shipping';
+}
 
 function stepsFor(side) {
   const status = side?.giftStatus ?? 'pending';
@@ -60,6 +68,11 @@ async function load() {
 }
 
 async function mark(status, role) {
+  const question =
+    status === 'sent'
+      ? 'Подтвердить отправку подарка? Получатель получит уведомление и сообщение в чате.'
+      : 'Подтвердить получение подарка? Отменить это действие нельзя.';
+  if (!window.confirm(question)) return;
   busy.value = true;
   try {
     await call('markGiftStatus', { campaignId, status, role });
@@ -115,36 +128,41 @@ onMounted(load);
           <span class="muted small">Санта</span>
           <b>{{ recipientSide.partnerName || 'Аноним' }}</b>
         </div>
-        <div class="divider" />
-        <ol class="steps">
-          <li
-            v-for="step in stepsFor(recipientSide)"
-            :key="step.key"
-            class="step"
-            :class="{ 'step--done': step.done }"
+        <template v-if="isShipping(recipientSide)">
+          <div class="divider" />
+          <ol class="steps">
+            <li
+              v-for="step in stepsFor(recipientSide)"
+              :key="step.key"
+              class="step"
+              :class="{ 'step--done': step.done }"
+            >
+              <span class="step__dot" aria-hidden="true">
+                <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
+              </span>
+              <span>{{ step.label }}</span>
+            </li>
+          </ol>
+          <p class="small muted">
+            Отметьте получение, чтобы Санта знал, что всё дошло. Это можно сделать, даже если
+            Санта забыл отметить отправку.
+          </p>
+          <button
+            class="btn btn--primary btn--block"
+            type="button"
+            :disabled="busy || recipientSide.giftStatus === 'received'"
+            @click="mark('received', 'recipient')"
           >
-            <span class="step__dot" aria-hidden="true">
-              <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
-            </span>
-            <span>{{ step.label }}</span>
-          </li>
-        </ol>
-        <p class="small muted">
-          Отметьте получение, чтобы Санта знал, что всё дошло. Это можно сделать, даже если
-          Санта забыл отметить отправку.
+            {{
+              recipientSide.giftStatus === 'received'
+                ? 'Получение отмечено'
+                : 'Я получил(а) подарок'
+            }}
+          </button>
+        </template>
+        <p v-else class="small muted">
+          Подарок передаётся лично — статусы не нужны. Договоритесь о встрече в чате.
         </p>
-        <button
-          class="btn btn--primary btn--block"
-          type="button"
-          :disabled="busy || recipientSide.giftStatus === 'received'"
-          @click="mark('received', 'recipient')"
-        >
-          {{
-            recipientSide.giftStatus === 'received'
-              ? 'Получение отмечено'
-              : 'Я получил(а) подарок'
-          }}
-        </button>
         <ChatButton
           v-if="chatAllowed && !recipientSide.chatBlocked"
           :to="`/c/${campaignId}/chat?role=recipient`"
@@ -163,32 +181,39 @@ onMounted(load);
           <span class="muted small">Получатель</span>
           <b>{{ santaSide.partnerName }}</b>
         </div>
-        <div class="divider" />
-        <ol class="steps">
-          <li
-            v-for="step in stepsFor(santaSide)"
-            :key="step.key"
-            class="step"
-            :class="{ 'step--done': step.done }"
+        <template v-if="isShipping(santaSide)">
+          <div class="divider" />
+          <ol class="steps">
+            <li
+              v-for="step in stepsFor(santaSide)"
+              :key="step.key"
+              class="step"
+              :class="{ 'step--done': step.done }"
+            >
+              <span class="step__dot" aria-hidden="true">
+                <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
+              </span>
+              <span>{{ step.label }}</span>
+            </li>
+          </ol>
+          <p class="small muted">
+            Нажмите, когда отправите подарок доставкой. Получатель увидит уведомление, но не
+            ваше имя.
+          </p>
+          <button
+            class="btn btn--primary btn--block"
+            type="button"
+            :disabled="busy || santaSide.giftStatus !== 'pending'"
+            @click="mark('sent', 'santa')"
           >
-            <span class="step__dot" aria-hidden="true">
-              <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
-            </span>
-            <span>{{ step.label }}</span>
-          </li>
-        </ol>
-        <p class="small muted">
-          Нажмите, когда передадите подарок или отправите его доставкой. Получатель увидит
-          уведомление, но не ваше имя.
+            {{
+              santaSide.giftStatus === 'pending' ? 'Я отправил(а) подарок' : 'Отправка отмечена'
+            }}
+          </button>
+        </template>
+        <p v-else class="small muted">
+          Подарок передаётся лично — статусы не нужны. Договоритесь о встрече в чате.
         </p>
-        <button
-          class="btn btn--primary btn--block"
-          type="button"
-          :disabled="busy || santaSide.giftStatus !== 'pending'"
-          @click="mark('sent', 'santa')"
-        >
-          {{ santaSide.giftStatus === 'pending' ? 'Я отправил(а) подарок' : 'Отправка отмечена' }}
-        </button>
         <ChatButton
           v-if="chatAllowed && !santaSide.chatBlocked"
           :to="`/c/${campaignId}/chat?role=santa`"

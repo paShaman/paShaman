@@ -218,7 +218,7 @@ export async function handleCallback(query, ctx) {
       await sendHtml(chatId, helpText(isSuperAdmin(userId)), welcomeKeyboard());
       return;
     }
-    if (action === 'wd' || action === 'wz' || action === 'wc') {
+    if (action === 'wd' || action === 'wr' || action === 'wz' || action === 'wc') {
       await handleWizardCallback(chatId, userId, action, parts[2], messageId);
       return;
     }

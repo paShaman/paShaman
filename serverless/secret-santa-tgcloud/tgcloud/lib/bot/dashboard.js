@@ -2,6 +2,7 @@ import { APP_URL } from '../config.js';
 import { assertTransition } from '../domain/campaign.js';
 import { progress } from '../domain/membership.js';
 import {
+  campaignShippingStats,
   campaignStats,
   getCampaign,
   getCampaignByCode,
@@ -305,13 +306,36 @@ export async function handleFinal(chatId, userId, campaignId, kind, token) {
     await purgeClaims(campaignId);
     await revealAssignments(campaignId);
     await logAudit(campaignId, userId, 'campaign.complete', {});
-    await notifySuperAdminsCampaignFinished(campaign, await campaignStats(campaignId));
-    for (const member of members) {
-      await sendMiniApp(
-        member.userId,
-        '🎁 <b>Кампания завершена</b>\n\nСпасибо за участие! Санты раскрыты, а личные данные удалены.',
-        appLink(),
-      );
+    let summary;
+    if (campaign.deliveryMode === 'meetup') {
+      summary = { tracked: false };
+    } else if (campaign.deliveryMode === 'hybrid') {
+      const stats = await campaignShippingStats(campaignId);
+      summary = { tracked: true, confirmed: stats.shipping, received: stats.received };
+    } else {
+      const stats = await campaignStats(campaignId);
+      summary = { tracked: true, confirmed: stats.confirmed, received: stats.received };
+    }
+    await notifySuperAdminsCampaignFinished(campaign, summary);
+    const allMembers = await listMembersDetailed(campaignId);
+    const greeting = [
+      `🎁 <b>Кампания «${esc(campaign.title)}» завершена</b>`,
+      '',
+      'Всем спасибо за участие! Увидимся снова!',
+      campaign.revealSanta
+        ? 'Санты раскрыты, личные данные удалены.'
+        : 'Личные данные удалены.',
+    ].join('\n');
+    for (const member of allMembers) {
+      if (['removed', 'declined'].includes(member.status)) continue;
+      try {
+        await sendMiniApp(member.userId, greeting, appLink());
+      } catch (error) {
+        console.warn(
+          `completion notify ${member.userId} failed`,
+          error instanceof Error ? error.message : error,
+        );
+      }
     }
     await openCampaign(chatId, userId, campaignId, null, 'Кампания завершена.');
     return;

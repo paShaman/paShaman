@@ -1,12 +1,35 @@
 import { APP_URL } from '../lib/config.js';
 import { fail, requirePair } from '../lib/access.js';
-import { setAssignmentGift } from '../lib/store.js';
+import { addChatMessage, getDelivery, setAssignmentGift } from '../lib/store.js';
 import { sendMiniApp } from '../lib/telegram.js';
+
+async function postStatusMessage(auth, status) {
+  const text = status === 'sent' ? '🎁 Подарок отправлен' : '✅ Подарок получен';
+  try {
+    await addChatMessage({
+      campaignId: auth.campaign.id,
+      assignmentId: auth.assignment.id,
+      senderRole: 'system',
+      senderUserId: auth.tgId,
+      clientMsgId: `gift:${status}:${auth.assignment.id}`,
+      text,
+    });
+  } catch (error) {
+    console.warn(
+      'gift status chat message failed',
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
 
 export default async function (input, ctx) {
   const auth = await requirePair(ctx, input?.campaignId, input?.role);
   if (!['drawn', 'gifting'].includes(auth.campaign.status)) {
     fail('CAMPAIGN_CLOSED', 'Кампания уже завершена.');
+  }
+  const delivery = await getDelivery(auth.campaign.id, auth.assignment.receiverId);
+  if (delivery?.method !== 'shipping') {
+    fail('STATUS_NOT_REQUIRED', 'Для личной передачи статусы не нужны.');
   }
   const status = String(input?.status ?? '');
   const current = auth.assignment.giftStatus;
@@ -16,6 +39,7 @@ export default async function (input, ctx) {
     if (!['pending', 'sent'].includes(current)) fail('INVALID_TRANSITION', 'Подарок уже получен.');
     if (current !== 'sent') {
       await setAssignmentGift(auth.assignment.id, { giftStatus: 'sent', sentAt: new Date() });
+      await postStatusMessage(auth, 'sent');
       try {
         await sendMiniApp(
           auth.otherUserId,
@@ -34,6 +58,7 @@ export default async function (input, ctx) {
     if (current === 'received') return { status: 'received' };
     if (!['pending', 'sent'].includes(current)) fail('INVALID_TRANSITION', 'Нельзя отметить получение.');
     await setAssignmentGift(auth.assignment.id, { giftStatus: 'received', receivedAt: new Date() });
+    await postStatusMessage(auth, 'received');
     try {
       await sendMiniApp(
         auth.otherUserId,

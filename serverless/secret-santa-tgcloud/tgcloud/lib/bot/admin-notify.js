@@ -39,12 +39,14 @@ export async function notifySuperAdminsNewCampaign(campaign, organizer) {
   await sendToAdmins(newCampaignText(campaign, organizer), adminKeyboard(campaign.id));
 }
 
-export async function notifySuperAdminsCampaignFinished(campaign, stats) {
+export async function notifySuperAdminsCampaignFinished(campaign, summary) {
   if (!campaign) return;
-  const confirmed = Number(stats?.confirmed) || 0;
-  const received = Number(stats?.received) || 0;
-  const receivedLine =
-    confirmed > 0 && received >= confirmed
+  const tracked = summary?.tracked !== false;
+  const confirmed = Number(summary?.confirmed) || 0;
+  const received = Number(summary?.received) || 0;
+  const receivedLine = !tracked
+    ? 'Подарки передавали лично — статусы не отслеживались.'
+    : confirmed > 0 && received >= confirmed
       ? `Подарки получили все ${confirmed} ${pluralRu(confirmed, 'участник', 'участника', 'участников')}.`
       : received === 0
         ? `Получение не отметил никто из ${confirmed} ${pluralRu(confirmed, 'участника', 'участников', 'участников')}.`

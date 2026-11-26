@@ -37,6 +37,7 @@ export function visibleMessages(messages) {
 
 export function canReportMessage(message, userId) {
   if (!message) return { ok: false, code: 'NOT_FOUND' };
+  if (message.senderRole === 'system') return { ok: false, code: 'NOT_ALLOWED' };
   if (Number(message.senderUserId) === Number(userId)) {
     return { ok: false, code: 'NOT_ALLOWED' };
   }

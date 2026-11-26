@@ -44,11 +44,19 @@ function cancelRow() {
   return inline([[btn('Отмена', 'ss:wc')]]);
 }
 
+function revealKeyboard() {
+  return inline([
+    [btn('Да, раскрыть Санту', 'ss:wr:yes')],
+    [btn('Нет, оставить анонимность', 'ss:wr:no')],
+    [btn('Отмена', 'ss:wc')],
+  ]);
+}
+
 export async function beginWizard(chatId, userId) {
   await startWizard(userId);
   await sendHtml(
     chatId,
-    '🎄 <b>Новая кампания</b>\n\nШаг 1 из 9. Как назовём кампанию?\n\n3–80 символов, например «Тайный Санта в офисе».',
+    '🎄 <b>Новая кампания</b>\n\nШаг 1 из 10. Как назовём кампанию?\n\n3–80 символов, например «Тайный Санта в офисе».',
     cancelRow(),
   );
 }
@@ -67,7 +75,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
     await setWizardStep(userId, 'wizard:description', { title });
     await sendHtml(
       chatId,
-      `Название: <b>${esc(title)}</b>\n\nШаг 2 из 9. Добавьте описание или отправьте /skip.`,
+      `Название: <b>${esc(title)}</b>\n\nШаг 2 из 10. Добавьте описание или отправьте /skip.`,
       cancelRow(),
     );
     return true;
@@ -80,7 +88,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
       return true;
     }
     await setWizardStep(userId, 'wizard:budget_min', { description });
-    await sendHtml(chatId, 'Шаг 3 из 9. Минимальный бюджет подарка в рублях (целое число).', cancelRow());
+    await sendHtml(chatId, 'Шаг 3 из 10. Минимальный бюджет подарка в рублях (целое число).', cancelRow());
     return true;
   }
 
@@ -91,7 +99,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
       return true;
     }
     await setWizardStep(userId, 'wizard:budget_max', { budgetMin });
-    await sendHtml(chatId, 'Шаг 4 из 9. Максимальный бюджет подарка в рублях.', cancelRow());
+    await sendHtml(chatId, 'Шаг 4 из 10. Максимальный бюджет подарка в рублях.', cancelRow());
     return true;
   }
 
@@ -104,7 +112,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
     await setWizardStep(userId, 'wizard:registration_end', { budgetMax });
     await sendHtml(
       chatId,
-      `Бюджет: <b>${formatBudget(draft.budgetMin, budgetMax)}</b>\n\nШаг 5 из 9. До какого числа принимаем участников? Формат: ДД.ММ.ГГГГ.`,
+      `Бюджет: <b>${formatBudget(draft.budgetMin, budgetMax)}</b>\n\nШаг 5 из 10. До какого числа принимаем участников? Формат: ДД.ММ.ГГГГ.`,
       cancelRow(),
     );
     return true;
@@ -121,7 +129,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
       return true;
     }
     await setWizardStep(userId, 'wizard:gift_date', { registrationEndsAt });
-    await sendHtml(chatId, 'Шаг 6 из 9. Когда вручаем подарки? Формат: ДД.ММ.ГГГГ.', cancelRow());
+    await sendHtml(chatId, 'Шаг 6 из 10. Когда вручаем подарки? Формат: ДД.ММ.ГГГГ.', cancelRow());
     return true;
   }
 
@@ -138,7 +146,7 @@ export async function handleWizardText(chatId, userId, session, rawText) {
     await setWizardStep(userId, 'wizard:delivery', { giftDate });
     await sendHtml(
       chatId,
-      'Шаг 7 из 9. Как передаём подарки?',
+      'Шаг 7 из 10. Как передаём подарки?',
       inline([
         [btn('Встреча', 'ss:wd:meetup'), btn('Доставка', 'ss:wd:shipping')],
         [btn('Встреча или доставка', 'ss:wd:hybrid')],
@@ -148,12 +156,21 @@ export async function handleWizardText(chatId, userId, session, rawText) {
     return true;
   }
 
+  if (step === 'reveal') {
+    await sendHtml(
+      chatId,
+      'Выберите вариант кнопкой ниже — текстом этот шаг не заполняется.',
+      revealKeyboard(),
+    );
+    return true;
+  }
+
   if (step === 'logo') {
     if (text.toLowerCase() === '/skip') {
       await setWizardStep(userId, 'wizard:rules', { logoFileId: '' });
       await sendHtml(
         chatId,
-        'Шаг 9 из 9. Отправьте правила кампании или /skip, чтобы взять шаблон.',
+        'Шаг 10 из 10. Отправьте правила кампании или /skip, чтобы взять шаблон.',
         cancelRow(),
       );
       return true;
@@ -214,7 +231,7 @@ export async function handleWizardPhoto(chatId, userId, session, message) {
   await setWizardStep(userId, 'wizard:rules', { logoFileId: fileId });
   await sendHtml(
     chatId,
-    'Логотип добавлен.\n\nШаг 9 из 9. Отправьте правила кампании или /skip, чтобы взять шаблон.',
+    'Логотип добавлен.\n\nШаг 10 из 10. Отправьте правила кампании или /skip, чтобы взять шаблон.',
     cancelRow(),
   );
   return true;
@@ -230,6 +247,7 @@ async function sendPreview(chatId, userId, draft) {
     `📅 Набор до: ${formatDateRu(draft.registrationEndsAt)}`,
     `🎁 Вручение: ${formatDateRu(draft.giftDate)}`,
     `🚚 Формат: ${DELIVERY[draft.deliveryMode] ?? DELIVERY.hybrid}`,
+    `🎭 После финала: ${draft.revealSanta === false ? 'Санта остаётся анонимным' : 'Санта раскрывается'}`,
     draft.logoFileId ? '🖼 Логотип: добавлен' : '',
     '',
     'После публикации появится код приглашения. Участники смогут вступить по нему.',
@@ -259,10 +277,21 @@ export async function handleWizardCallback(chatId, userId, action, value, messag
 
   if (action === 'wd') {
     const mode = ['meetup', 'shipping', 'hybrid'].includes(value) ? value : 'hybrid';
-    await setWizardStep(userId, 'wizard:logo', { deliveryMode: mode });
+    await setWizardStep(userId, 'wizard:reveal', { deliveryMode: mode });
     await sendHtml(
       chatId,
-      `Формат: <b>${DELIVERY[mode]}</b>\n\nШаг 8 из 9. Пришлите логотип кампании (фото) или /skip.`,
+      `Формат: <b>${DELIVERY[mode]}</b>\n\nШаг 8 из 10. Раскрывать имя Санты после завершения кампании?`,
+      revealKeyboard(),
+    );
+    return true;
+  }
+
+  if (action === 'wr') {
+    const revealSanta = value === 'yes';
+    await setWizardStep(userId, 'wizard:logo', { revealSanta });
+    await sendHtml(
+      chatId,
+      `${revealSanta ? 'После финала участники увидят, кто был их Сантой.' : 'Санта останется анонимным даже после финала.'}\n\nШаг 9 из 10. Пришлите логотип кампании (фото) или /skip.`,
       cancelRow(),
     );
     return true;
@@ -314,7 +343,7 @@ export async function handleWizardCallback(chatId, userId, action, value, messag
         currency: 'RUB',
         deliveryMode: draft.deliveryMode ?? 'hybrid',
         logoFileId: draft.logoFileId ?? '',
-        revealSanta: true,
+        revealSanta: draft.revealSanta !== false,
         organizerId: Number(userId),
       });
       await clear(userId);

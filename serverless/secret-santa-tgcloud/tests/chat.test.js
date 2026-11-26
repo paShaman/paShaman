@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canReportMessage,
   checkChatRate,
   normalizeChatText,
   roleForAssignment,
@@ -84,4 +85,14 @@ test('counts progress without removed members', () => {
     { status: 'removed' },
   ]);
   assert.deepEqual(result, { total: 2, confirmed: 1, accepted: 1 });
+});
+
+test('does not allow reporting system gift messages', () => {
+  assert.deepEqual(canReportMessage({ id: 1, senderRole: 'system', senderUserId: 2 }, 1), {
+    ok: false,
+    code: 'NOT_ALLOWED',
+  });
+  assert.deepEqual(canReportMessage({ id: 2, senderRole: 'santa', senderUserId: 2 }, 1), {
+    ok: true,
+  });
 });

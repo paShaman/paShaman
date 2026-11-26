@@ -1035,6 +1035,25 @@ export async function campaignStats(campaignId) {
   return { total, confirmed, wishlist, deliveries, sent, received, reports };
 }
 
+export async function campaignShippingStats(campaignId) {
+  const cid = num(campaignId);
+  const [list, deliveries] = await Promise.all([
+    db
+      .select()
+      .from(assignments)
+      .where(and(eq(assignments.campaignId, cid), eq(assignments.status, 'confirmed')))
+      .all(),
+    db.select().from(deliveryInfo).where(eq(deliveryInfo.campaignId, cid)).all(),
+  ]);
+  const methodByUser = new Map(deliveries.map((row) => [Number(row.userId), row.method]));
+  const shipping = list.filter((row) => methodByUser.get(Number(row.receiverId)) === 'shipping');
+  return {
+    shipping: shipping.length,
+    sent: shipping.filter((row) => row.giftStatus === 'sent').length,
+    received: shipping.filter((row) => row.giftStatus === 'received').length,
+  };
+}
+
 export async function globalStats() {
   const usersCount = await db.$count(users);
   const campaignsCount = await db.$count(campaigns);
