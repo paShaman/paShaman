@@ -5,9 +5,12 @@ import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
 import { haptic, openLink } from '../telegram/webapp.js';
 import AppIcon from '../components/ui/AppIcon.vue';
+import ChatButton from '../components/ui/ChatButton.vue';
+import { useUnread } from '../composables/useUnread.js';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
+const { unread } = useUnread(campaignId);
 const data = ref(null);
 const loading = ref(true);
 const error = ref('');
@@ -108,6 +111,9 @@ onMounted(load);
           <h2 class="h2">Вишлист</h2>
           <span class="pill">{{ data.wishlist.length }}</span>
         </div>
+        <p class="small muted">
+          Отмечайте купленные подарки — получатель этого не увидит.
+        </p>
 
         <div v-if="data.wishlist.length" class="list">
           <div v-for="item in data.wishlist" :key="item.id" class="gift">
@@ -135,11 +141,19 @@ onMounted(load);
               :class="{ 'claim--on': item.claimed }"
               type="button"
               :aria-pressed="item.claimed"
+              :aria-label="
+                item.claimed ? 'Снять отметку «куплено»' : 'Отметить как купленное'
+              "
               :disabled="busyItem === item.id"
               :title="item.claimed ? 'Снять отметку' : 'Отметить как купленное'"
               @click="toggleClaim(item)"
             >
-              <AppIcon v-if="item.claimed" name="check" :size="20" :stroke-width="2.6" />
+              <AppIcon
+                :name="item.claimed ? 'check' : 'bag'"
+                :size="15"
+                :stroke-width="2.2"
+              />
+              <span>{{ item.claimed ? 'Куплено' : 'Купил(а)' }}</span>
             </button>
           </div>
         </div>
@@ -176,14 +190,13 @@ onMounted(load);
       </div>
 
       <div class="row">
-        <RouterLink
+        <ChatButton
           v-if="data.chatAvailable"
           :to="`/c/${campaignId}/chat?role=santa`"
-          class="btn btn--secondary"
+          label="Чат"
+          :unread="unread.santa"
           style="flex: 1"
-        >
-          Чат
-        </RouterLink>
+        />
         <RouterLink :to="`/c/${campaignId}/gift`" class="btn btn--secondary" style="flex: 1">
           Статус подарка
         </RouterLink>
@@ -259,14 +272,17 @@ onMounted(load);
   font-size: 15px;
 }
 .claim {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--pine-900);
-  display: grid;
-  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
   flex: 0 0 auto;
 }
 .claim--on {

@@ -58,6 +58,14 @@ defineProps({
       <circle cx="8.5" cy="9.5" r="1.8" />
       <path d="m21 15-4.5-4.5a2 2 0 0 0-2.8 0L6 20" />
     </template>
+    <template v-else-if="name === 'chat'">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" />
+    </template>
+    <template v-else-if="name === 'bag'">
+      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <path d="M3 6h18" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
+    </template>
     <template v-else-if="name === 'trash'">
       <path d="M4 7h16" />
       <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />

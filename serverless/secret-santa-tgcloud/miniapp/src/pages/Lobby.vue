@@ -8,11 +8,15 @@ import { state } from '../composables/useSession.js';
 import CampaignStatus from '../components/campaign/CampaignStatus.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
+import ChatButton from '../components/ui/ChatButton.vue';
+import { useUnread } from '../composables/useUnread.js';
+import { pluralRu } from '../utils/plural.js';
 import { shareLink } from '../telegram/webapp.js';
 
 const route = useRoute();
 const router = useRouter();
 const { campaign, loading, error, busy, act } = useCampaign(route.params.id);
+const { unread } = useUnread(route.params.id);
 const rulesOpen = ref(false);
 const leaving = ref(false);
 const deliveryOpen = ref(false);
@@ -310,7 +314,10 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
           <h2 class="h2">Вы участвуете</h2>
           <span class="pill pill--ok">подтверждено</span>
         </div>
-        <p class="small muted">Вишлист: {{ me.wishlistCount }} желаний.</p>
+        <p class="small muted">
+          Вишлист: {{ me.wishlistCount }}
+          {{ pluralRu(me.wishlistCount, 'желание', 'желания', 'желаний') }}.
+        </p>
         <RouterLink :to="`/c/${campaign.id}/wishlist`" class="btn btn--secondary btn--block">
           Мой вишлист
         </RouterLink>
@@ -329,22 +336,23 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
         >
           Мой получатель
         </RouterLink>
-        <div v-if="canOpenChat" class="row">
-          <RouterLink :to="`/c/${campaign.id}/chat`" class="btn btn--secondary" style="flex: 1">
-            Чат
-          </RouterLink>
-          <RouterLink :to="`/c/${campaign.id}/gift`" class="btn btn--secondary" style="flex: 1">
+        <div v-if="canOpenChat" class="stack">
+          <ChatButton
+            :to="`/c/${campaign.id}/chat?role=recipient`"
+            label="Чат с Сантой"
+            :unread="unread.recipient"
+            block
+          />
+          <ChatButton
+            :to="`/c/${campaign.id}/chat?role=santa`"
+            label="Чат с получателем"
+            :unread="unread.santa"
+            block
+          />
+          <RouterLink :to="`/c/${campaign.id}/gift`" class="btn btn--secondary btn--block">
             Подарок
           </RouterLink>
         </div>
-      </div>
-
-      <div class="card card--flat stack">
-        <button class="row row--between rules-toggle" type="button" @click="rulesOpen = !rulesOpen">
-          <span class="h2">Правила кампании</span>
-          <AppIcon :name="rulesOpen ? 'chevron-up' : 'chevron-down'" :size="20" :stroke-width="2.2" />
-        </button>
-        <p v-if="rulesOpen" class="small muted" style="white-space: pre-wrap">{{ campaign.rules }}</p>
       </div>
 
       <div class="stack">
@@ -367,6 +375,14 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
             </span>
           </div>
         </div>
+      </div>
+
+      <div class="card card--flat stack">
+        <button class="row row--between rules-toggle" type="button" @click="rulesOpen = !rulesOpen">
+          <span class="h2">Правила кампании</span>
+          <AppIcon :name="rulesOpen ? 'chevron-up' : 'chevron-down'" :size="20" :stroke-width="2.2" />
+        </button>
+        <p v-if="rulesOpen" class="small muted" style="white-space: pre-wrap">{{ campaign.rules }}</p>
       </div>
 
       <div v-if="campaign.status === 'recruiting'" class="card stack">

@@ -839,6 +839,18 @@ export async function countRecentMessages(assignmentId, senderUserId, sinceSec) 
   );
 }
 
+export async function countUnreadMessages(assignmentId, userId) {
+  return db.$count(
+    chatMessages,
+    and(
+      eq(chatMessages.assignmentId, num(assignmentId)),
+      ne(chatMessages.senderUserId, num(userId)),
+      isNull(chatMessages.readAt),
+      isNull(chatMessages.hiddenAt),
+    ),
+  );
+}
+
 export async function markMessagesRead(assignmentId, userId, upToId) {
   const where = [
     eq(chatMessages.assignmentId, num(assignmentId)),

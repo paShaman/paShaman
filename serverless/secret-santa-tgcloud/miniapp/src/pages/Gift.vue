@@ -4,9 +4,12 @@ import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
 import AppIcon from '../components/ui/AppIcon.vue';
+import ChatButton from '../components/ui/ChatButton.vue';
+import { useUnread } from '../composables/useUnread.js';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
+const { unread } = useUnread(campaignId);
 const data = ref(null);
 const loading = ref(true);
 const error = ref('');
@@ -142,13 +145,13 @@ onMounted(load);
               : 'Я получил(а) подарок'
           }}
         </button>
-        <RouterLink
+        <ChatButton
           v-if="chatAllowed && !recipientSide.chatBlocked"
           :to="`/c/${campaignId}/chat?role=recipient`"
-          class="btn btn--secondary btn--block"
-        >
-          Чат с Сантой
-        </RouterLink>
+          label="Чат с Сантой"
+          :unread="unread.recipient"
+          block
+        />
       </section>
 
       <section v-if="santaSide" class="card stack">
@@ -186,13 +189,13 @@ onMounted(load);
         >
           {{ santaSide.giftStatus === 'pending' ? 'Я отправил(а) подарок' : 'Отправка отмечена' }}
         </button>
-        <RouterLink
+        <ChatButton
           v-if="chatAllowed && !santaSide.chatBlocked"
           :to="`/c/${campaignId}/chat?role=santa`"
-          class="btn btn--secondary btn--block"
-        >
-          Чат с получателем
-        </RouterLink>
+          label="Чат с получателем"
+          :unread="unread.santa"
+          block
+        />
       </section>
 
       <RouterLink :to="`/c/${campaignId}`" class="btn btn--secondary btn--block">

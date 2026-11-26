@@ -4,9 +4,11 @@ import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
 import AppIcon from '../components/ui/AppIcon.vue';
+import { useUnread } from '../composables/useUnread.js';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
+const { unread, refresh: refreshUnread } = useUnread(campaignId);
 const messages = ref([]);
 const roles = ref([]);
 const role = ref(route.query.role === 'santa' ? 'santa' : 'recipient');
@@ -58,7 +60,10 @@ async function load(silent = false) {
     chatBlocked.value = Boolean(result.chatBlocked);
     campaignStatus.value = result.campaignStatus;
     error.value = '';
-    if (!silent) scrollBottom();
+    if (!silent) {
+      scrollBottom();
+      refreshUnread();
+    }
   } catch (e) {
     if (!silent) error.value = e.message || 'Не удалось открыть чат.';
   } finally {
@@ -162,6 +167,9 @@ onUnmounted(() => {
         @click="switchRole(item)"
       >
         {{ roleLabel(item) }}
+        <span v-if="unread[item] > 0" class="role-tabs__badge" aria-hidden="true">
+          {{ unread[item] > 99 ? '99+' : unread[item] }}
+        </span>
       </button>
     </div>
 
@@ -252,10 +260,27 @@ onUnmounted(() => {
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .role-tabs__item--active {
   background: var(--pine-700);
   color: #fff8f0;
+}
+.role-tabs__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--berry-600);
+  color: #fff8f0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
 }
 .chat-page {
   min-height: calc(100dvh - 90px);

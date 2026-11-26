@@ -310,7 +310,16 @@ export async function mockCall(name, input = {}) {
     };
   }
   if (name === 'setItemClaimed') return { claimed: Boolean(input.claimed) };
+  if (name === 'getUnread') {
+    const unread = state.messages.filter((message) => !message.mine && !message.readAt).length;
+    return { roles: ['santa', 'recipient'], unread: { santa: 0, recipient: unread } };
+  }
   if (name === 'getThread') {
+    if (input.markRead) {
+      state.messages.forEach((message) => {
+        if (!message.mine) message.readAt = new Date().toISOString();
+      });
+    }
     return {
       role: input.role === 'recipient' ? 'recipient' : 'santa',
       roles: ['santa', 'recipient'],

@@ -8,6 +8,7 @@ import { useCampaign } from '../composables/useCampaign.js';
 import { openLink } from '../telegram/webapp.js';
 import AppSheet from '../components/ui/AppSheet.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
+import { pluralRu } from '../utils/plural.js';
 
 const route = useRoute();
 const { campaign, loading: campaignLoading } = useCampaign(route.params.id);
@@ -376,9 +377,12 @@ onMounted(load);
         :disabled="items.length >= limit"
         @click="openNew"
       >
-        {{ items.length >= limit ? `Лимит ${limit} желаний` : 'Добавить желание' }}
+        {{ items.length >= limit ? `Лимит ${limit} ${pluralRu(limit, 'желание', 'желания', 'желаний')}` : 'Добавить желание' }}
       </button>
-      <p class="hint">Можно добавить до {{ limit }} желаний. Фото — до 320 КБ, лучше 1280 px.</p>
+      <p class="hint">
+        Можно добавить до {{ limit }}
+        {{ pluralRu(limit, 'желания', 'желаний', 'желаний') }}. Фото — до 320 КБ, лучше 1280 px.
+      </p>
     </template>
 
     <input
