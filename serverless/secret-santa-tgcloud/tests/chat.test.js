@@ -42,6 +42,26 @@ test('checks participation confirmation', () => {
   assert.equal(canConfirm({ campaign, member, wishlistCount: 0 }).code, 'WISHLIST_EMPTY');
 });
 
+test('requires a delivery method for hybrid campaigns', () => {
+  const campaign = { status: 'recruiting', rulesVersion: 2, deliveryMode: 'hybrid' };
+  const member = { status: 'rules_accepted', rulesVersionAccepted: 2 };
+  assert.equal(canConfirm({ campaign, member, wishlistCount: 1 }).code, 'DELIVERY_METHOD_REQUIRED');
+  assert.equal(canConfirm({ campaign, member, wishlistCount: 1, delivery: { method: 'meetup' } }).ok, true);
+  assert.equal(
+    canConfirm({ campaign, member, wishlistCount: 1, delivery: { method: 'shipping' } }).code,
+    'DELIVERY_REQUIRED',
+  );
+  assert.equal(
+    canConfirm({
+      campaign,
+      member,
+      wishlistCount: 1,
+      delivery: { method: 'shipping', recipientName: 'Аня', address: 'ПВЗ, ул. Ленина, 1' },
+    }).ok,
+    true,
+  );
+});
+
 test('requires delivery details for shipping campaigns', () => {
   const campaign = { status: 'recruiting', rulesVersion: 2, deliveryMode: 'shipping' };
   const member = { status: 'rules_accepted', rulesVersionAccepted: 2 };

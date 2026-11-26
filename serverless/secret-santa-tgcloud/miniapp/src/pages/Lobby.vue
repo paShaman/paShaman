@@ -28,6 +28,15 @@ const deliveryForm = reactive({
 
 const me = computed(() => campaign.value?.me);
 const deliveryRequired = computed(() => campaign.value?.deliveryMode === 'shipping');
+const deliveryAvailable = computed(() => campaign.value?.deliveryMode !== 'meetup');
+const deliveryButtonLabel = computed(() => {
+  if (deliveryRequired.value) {
+    return me.value?.deliveryFilled ? 'Изменить адрес доставки' : 'Заполнить адрес доставки';
+  }
+  const saved = campaign.value?.myDelivery;
+  const chosen = saved && (saved.method === 'meetup' || saved.method === 'shipping');
+  return chosen ? 'Изменить способ получения' : 'Выбрать способ получения';
+});
 const progress = computed(() => campaign.value?.progress ?? { total: 0, confirmed: 0 });
 const percent = computed(() => {
   if (!progress.value.total) return 0;
@@ -40,6 +49,7 @@ const hint = computed(() => {
       RULES_NOT_ACCEPTED: 'Примите правила, чтобы подтвердить участие.',
       WISHLIST_EMPTY: 'Добавьте хотя бы одно желание в вишлист.',
       DELIVERY_REQUIRED: 'Заполните адрес доставки и укажите почту или пункт выдачи.',
+      DELIVERY_METHOD_REQUIRED: 'Выберите, как получить подарок: встреча или доставка.',
       CAMPAIGN_LOCKED: 'Набор уже закрыт.',
       NOT_MEMBER: 'Вы не участвуете в кампании.',
     }[code] ?? ''
@@ -142,8 +152,14 @@ async function leave() {
 
 function openDelivery() {
   const saved = campaign.value?.myDelivery;
+  let method = saved?.method;
+  if (campaign.value?.deliveryMode === 'shipping') {
+    method = 'shipping';
+  } else if (method !== 'meetup' && method !== 'shipping') {
+    method = '';
+  }
   Object.assign(deliveryForm, {
-    method: saved?.method ?? campaign.value?.deliveryMode ?? 'hybrid',
+    method,
     recipientName: saved?.recipientName ?? '',
     address: saved?.address ?? '',
     phone: saved?.phone ?? '',
@@ -153,21 +169,31 @@ function openDelivery() {
 }
 
 async function saveDelivery() {
-  if (!deliveryForm.recipientName.trim()) {
+  const method = deliveryForm.method;
+  if (!method) {
+    toast('Выберите, как получить подарок.');
+    return;
+  }
+  const isShipping = method === 'shipping';
+  if (isShipping && !deliveryForm.recipientName.trim()) {
     toast('Укажите, кому адресован подарок.');
+    return;
+  }
+  if (isShipping && deliveryForm.address.trim().length < 5) {
+    toast('Укажите адрес доставки или пункт самовывоза.');
     return;
   }
   try {
     await act(
       'updateDeliveryInfo',
       {
-        method: deliveryForm.method,
-        recipientName: deliveryForm.recipientName,
-        address: deliveryForm.address,
-        phone: deliveryForm.phone,
-        comment: deliveryForm.comment,
+        method,
+        recipientName: isShipping ? deliveryForm.recipientName : '',
+        address: isShipping ? deliveryForm.address : '',
+        phone: isShipping ? deliveryForm.phone : '',
+        comment: isShipping ? deliveryForm.comment : '',
       },
-      'Данные доставки сохранены.',
+      isShipping ? 'Данные доставки сохранены.' : 'Способ получения сохранён.',
     );
     deliveryOpen.value = false;
   } catch {
@@ -230,17 +256,6 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
         </div>
       </div>
 
-      <div v-if="campaign.status === 'recruiting'" class="card stack">
-        <h2 class="h2">Пригласить друзей</h2>
-        <p class="small muted">
-          Отправьте ссылку или код — новый участник вступит в боте и появится в списке.
-        </p>
-        <p class="small">Код кампании: <b>{{ campaign.code }}</b></p>
-        <button class="btn btn--secondary btn--block" type="button" @click="invite">
-          Поделиться приглашением
-        </button>
-      </div>
-
       <div v-if="me && !me.confirmed" class="card stack">
         <h2 class="h2">Ваше участие</h2>
         <p class="small muted">
@@ -248,13 +263,13 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
           {{ hint }}
         </p>
         <button
-          v-if="deliveryRequired"
+          v-if="deliveryAvailable"
           class="btn btn--secondary btn--block"
           type="button"
           :disabled="busy"
           @click="openDelivery"
         >
-          {{ me.deliveryFilled ? 'Изменить адрес доставки' : 'Заполнить адрес доставки' }}
+          {{ deliveryButtonLabel }}
         </button>
         <button
           v-if="campaign.can.acceptRules"
@@ -299,7 +314,7 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
           Мой вишлист
         </RouterLink>
         <button
-          v-if="!['completed', 'cancelled'].includes(campaign.status)"
+          v-if="deliveryAvailable && !['completed', 'cancelled'].includes(campaign.status)"
           class="btn btn--secondary btn--block"
           type="button"
           @click="openDelivery"
@@ -353,11 +368,26 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
         </div>
       </div>
 
+      <div v-if="campaign.status === 'recruiting'" class="card stack">
+        <h2 class="h2">Пригласить друзей</h2>
+        <p class="small muted">
+          Отправьте ссылку или код — новый участник вступит в боте и появится в списке.
+        </p>
+        <p class="small">Код кампании: <b>{{ campaign.code }}</b></p>
+        <button class="btn btn--secondary btn--block" type="button" @click="invite">
+          Поделиться приглашением
+        </button>
+      </div>
+
       <p v-if="state.boot?.user?.isSuperAdmin" class="hint">
         Вы супер-админ: управление кампанией доступно в боте.
       </p>
 
-      <AppSheet :open="deliveryOpen" title="Доставка подарка" @close="deliveryOpen = false">
+      <AppSheet
+        :open="deliveryOpen"
+        :title="campaign.deliveryMode === 'shipping' ? 'Доставка подарка' : 'Как получить подарок'"
+        @close="deliveryOpen = false"
+      >
         <form class="stack" @submit.prevent="saveDelivery">
           <div v-if="campaign.deliveryMode === 'shipping'" class="row row--between">
             <span class="muted small">Передача</span>
@@ -365,50 +395,55 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
           </div>
           <div v-else class="field">
             <label for="delivery-method">Как передаём подарок</label>
-            <select id="delivery-method" v-model="deliveryForm.method" class="input">
+            <select id="delivery-method" v-model="deliveryForm.method" class="input" required>
+              <option value="" disabled>Выберите способ</option>
               <option value="meetup">Встреча</option>
               <option value="shipping">Доставка</option>
-              <option value="hybrid">Встреча или доставка</option>
             </select>
           </div>
-          <div class="field">
-            <label for="delivery-name">Кому адресован подарок *</label>
-            <input
-              id="delivery-name"
-              v-model="deliveryForm.recipientName"
-              class="input"
-              maxlength="120"
-              required
-            />
-          </div>
-          <div class="field">
-            <label for="delivery-address">Адрес или пункт самовывоза</label>
-            <textarea
-              id="delivery-address"
-              v-model="deliveryForm.address"
-              class="input"
-              maxlength="500"
-              placeholder="Город, улица, дом, квартира, индекс — или адрес отделения почты / ПВЗ"
-            />
-            <p class="hint">
-              Укажите отделение почты или пункт выдачи. Для доставки адрес обязателен, его видит
-              только ваш Санта.
-            </p>
-          </div>
-          <div class="field">
-            <label for="delivery-phone">Телефон</label>
-            <input
-              id="delivery-phone"
-              v-model="deliveryForm.phone"
-              class="input"
-              maxlength="40"
-              inputmode="tel"
-            />
-          </div>
-          <div class="field">
-            <label for="delivery-comment">Комментарий</label>
-            <textarea id="delivery-comment" v-model="deliveryForm.comment" class="input" maxlength="300" />
-          </div>
+          <p v-if="deliveryForm.method === 'meetup'" class="hint">
+            Встретимся лично — адрес и телефон не нужны.
+          </p>
+          <template v-if="deliveryForm.method === 'shipping'">
+            <div class="field">
+              <label for="delivery-name">Кому адресован подарок *</label>
+              <input
+                id="delivery-name"
+                v-model="deliveryForm.recipientName"
+                class="input"
+                maxlength="120"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="delivery-address">Адрес или пункт самовывоза</label>
+              <textarea
+                id="delivery-address"
+                v-model="deliveryForm.address"
+                class="input"
+                maxlength="500"
+                placeholder="Город, улица, дом, квартира, индекс — или адрес отделения почты / ПВЗ"
+              />
+              <p class="hint">
+                Укажите отделение почты или пункт выдачи. Для доставки адрес обязателен, его видит
+                только ваш Санта.
+              </p>
+            </div>
+            <div class="field">
+              <label for="delivery-phone">Телефон</label>
+              <input
+                id="delivery-phone"
+                v-model="deliveryForm.phone"
+                class="input"
+                maxlength="40"
+                inputmode="tel"
+              />
+            </div>
+            <div class="field">
+              <label for="delivery-comment">Комментарий</label>
+              <textarea id="delivery-comment" v-model="deliveryForm.comment" class="input" maxlength="300" />
+            </div>
+          </template>
           <button class="btn btn--primary" type="submit" :disabled="busy">
             {{ busy ? 'Сохраняем…' : 'Сохранить' }}
           </button>

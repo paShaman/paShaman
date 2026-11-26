@@ -25,6 +25,7 @@ export default async function (input, ctx) {
       RULES_NOT_ACCEPTED: 'Сначала примите правила кампании.',
       WISHLIST_EMPTY: 'Добавьте хотя бы один пункт в вишлист.',
       DELIVERY_REQUIRED: 'Заполните адрес доставки и укажите почту или пункт выдачи.',
+      DELIVERY_METHOD_REQUIRED: 'Выберите, как получить подарок: встреча или доставка.',
       NOT_MEMBER: 'Вы не участвуете в кампании.',
     };
     fail(check.code, messages[check.code] ?? 'Не удалось подтвердить участие.');

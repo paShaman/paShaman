@@ -124,10 +124,17 @@ export async function photoDataUrl(fileId) {
 
 export async function profilePhotoDataUrl(userId) {
   const result = await api.getUserProfilePhotos({ user_id: Number(userId), limit: 1 });
-  const photo = result?.photos?.[0];
-  if (!photo || photo.length === 0) return '';
-  const smallest = photo[0];
-  return photoDataUrl(smallest.file_id);
+  const sizes = result?.photos?.[0];
+  if (!Array.isArray(sizes) || sizes.length === 0) return '';
+  for (const size of [sizes[0], sizes[sizes.length - 1]]) {
+    if (!size?.file_id) continue;
+    try {
+      return await photoDataUrl(size.file_id);
+    } catch {
+      // пробуем другой размер
+    }
+  }
+  return '';
 }
 
 export async function sendBroadcastMessage(chatId, html) {

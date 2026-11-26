@@ -185,6 +185,7 @@ export async function mockCall(name, input = {}) {
   if (name === 'bootstrap') return bootstrapPayload();
   if (name === 'getCampaign') return campaignPayload();
   if (name === 'getMemberAvatar') return { photo: '' };
+  if (name === 'getMyAvatar') return { photo: '' };
   if (name === 'getCampaignLogo') return { photo: '', version: 0 };
   if (name === 'joinCampaign') {
     if (String(input.code || '').toUpperCase() !== state.campaign.code) {

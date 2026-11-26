@@ -27,11 +27,19 @@ export function canConfirm({ campaign, member, wishlistCount, delivery }) {
   if (Number(wishlistCount) < 1) {
     return { ok: false, code: 'WISHLIST_EMPTY' };
   }
-  if (campaign.deliveryMode === 'shipping') {
+  const needsAddress =
+    campaign.deliveryMode === 'shipping' ||
+    (campaign.deliveryMode === 'hybrid' && delivery?.method === 'shipping');
+  if (needsAddress) {
     const recipientName = String(delivery?.recipientName ?? '').trim();
     const address = String(delivery?.address ?? '').trim();
     if (recipientName.length < 2 || address.length < 5) {
       return { ok: false, code: 'DELIVERY_REQUIRED' };
+    }
+  } else if (campaign.deliveryMode === 'hybrid') {
+    const method = delivery?.method;
+    if (method !== 'meetup' && method !== 'shipping') {
+      return { ok: false, code: 'DELIVERY_METHOD_REQUIRED' };
     }
   }
   return { ok: true };

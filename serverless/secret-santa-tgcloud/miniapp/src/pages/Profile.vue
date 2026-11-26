@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { call } from '../api/client.js';
 import { state, toast } from '../composables/useSession.js';
 import { telegramUser } from '../telegram/webapp.js';
@@ -7,12 +7,23 @@ import { telegramUser } from '../telegram/webapp.js';
 const saving = ref(false);
 const name = ref(state.boot?.user?.name ?? '');
 const error = ref('');
+const remotePhoto = ref('');
 
 const user = computed(() => state.boot?.user);
 const photoUrl = computed(
-  () => state.boot?.user?.photoUrl || telegramUser()?.photo_url || '',
+  () => state.boot?.user?.photoUrl || telegramUser()?.photo_url || remotePhoto.value || '',
 );
 const mockMode = computed(() => !window?.Telegram?.WebApp?.initData);
+
+onMounted(async () => {
+  if (photoUrl.value) return;
+  try {
+    const result = await call('getMyAvatar', {});
+    remotePhoto.value = result?.photo ?? '';
+  } catch {
+    // без фото остаётся инициал
+  }
+});
 
 async function save() {
   if (!name.value.trim()) {

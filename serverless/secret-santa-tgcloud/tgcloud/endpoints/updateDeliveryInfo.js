@@ -21,20 +21,23 @@ export default async function (input, ctx) {
   const phone = String(input?.phone ?? '').trim().slice(0, 40);
   const comment = String(input?.comment ?? '').trim().slice(0, 300);
 
-  if (recipientName.length < 2) fail('VALIDATION', 'Укажите, кому адресован подарок.');
-  if (method === 'shipping' && address.length < 5) {
+  const isShipping = method === 'shipping';
+  if (isShipping && recipientName.length < 2) {
+    fail('VALIDATION', 'Укажите, кому адресован подарок.');
+  }
+  if (isShipping && address.length < 5) {
     fail('VALIDATION', 'Для доставки нужен адрес.');
   }
-  if (phone && !/^[+\d()\-\s]{5,40}$/.test(phone)) {
+  if (isShipping && phone && !/^[+\d()\-\s]{5,40}$/.test(phone)) {
     fail('VALIDATION', 'Телефон содержит недопустимые символы.');
   }
 
   const delivery = await saveDelivery(auth.campaign.id, auth.tgId, {
     method,
-    recipientName,
-    address: method === 'meetup' ? '' : address,
-    phone,
-    comment,
+    recipientName: isShipping ? recipientName : '',
+    address: isShipping ? address : '',
+    phone: isShipping ? phone : '',
+    comment: isShipping ? comment : '',
   });
   return {
     delivery: {
