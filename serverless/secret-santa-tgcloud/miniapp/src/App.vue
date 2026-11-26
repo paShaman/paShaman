@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import mark from './assets/tree-192.png';
+import AppIcon from './components/ui/AppIcon.vue';
 import { call, ApiError } from './api/client.js';
 import { initTelegram, bindBackButton, openLink } from './telegram/webapp.js';
 import { loadBoot, refreshBoot, state, toast } from './composables/useSession.js';
@@ -83,7 +84,7 @@ async function retry() {
         aria-label="Назад"
         @click="router.back()"
       >
-        ←
+        <AppIcon name="arrow-left" :size="22" />
       </button>
       <RouterLink to="/campaigns" class="brand" aria-label="Тайный Санта">
         <img :src="mark" alt="" class="brand__mark" width="36" height="36" />

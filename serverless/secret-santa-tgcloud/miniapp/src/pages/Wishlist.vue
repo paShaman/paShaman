@@ -7,6 +7,7 @@ import { state, toast } from '../composables/useSession.js';
 import { useCampaign } from '../composables/useCampaign.js';
 import { openLink } from '../telegram/webapp.js';
 import AppSheet from '../components/ui/AppSheet.vue';
+import AppIcon from '../components/ui/AppIcon.vue';
 
 const route = useRoute();
 const { campaign, loading: campaignLoading } = useCampaign(route.params.id);
@@ -293,7 +294,7 @@ onMounted(load);
         <article v-for="(item, index) in items" :key="item.id" class="wish">
           <div class="wish__photo">
             <img v-if="photos[item.id]" :src="photos[item.id]" :alt="`Фото: ${item.title}`" />
-            <span v-else aria-hidden="true">✦</span>
+            <AppIcon v-else name="image" :size="22" :stroke-width="1.6" />
           </div>
           <div class="wish__body">
             <h2 class="wish__title">{{ item.title }}</h2>
@@ -317,10 +318,7 @@ onMounted(load);
                 title="Изменить"
                 @click="openEdit(item)"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                </svg>
+                <AppIcon name="pencil" :size="19" :stroke-width="1.8" />
               </button>
               <button
                 class="wish-action"
@@ -330,11 +328,7 @@ onMounted(load);
                 :disabled="photoBusy"
                 @click="pickPhoto(item)"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="3" y="4" width="18" height="16" rx="3" />
-                  <circle cx="8.5" cy="9.5" r="1.8" />
-                  <path d="m21 15-4.5-4.5a2 2 0 0 0-2.8 0L6 20" />
-                </svg>
+                <AppIcon name="image" :size="19" :stroke-width="1.8" />
               </button>
               <button
                 class="wish-action"
@@ -344,10 +338,7 @@ onMounted(load);
                 :disabled="index === 0"
                 @click="move(item, -1)"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 19V5" />
-                  <path d="M6 11l6-6 6 6" />
-                </svg>
+                <AppIcon name="arrow-up" :size="19" :stroke-width="1.8" />
               </button>
               <button
                 class="wish-action"
@@ -357,10 +348,7 @@ onMounted(load);
                 :disabled="index === items.length - 1"
                 @click="move(item, 1)"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14" />
-                  <path d="M6 13l6 6 6-6" />
-                </svg>
+                <AppIcon name="arrow-down" :size="19" :stroke-width="1.8" />
               </button>
               <button
                 class="wish-action wish-action--danger"
@@ -369,12 +357,7 @@ onMounted(load);
                 title="Удалить"
                 @click="removeItem(item)"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16" />
-                  <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                  <path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
-                  <path d="M10 11v6M14 11v6" />
-                </svg>
+                <AppIcon name="trash" :size="19" :stroke-width="1.8" />
               </button>
             </div>
           </div>

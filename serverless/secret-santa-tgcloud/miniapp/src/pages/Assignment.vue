@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
 import { haptic, openLink } from '../telegram/webapp.js';
+import AppIcon from '../components/ui/AppIcon.vue';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
@@ -112,7 +113,7 @@ onMounted(load);
           <div v-for="item in data.wishlist" :key="item.id" class="gift">
             <div class="gift__photo">
               <img v-if="photos[item.id]" :src="photos[item.id]" :alt="item.title" />
-              <span v-else aria-hidden="true">✦</span>
+              <AppIcon v-else name="image" :size="22" :stroke-width="1.6" />
             </div>
             <div class="gift__body">
               <p class="gift__title">{{ item.title }}</p>
@@ -138,16 +139,16 @@ onMounted(load);
               :title="item.claimed ? 'Снять отметку' : 'Отметить как купленное'"
               @click="toggleClaim(item)"
             >
-              {{ item.claimed ? '✓' : '' }}
+              <AppIcon v-if="item.claimed" name="check" :size="20" :stroke-width="2.6" />
             </button>
           </div>
         </div>
         <p v-else class="small muted">Получатель пока не добавил желания. Можно написать в чат и спросить.</p>
       </div>
 
-      <div v-if="data.delivery" class="card stack">
+      <div v-if="data.delivery?.method === 'shipping'" class="card stack">
         <h2 class="h2">Куда отправлять</h2>
-        <div class="row row--between">
+        <div v-if="data.delivery.recipientName" class="row row--between">
           <span class="muted small">Кому</span>
           <b>{{ data.delivery.recipientName }}</b>
         </div>
@@ -159,6 +160,13 @@ onMounted(load);
           <span class="muted small">Телефон</span>
           <b>{{ data.delivery.phone }}</b>
         </div>
+        <p v-if="data.delivery.comment" class="small muted">{{ data.delivery.comment }}</p>
+      </div>
+      <div v-else-if="data.delivery" class="card stack">
+        <h2 class="h2">Как передать подарок</h2>
+        <p class="small muted">
+          Получатель выбрал встречу. Договоритесь о времени и месте в чате.
+        </p>
         <p v-if="data.delivery.comment" class="small muted">{{ data.delivery.comment }}</p>
       </div>
       <div v-else class="card card--flat stack">
@@ -257,7 +265,8 @@ onMounted(load);
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--pine-900);
-  font-weight: 800;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
 }
 .claim--on {

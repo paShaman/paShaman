@@ -1,6 +1,7 @@
 <script setup>
 import { watch, onUnmounted } from 'vue';
 import { setClosingConfirmation } from '../../telegram/webapp.js';
+import AppIcon from './AppIcon.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -39,7 +40,7 @@ onUnmounted(() => {
           <div class="sheet__head">
             <h2 class="h2">{{ title }}</h2>
             <button class="icon-btn" type="button" aria-label="Закрыть" @click="emit('close')">
-              ×
+              <AppIcon name="close" :size="18" :stroke-width="2.2" />
             </button>
           </div>
           <div class="sheet__body">

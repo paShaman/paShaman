@@ -7,6 +7,7 @@ import { toast } from '../composables/useSession.js';
 import { state } from '../composables/useSession.js';
 import CampaignStatus from '../components/campaign/CampaignStatus.vue';
 import AppSheet from '../components/ui/AppSheet.vue';
+import AppIcon from '../components/ui/AppIcon.vue';
 import { shareLink } from '../telegram/webapp.js';
 
 const route = useRoute();
@@ -341,7 +342,7 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
       <div class="card card--flat stack">
         <button class="row row--between rules-toggle" type="button" @click="rulesOpen = !rulesOpen">
           <span class="h2">Правила кампании</span>
-          <span aria-hidden="true">{{ rulesOpen ? '−' : '+' }}</span>
+          <AppIcon :name="rulesOpen ? 'chevron-up' : 'chevron-down'" :size="20" :stroke-width="2.2" />
         </button>
         <p v-if="rulesOpen" class="small muted" style="white-space: pre-wrap">{{ campaign.rules }}</p>
       </div>

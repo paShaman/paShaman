@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
+import AppIcon from '../components/ui/AppIcon.vue';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
@@ -18,6 +19,13 @@ const steps = computed(() => {
     { key: 'sent', label: 'Подарок отправлен', done: ['sent', 'received'].includes(status) },
     { key: 'received', label: 'Подарок получен', done: status === 'received' },
   ];
+});
+
+const title = computed(() => {
+  const status = data.value?.giftStatus ?? 'pending';
+  if (status === 'received') return 'Подарок получен';
+  if (status === 'sent') return 'Подарок в пути';
+  return data.value?.role === 'recipient' ? 'Ждём подарок' : 'Выбираем подарок';
 });
 
 async function load() {
@@ -53,13 +61,7 @@ onMounted(load);
     <div>
       <p class="eyebrow">Подарок</p>
       <h1 class="display" style="font-size: clamp(24px, 6vw, 30px)">
-        {{
-          data?.giftStatus === 'received'
-            ? 'Подарок получен'
-            : data?.role === 'recipient'
-              ? 'Ждём подарок'
-              : 'Подарок в пути'
-        }}
+        {{ title }}
       </h1>
     </div>
 
@@ -89,7 +91,9 @@ onMounted(load);
         <div class="divider" />
         <ol class="steps">
           <li v-for="step in steps" :key="step.key" class="step" :class="{ 'step--done': step.done }">
-            <span class="step__dot" aria-hidden="true">{{ step.done ? '✓' : '' }}</span>
+            <span class="step__dot" aria-hidden="true">
+              <AppIcon v-if="step.done" name="check" :size="13" :stroke-width="2.6" />
+            </span>
             <span>{{ step.label }}</span>
           </li>
         </ol>

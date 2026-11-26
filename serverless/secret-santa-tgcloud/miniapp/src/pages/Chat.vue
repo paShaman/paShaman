@@ -3,6 +3,7 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
+import AppIcon from '../components/ui/AppIcon.vue';
 
 const route = useRoute();
 const campaignId = Number(route.params.id);
@@ -150,7 +151,7 @@ onUnmounted(() => {
               :aria-label="'Пожаловаться на сообщение'"
               @click="report(message)"
             >
-              !
+              <AppIcon name="flag" :size="11" :stroke-width="2.4" />
             </button>
           </div>
         </div>
@@ -180,7 +181,7 @@ onUnmounted(() => {
           type="submit"
           :disabled="sending || chatBlocked || campaignStatus === 'completed' || !text.trim()"
         >
-          ↑
+          <AppIcon name="arrow-up" :size="20" :stroke-width="2.2" />
         </button>
       </form>
     </template>
@@ -239,8 +240,8 @@ onUnmounted(() => {
   border: 1px solid currentColor;
   background: transparent;
   color: inherit;
-  font-size: 11px;
-  line-height: 1;
+  display: grid;
+  place-items: center;
   padding: 0;
 }
 .composer {
