@@ -1,5 +1,6 @@
 {
-  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json"
+  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json",
 
-  // Mini App в этом боте не используется, поэтому блок "static" не нужен.
+  // Статика мини-игры. Публикуется на https://app<app_id>.tgcloud.ai/
+  "static": { "source": "miniapp" }
 }

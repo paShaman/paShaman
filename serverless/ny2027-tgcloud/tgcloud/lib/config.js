@@ -8,6 +8,11 @@
  */
 export const ADMIN_IDS = ['115462629', '442705820'];
 
+// Мини-игра — статический Mini App, который публикуется из папки miniapp/
+// (tgcloud.jsonc → "static"). URL печатает `npx tgcloud push`; если он
+// отличается, поправь здесь.
+export const GAME_URL = 'https://app9204350653.tgcloud.ai/';
+
 export const TZ = 'Europe/Moscow';
 
 export const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];

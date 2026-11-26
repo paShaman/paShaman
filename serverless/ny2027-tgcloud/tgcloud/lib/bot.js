@@ -336,7 +336,7 @@ export async function handleCallback(callbackQuery) {
   if (scope === 'game') {
     const sent = await sendGame(chatId);
     if (!sent) {
-      await sendHtml(chatId, 'Не удалось запустить игру. Попробуйте позже.');
+      await sendHtml(chatId, 'Не удалось открыть игру. Попробуйте позже.');
     }
     return;
   }
@@ -568,7 +568,7 @@ async function cmdHelp(chatId, userId) {
 async function cmdGame(chatId) {
   const sent = await sendGame(chatId);
   if (!sent) {
-    await sendHtml(chatId, 'Не удалось отправить игру. Попробуйте позже.');
+    await sendHtml(chatId, 'Не удалось открыть игру. Попробуйте позже.');
   }
 }
 

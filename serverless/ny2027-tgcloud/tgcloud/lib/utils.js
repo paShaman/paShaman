@@ -1,4 +1,4 @@
-import { SIZES, TZ } from './config.js';
+import { GAME_URL, SIZES, TZ } from './config.js';
 
 export function esc(value) {
   return String(value)
@@ -95,12 +95,16 @@ export function inline(rows) {
   return { inline_keyboard: rows };
 }
 
+export function webBtn(text, url) {
+  return { text, web_app: { url } };
+}
+
 export function registerKeyboard() {
   return inline([[btn('📝 Заполнить анкету', 'reg:start')]]);
 }
 
 export function welcomeKeyboard(registered) {
-  const gameRow = [btn('🎮 Сыграть в игру', 'game:start')];
+  const gameRow = [webBtn('🎮 Сыграть в игру', GAME_URL)];
   if (registered) {
     return inline([
       [btn('✏️ Изменить данные', 'reg:edit'), btn('📋 Моя анкета', 'reg:my')],
