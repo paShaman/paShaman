@@ -130,12 +130,14 @@ async function removeItem(item) {
 }
 
 async function move(item, delta) {
+  if (busy.value) return;
   const index = items.value.findIndex((row) => row.id === item.id);
   const target = index + delta;
   if (index < 0 || target < 0 || target >= items.value.length) return;
   const next = [...items.value];
   [next[index], next[target]] = [next[target], next[index]];
   items.value = next;
+  busy.value = true;
   try {
     await call('reorderWishlist', {
       campaignId: Number(route.params.id),
@@ -144,6 +146,8 @@ async function move(item, delta) {
   } catch (e) {
     toast(e.message);
     await load();
+  } finally {
+    busy.value = false;
   }
 }
 

@@ -1,9 +1,8 @@
 import { APP_URL } from '../lib/config.js';
 import { fail, requirePair } from '../lib/access.js';
-import { checkChatRate, normalizeChatText } from '../lib/domain/chat.js';
+import { CHAT_LIMIT_HOUR, CHAT_LIMIT_MINUTE, normalizeChatText } from '../lib/domain/chat.js';
 import {
   addChatMessage,
-  countRecentMessages,
   hitRate,
 } from '../lib/store.js';
 import { sendMiniApp } from '../lib/telegram.js';
@@ -25,9 +24,9 @@ export default async function (input, ctx) {
     fail('VALIDATION', 'Не передан идентификатор сообщения.');
   }
 
-  const minute = await hitRate(`chat1m:${auth.assignment.id}:${auth.tgId}`, 10, 60);
+  const minute = await hitRate(`chat1m:${auth.assignment.id}:${auth.tgId}`, CHAT_LIMIT_MINUTE, 60);
   if (!minute.ok) fail('RATE_LIMITED', 'Слишком много сообщений. Подождите минуту.', { retryAfter: minute.retryAfter });
-  const hour = await hitRate(`chat1h:${auth.assignment.id}:${auth.tgId}`, 60, 3600);
+  const hour = await hitRate(`chat1h:${auth.assignment.id}:${auth.tgId}`, CHAT_LIMIT_HOUR, 3600);
   if (!hour.ok) fail('RATE_LIMITED', 'Лимит сообщений на час. Попробуйте позже.', { retryAfter: hour.retryAfter });
 
   const message = await addChatMessage({

@@ -143,7 +143,7 @@ export async function openReports(chatId, userId, page = 1, messageIdToEdit = nu
   if (slice.length === 0) lines.push('Жалоб нет.');
   for (const report of slice) {
     lines.push(
-      `#${report.id} · ${report.reportedAt ? 'есть' : '—'} · ${String(report.text).slice(0, 60)}`,
+      `#${report.id} · ${report.reportedAt ? 'есть' : '—'} · ${esc(String(report.text).slice(0, 60))}`,
     );
   }
   const keyboardRows = slice.map((report) => [

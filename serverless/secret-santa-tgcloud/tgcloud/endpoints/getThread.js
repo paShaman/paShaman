@@ -8,8 +8,13 @@ export default async function (input, ctx) {
   if (auth.campaign.status === 'cancelled') fail('CAMPAIGN_CANCELLED', 'Кампания отменена.');
   const afterId = Number(input?.afterId) || 0;
   const rows = (await listChatMessages(auth.assignment.id, afterId)).filter(isMessageVisible);
-  if (input?.markRead !== false) {
-    await markMessagesRead(auth.assignment.id, auth.tgId, null);
+  if (input?.markRead === true) {
+    const upToId = Number(input?.upToId);
+    await markMessagesRead(
+      auth.assignment.id,
+      auth.tgId,
+      Number.isSafeInteger(upToId) && upToId > 0 ? upToId : null,
+    );
   }
   return {
     role: auth.role,

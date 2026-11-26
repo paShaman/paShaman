@@ -1,8 +1,7 @@
 # AGENTS.md — secret-santa-tgcloud
 
 Правила проекта. Общие правила платформы и деплоя — в [`../AGENTS.md`](../AGENTS.md);
-справочник SDK — в [docs/tgcloud-sdk.md](docs/tgcloud-sdk.md); план — в
-[docs/plan.md](docs/plan.md).
+справочник SDK — в [docs/tgcloud-sdk.md](docs/tgcloud-sdk.md).
 
 ## Что это
 

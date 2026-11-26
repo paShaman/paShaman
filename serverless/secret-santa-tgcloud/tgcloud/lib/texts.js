@@ -226,7 +226,8 @@ export function broadcastPreviewText(text, count) {
 }
 
 export function broadcastReport(stats) {
-  return `✅ <b>Рассылка завершена</b>\n\nОтправлено: ${stats.sent}\nЗаблокировали бота: ${stats.blocked}\nОшибки: ${stats.failed}\nВсего: ${stats.recipients}`;
+  const limits = stats.limited ? `\nНе отправлено из-за лимита Telegram: ${stats.limited}` : '';
+  return `✅ <b>Рассылка завершена</b>\n\nОтправлено: ${stats.sent}\nЗаблокировали бота: ${stats.blocked}\nОшибки: ${stats.failed}${limits}\nВсего: ${stats.recipients}`;
 }
 
 export function broadcastHtml(campaign, text) {

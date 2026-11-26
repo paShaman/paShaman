@@ -36,12 +36,13 @@ export function normalizeWishlistInput(input = {}, budget = null) {
   if (priceMin != null && priceMax != null && priceMin > priceMax) {
     throw new WishlistError('PRICE_ORDER');
   }
-  if (budget && budget.min != null && budget.max != null && priceMin != null) {
+  if (budget && budget.min != null && budget.max != null && (priceMin != null || priceMax != null)) {
     const min = Number(budget.min);
     const max = Number(budget.max);
     if (Number.isFinite(min) && Number.isFinite(max)) {
+      const low = priceMin ?? priceMax;
       const high = priceMax ?? priceMin;
-      if (priceMin < min || high > max) {
+      if (low < min || high > max) {
         throw new WishlistError('PRICE_OUT_OF_BUDGET', { field: 'price', min, max });
       }
     }

@@ -36,6 +36,8 @@ const DELIVERY = {
   hybrid: 'Встреча или доставка',
 };
 
+const publishing = new Set();
+
 function cancelRow() {
   return inline([[btn('Отмена', 'ss:wc')]]);
 }
@@ -269,47 +271,57 @@ export async function handleWizardCallback(chatId, userId, action, value, messag
       await sendHtml(chatId, 'Сначала заполните все шаги. Продолжим с текущего.');
       return true;
     }
-    const draft = session.data?.draft ?? {};
-    const checked = validateDraft({
-      title: draft.title,
-      description: draft.description,
-      budgetMin: draft.budgetMin,
-      budgetMax: draft.budgetMax,
-      registrationEndsAt: draft.registrationEndsAt,
-      giftDate: draft.giftDate,
-    });
-    if (!checked.ok) {
-      await sendHtml(chatId, `Не получилось опубликовать: ${checked.code}. Проверьте данные и попробуйте снова.`);
+    const publisherId = Number(userId);
+    if (publishing.has(publisherId)) {
+      await sendHtml(chatId, 'Публикация уже выполняется. Подождите немного.');
       return true;
     }
-
-    let code = '';
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const candidate = makeCode();
-      if (!(await getCampaignByCode(candidate))) {
-        code = candidate;
-        break;
+    publishing.add(publisherId);
+    try {
+      const draft = session.data?.draft ?? {};
+      const checked = validateDraft({
+        title: draft.title,
+        description: draft.description,
+        budgetMin: draft.budgetMin,
+        budgetMax: draft.budgetMax,
+        registrationEndsAt: draft.registrationEndsAt,
+        giftDate: draft.giftDate,
+      });
+      if (!checked.ok) {
+        await sendHtml(chatId, `Не получилось опубликовать: ${checked.code}. Проверьте данные и попробуйте снова.`);
+        return true;
       }
-    }
-    if (!code) {
-      await sendHtml(chatId, 'Не удалось подобрать код кампании. Попробуйте ещё раз.');
-      return true;
-    }
 
-    const campaign = await createCampaign({
-      code,
-      ...checked.value,
-      rules: draft.rules,
-      currency: 'RUB',
-      deliveryMode: draft.deliveryMode ?? 'hybrid',
-      logoFileId: draft.logoFileId ?? '',
-      revealSanta: true,
-      organizerId: Number(userId),
-    });
-    await clear(userId);
-    await logAudit(campaign.id, userId, 'campaign.create', { code: campaign.code });
-    await openCampaign(chatId, userId, campaign.id, null, 'Кампания опубликована!');
-    return true;
+      let code = '';
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = makeCode();
+        if (!(await getCampaignByCode(candidate))) {
+          code = candidate;
+          break;
+        }
+      }
+      if (!code) {
+        await sendHtml(chatId, 'Не удалось подобрать код кампании. Попробуйте ещё раз.');
+        return true;
+      }
+
+      const campaign = await createCampaign({
+        code,
+        ...checked.value,
+        rules: draft.rules,
+        currency: 'RUB',
+        deliveryMode: draft.deliveryMode ?? 'hybrid',
+        logoFileId: draft.logoFileId ?? '',
+        revealSanta: true,
+        organizerId: Number(userId),
+      });
+      await clear(userId);
+      await logAudit(campaign.id, userId, 'campaign.create', { code: campaign.code });
+      await openCampaign(chatId, userId, campaign.id, null, 'Кампания опубликована!');
+      return true;
+    } finally {
+      publishing.delete(publisherId);
+    }
   }
 
   return false;

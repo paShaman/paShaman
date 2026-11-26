@@ -6,7 +6,7 @@ import {
   validateDraft,
   validateRules,
 } from '../tgcloud/lib/domain/campaign.js';
-import { normalizeCode } from '../tgcloud/lib/utils.js';
+import { normalizeCode, moscowToday } from '../tgcloud/lib/utils.js';
 
 test('generates six-character codes from the safe alphabet', () => {
   const code = makeCode(() => 0.5, 6);
@@ -34,6 +34,23 @@ test('validates a campaign draft', () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.value.title, 'Новый год');
+});
+
+test('compares the registration deadline with Moscow midnight', () => {
+  assert.equal(
+    moscowToday(new Date('2026-11-26T12:00:00Z')).toISOString(),
+    '2026-11-25T21:00:00.000Z',
+  );
+  const result = validateDraft({
+    title: 'Кампания',
+    description: '',
+    budgetMin: 1000,
+    budgetMax: 3000,
+    registrationEndsAt: new Date('2026-11-26T00:00:00+03:00'),
+    giftDate: new Date('2026-12-25T00:00:00+03:00'),
+    now: new Date('2026-11-26T12:00:00Z'),
+  });
+  assert.equal(result.ok, true);
 });
 
 test('rejects invalid budgets and dates', () => {

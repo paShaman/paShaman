@@ -129,14 +129,15 @@ export async function sendBroadcast(chatId, userId, campaignId) {
   }
 
   const html = broadcastHtml(loaded.campaign, body);
-  const stats = { recipients: recipients.length, sent: 0, blocked: 0, failed: 0 };
+  const stats = { recipients: recipients.length, sent: 0, blocked: 0, failed: 0, limited: 0 };
   for (const member of recipients) {
     const result = await sendBroadcastMessage(member.userId, html);
     if (result === 'ok') stats.sent += 1;
     else if (result === 'blocked') {
       stats.blocked += 1;
       await setUserBlocked(member.userId, true);
-    } else stats.failed += 1;
+    } else if (result === 'limited') stats.limited += 1;
+    else stats.failed += 1;
   }
 
   await logBroadcast({
@@ -147,7 +148,7 @@ export async function sendBroadcast(chatId, userId, campaignId) {
     recipients: stats.recipients,
     sent: stats.sent,
     blocked: stats.blocked,
-    failed: stats.failed,
+    failed: stats.failed + stats.limited,
   });
   await logAudit(campaignId, userId, 'broadcast.send', stats);
   await clear(userId);

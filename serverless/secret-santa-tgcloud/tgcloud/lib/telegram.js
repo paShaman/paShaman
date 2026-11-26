@@ -137,7 +137,11 @@ export async function profilePhotoDataUrl(userId) {
   return '';
 }
 
-export async function sendBroadcastMessage(chatId, html) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function sendBroadcastMessage(chatId, html, attempt = 0) {
   try {
     await api.sendMessage({
       chat_id: chatId,
@@ -149,6 +153,17 @@ export async function sendBroadcastMessage(chatId, html) {
   } catch (error) {
     if (!(error instanceof BotApiError)) return 'error';
     const description = String(error.description ?? '');
+    if (error.code === 429) {
+      if (attempt >= 1) {
+        console.warn(`broadcast ${chatId}: 429 after retry, giving up`);
+        return 'limited';
+      }
+      const retryAfter = Number(error.parameters?.retry_after);
+      const waitMs = Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 1, 5) * 1000;
+      console.warn(`broadcast ${chatId}: 429, retrying in ${waitMs} ms`);
+      await sleep(waitMs);
+      return sendBroadcastMessage(chatId, html, attempt + 1);
+    }
     if (
       error.code === 403 ||
       (error.code === 400 &&

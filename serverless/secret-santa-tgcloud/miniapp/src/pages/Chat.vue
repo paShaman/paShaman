@@ -31,7 +31,12 @@ function mergeMessages(incoming) {
 async function load(silent = false) {
   if (!silent) loading.value = true;
   try {
-    const result = await call('getThread', { campaignId });
+    const lastSeen = messages.value.length ? messages.value[messages.value.length - 1].id : null;
+    const result = await call('getThread', {
+      campaignId,
+      markRead: typeof document !== 'undefined' && document.visibilityState === 'visible',
+      ...(lastSeen ? { upToId: lastSeen } : {}),
+    });
     mergeMessages(result.messages ?? []);
     chatBlocked.value = Boolean(result.chatBlocked);
     campaignStatus.value = result.campaignStatus;

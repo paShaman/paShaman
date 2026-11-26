@@ -45,6 +45,23 @@ test('rejects a price outside the campaign budget', () => {
   );
 });
 
+test('checks the campaign budget when only one bound is set', () => {
+  assert.throws(
+    () => normalizeWishlistInput({ title: 'x', priceMax: 500000 }, { min: 1500, max: 3000 }),
+    (error) => error instanceof WishlistError && error.code === 'PRICE_OUT_OF_BUDGET',
+  );
+  assert.throws(
+    () => normalizeWishlistInput({ title: 'x', priceMin: 100 }, { min: 1500, max: 3000 }),
+    WishlistError,
+  );
+  const item = normalizeWishlistInput(
+    { title: 'x', priceMax: 3000 },
+    { min: 1500, max: 3000 },
+  );
+  assert.equal(item.priceMin, null);
+  assert.equal(item.priceMax, 3000);
+});
+
 test('rejects bad urls, prices and titles', () => {
   assert.throws(() => normalizeWishlistInput({ title: '' }), WishlistError);
   assert.throws(() => normalizeWishlistInput({ title: 'x', url: 'javascript:alert(1)' }), WishlistError);

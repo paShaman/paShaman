@@ -3,7 +3,7 @@ import {
   MAX_PRICE,
   MAX_RULES,
 } from '../config.js';
-import { normalizeSpaces } from '../utils.js';
+import { moscowToday, normalizeSpaces } from '../utils.js';
 
 export class CampaignError extends Error {
   constructor(code, details = {}) {
@@ -92,8 +92,7 @@ export function validateDraft({
   }
   if (min > max) return { ok: false, code: 'BUDGET_ORDER' };
 
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
+  const today = moscowToday(now);
   const registration =
     registrationEndsAt instanceof Date ? registrationEndsAt : new Date(registrationEndsAt);
   const gift = giftDate instanceof Date ? giftDate : new Date(giftDate);

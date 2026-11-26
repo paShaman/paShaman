@@ -81,8 +81,8 @@ function moscowParts(date = new Date()) {
   };
 }
 
-export function moscowToday() {
-  const p = moscowParts();
+export function moscowToday(reference = new Date()) {
+  const p = moscowParts(reference);
   return new Date(`${p.year}-${p.month}-${p.day}T00:00:00${TZ_OFFSET}`);
 }
 
