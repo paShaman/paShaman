@@ -5,11 +5,13 @@ import mark from './assets/tree-192.png';
 import { call, ApiError } from './api/client.js';
 import { initTelegram, bindBackButton, openLink } from './telegram/webapp.js';
 import { loadBoot, refreshBoot, state, toast } from './composables/useSession.js';
+import { useMyAvatar } from './composables/useMyAvatar.js';
 
 const route = useRoute();
 const router = useRouter();
 const isRoot = computed(() => ['/', '/campaigns'].includes(route.path));
 const backCleanup = { fn: null };
+const { avatar: myAvatar, load: loadMyAvatar } = useMyAvatar();
 
 async function handleStartParam() {
   const param = state.boot?.startParam;
@@ -48,6 +50,7 @@ onMounted(async () => {
   updateBackButton();
   try {
     await loadBoot();
+    await loadMyAvatar();
     await handleStartParam();
   } catch {
     // состояние ошибки показывает экран ниже
@@ -62,6 +65,7 @@ onUnmounted(() => {
 async function retry() {
   try {
     await loadBoot(true);
+    await loadMyAvatar();
     await handleStartParam();
   } catch {
     // ничего: ошибка останется на экране
@@ -86,7 +90,10 @@ async function retry() {
         <span class="brand__name">Тайный Санта</span>
       </RouterLink>
       <div class="topbar__spacer" />
-      <RouterLink to="/profile" class="icon-btn" aria-label="Профиль">Я</RouterLink>
+      <RouterLink to="/profile" class="icon-btn icon-btn--avatar" aria-label="Профиль">
+        <img v-if="myAvatar" :src="myAvatar" alt="" />
+        <template v-else>{{ (state.boot?.user?.name || 'Я').slice(0, 1) }}</template>
+      </RouterLink>
     </header>
 
     <main v-if="state.loading" class="page" aria-busy="true">

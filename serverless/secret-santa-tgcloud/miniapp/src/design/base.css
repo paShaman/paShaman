@@ -276,6 +276,17 @@ html[data-theme='dark'] {
   line-height: 1;
 }
 
+.icon-btn--avatar {
+  overflow: hidden;
+  padding: 0;
+}
+
+.icon-btn--avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .page {
   display: flex;
   flex-direction: column;
