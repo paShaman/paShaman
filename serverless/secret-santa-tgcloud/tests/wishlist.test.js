@@ -23,6 +23,12 @@ test('normalizes a wishlist item', () => {
   assert.equal(item.comment, 'Любая из серии');
 });
 
+test('accepts product urls and strips invisible characters', () => {
+  const url = 'https://shop.tastycoffee.ru/coffee/advent-game-calendar-2027';
+  const item = normalizeWishlistInput({ title: 'Календарь', url: `\u200B${url}\u200B` });
+  assert.equal(item.url, url);
+});
+
 test('accepts a fixed price within the campaign budget', () => {
   const item = normalizeWishlistInput(
     { title: 'Наушники', priceMin: '2000', priceMax: '2000' },

@@ -4,7 +4,7 @@ import {
   MAX_PRICE,
   MAX_WISHLIST_ITEMS,
 } from '../config.js';
-import { normalizeSpaces, validUrl } from '../utils.js';
+import { normalizeSpaces, normalizeUrl, validUrl } from '../utils.js';
 
 export class WishlistError extends Error {
   constructor(code, details = {}) {
@@ -20,7 +20,7 @@ export function normalizeWishlistInput(input = {}, budget = null) {
   if (title.length < 1) throw new WishlistError('TITLE_EMPTY');
   if (title.length > MAX_ITEM_TITLE) throw new WishlistError('TITLE_LONG');
 
-  const url = String(input.url ?? '').trim();
+  const url = normalizeUrl(input.url);
   if (url && !validUrl(url)) throw new WishlistError('URL_INVALID');
 
   const priceMin = input.priceMin == null || input.priceMin === '' ? null : Number(input.priceMin);

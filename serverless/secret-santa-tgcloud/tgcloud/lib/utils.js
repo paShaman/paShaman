@@ -158,16 +158,17 @@ export function formatPriceRange(min, max, currency = 'RUB') {
   return formatMoney(min ?? max, currency);
 }
 
+export function normalizeUrl(value) {
+  return String(value ?? '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+}
+
 export function validUrl(value) {
-  const text = String(value ?? '').trim();
+  const text = normalizeUrl(value);
   if (!text) return true;
   if (text.length > MAX_URL_LENGTH) return false;
-  try {
-    const url = new URL(text);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return /^https?:\/\/[^\s]+$/i.test(text);
 }
 
 export function normalizeCode(value) {

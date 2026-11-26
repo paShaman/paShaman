@@ -78,19 +78,10 @@ async function save() {
     toast('Название не может быть пустым.');
     return;
   }
-  const url = form.url.trim();
-  if (url) {
-    let valid = false;
-    try {
-      const parsed = new URL(url);
-      valid = (parsed.protocol === 'http:' || parsed.protocol === 'https:') && url.length <= MAX_URL_LENGTH;
-    } catch {
-      valid = false;
-    }
-    if (!valid) {
-      toast(`Ссылка должна начинаться с http:// или https:// и быть короче ${MAX_URL_LENGTH} символов.`);
-      return;
-    }
+  const url = form.url.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (url && !(/^https?:\/\/\S+$/i.test(url) && url.length <= MAX_URL_LENGTH)) {
+    toast(`Ссылка должна начинаться с http:// или https:// и быть короче ${MAX_URL_LENGTH} символов.`);
+    return;
   }
   const rawPrice = String(form.price).trim();
   const price = rawPrice === '' ? null : Number(rawPrice);
@@ -315,18 +306,72 @@ onMounted(load);
               Открыть ссылку
             </a>
             <div v-if="canEdit" class="row wish__actions">
-              <button class="btn btn--ghost btn--sm" type="button" @click="openEdit(item)">Изменить</button>
               <button
-                class="btn btn--ghost btn--sm"
+                class="wish-action"
                 type="button"
+                aria-label="Изменить"
+                title="Изменить"
+                @click="openEdit(item)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                </svg>
+              </button>
+              <button
+                class="wish-action"
+                type="button"
+                :aria-label="item.hasPhoto ? 'Заменить фото' : 'Добавить фото'"
+                :title="item.hasPhoto ? 'Заменить фото' : 'Добавить фото'"
                 :disabled="photoBusy"
                 @click="pickPhoto(item)"
               >
-                {{ item.hasPhoto ? 'Фото' : 'Добавить фото' }}
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="3" />
+                  <circle cx="8.5" cy="9.5" r="1.8" />
+                  <path d="m21 15-4.5-4.5a2 2 0 0 0-2.8 0L6 20" />
+                </svg>
               </button>
-              <button class="btn btn--ghost btn--sm" type="button" @click="move(item, -1)">↑</button>
-              <button class="btn btn--ghost btn--sm" type="button" @click="move(item, 1)">↓</button>
-              <button class="btn btn--ghost btn--sm" type="button" @click="removeItem(item)">Удалить</button>
+              <button
+                class="wish-action"
+                type="button"
+                aria-label="Выше"
+                title="Выше"
+                :disabled="index === 0"
+                @click="move(item, -1)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 19V5" />
+                  <path d="M6 11l6-6 6 6" />
+                </svg>
+              </button>
+              <button
+                class="wish-action"
+                type="button"
+                aria-label="Ниже"
+                title="Ниже"
+                :disabled="index === items.length - 1"
+                @click="move(item, 1)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14" />
+                  <path d="M6 13l6 6 6-6" />
+                </svg>
+              </button>
+              <button
+                class="wish-action wish-action--danger"
+                type="button"
+                aria-label="Удалить"
+                title="Удалить"
+                @click="removeItem(item)"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16" />
+                  <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  <path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
+              </button>
             </div>
           </div>
         </article>
@@ -365,7 +410,15 @@ onMounted(load);
         </div>
         <div class="field">
           <label for="url">Ссылка</label>
-          <input id="url" v-model="form.url" class="input" type="url" :maxlength="MAX_URL_LENGTH" placeholder="https://" />
+          <input
+            id="url"
+            v-model="form.url"
+            class="input"
+            type="text"
+            inputmode="url"
+            :maxlength="MAX_URL_LENGTH"
+            placeholder="https://"
+          />
         </div>
         <div class="field">
           <label for="price">Цена, ₽</label>
@@ -436,7 +489,41 @@ onMounted(load);
 }
 .wish__actions {
   flex-wrap: wrap;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 8px;
+}
+.wish-action {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  appearance: none;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--pine-700);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wish-action:not(:disabled):hover {
+  background: var(--paper-sunken);
+}
+.wish-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.wish-action--danger {
+  color: var(--berry-600);
+}
+.wish-action svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .link {
   color: var(--pine-700);

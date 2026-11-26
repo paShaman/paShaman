@@ -119,7 +119,7 @@ async function retry() {
         rel="noopener noreferrer"
         @click.prevent="openLink('https://paShaman.dev')"
       >
-        Сделано paShaman.dev
+        Разработчик paShaman.dev
       </a>
     </footer>
 
