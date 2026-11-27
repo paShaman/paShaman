@@ -1,5 +1,6 @@
 import { BOT_USERNAME } from './config.js';
 import { canConfirm } from './domain/membership.js';
+import { priceOutOfBudget } from './domain/wishlist.js';
 import { displayName } from './utils.js';
 
 export function inviteUrlFor(code) {
@@ -96,7 +97,7 @@ export function serializeCampaign(campaign, {
   };
 }
 
-export function serializeItem(item, { claimed = false } = {}) {
+export function serializeItem(item, { claimed = false, budget = null } = {}) {
   return {
     id: item.id,
     title: item.title,
@@ -108,6 +109,7 @@ export function serializeItem(item, { claimed = false } = {}) {
     photoVersion: item.photoVersion,
     hasPhoto: Boolean(item.photoFileId),
     claimed: Boolean(claimed),
+    outOfBudget: Boolean(priceOutOfBudget(item.priceMin, item.priceMax, budget)),
   };
 }
 

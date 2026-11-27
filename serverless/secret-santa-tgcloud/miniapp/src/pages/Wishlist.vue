@@ -41,6 +41,13 @@ const budgetLabel = computed(() => {
   return value.min === value.max ? min : `${min} — ${formatter.format(value.max)}`;
 });
 const pricePlaceholder = computed(() => (budget.value ? String(budget.value.min) : 'например 2000'));
+const priceOutsideBudget = computed(() => {
+  const raw = String(form.price).trim();
+  if (raw === '' || !budget.value) return false;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) return false;
+  return value < budget.value.min || value > budget.value.max;
+});
 
 async function load() {
   loading.value = true;
@@ -91,9 +98,21 @@ async function save() {
     toast('Цена — целое число от 0 до 1 000 000 ₽.');
     return;
   }
-  if (price !== null && budget.value && (price < budget.value.min || price > budget.value.max)) {
-    toast(`Цена должна быть в бюджете кампании: ${budgetLabel.value}.`);
-    return;
+  const outside = price !== null && budget.value && (price < budget.value.min || price > budget.value.max);
+  if (outside) {
+    const current = editingId.value
+      ? items.value.find((item) => item.id === editingId.value)
+      : null;
+    const unchanged =
+      Boolean(current?.outOfBudget) && price === (current.priceMin ?? current.priceMax);
+    if (!unchanged) {
+      const confirmed = window.confirm(
+        `Цена ${formatPrice({ priceMin: price, priceMax: price, currency: budget.value.currency })} ` +
+          `вне бюджета кампании ${budgetLabel.value}. Сохранить всё равно? ` +
+          'Санта увидит отметку «вне бюджета».',
+      );
+      if (!confirmed) return;
+    }
   }
   busy.value = true;
   try {
@@ -105,6 +124,7 @@ async function save() {
       priceMin: price,
       priceMax: price,
       comment: form.comment,
+      confirmOutOfBudget: Boolean(outside),
     });
     editorOpen.value = false;
     toast(editingId.value ? 'Желание обновлено.' : 'Желание добавлено.');
@@ -292,13 +312,21 @@ onMounted(load);
 
     <template v-else>
       <div v-if="items.length" class="list">
-        <article v-for="(item, index) in items" :key="item.id" class="wish">
+        <article
+          v-for="(item, index) in items"
+          :key="item.id"
+          class="wish"
+          :class="{ 'wish--out': item.outOfBudget }"
+        >
           <div class="wish__photo">
             <img v-if="photos[item.id]" :src="photos[item.id]" :alt="`Фото: ${item.title}`" />
             <AppIcon v-else name="image" :size="22" :stroke-width="1.6" />
           </div>
           <div class="wish__body">
-            <h2 class="wish__title">{{ item.title }}</h2>
+            <div class="wish__head">
+              <h2 class="wish__title">{{ item.title }}</h2>
+              <span v-if="item.outOfBudget" class="pill pill--warn">Вне бюджета</span>
+            </div>
             <p v-if="formatPrice(item)" class="small muted">{{ formatPrice(item) }}</p>
             <p v-if="item.comment" class="small muted wish__comment">{{ item.comment }}</p>
             <a
@@ -421,6 +449,9 @@ onMounted(load);
             :placeholder="pricePlaceholder"
           />
           <p v-if="budgetLabel" class="hint">Бюджет кампании: {{ budgetLabel }}.</p>
+          <p v-if="priceOutsideBudget" class="hint warn">
+            Цена вне бюджета. При сохранении попросим подтверждение — Санта увидит отметку.
+          </p>
         </div>
         <div class="field">
           <label for="comment">Комментарий</label>
@@ -442,6 +473,10 @@ onMounted(load);
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--paper-raised);
+}
+.wish--out {
+  border-color: color-mix(in srgb, var(--gold-500) 70%, var(--line));
+  background: color-mix(in srgb, var(--gold-300) 16%, var(--paper-raised));
 }
 .wish__photo {
   width: 76px;
@@ -465,6 +500,12 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.wish__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .wish__title {
   margin: 0;
@@ -520,5 +561,9 @@ onMounted(load);
   color: var(--pine-700);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.warn {
+  color: var(--berry-600);
+  font-weight: 600;
 }
 </style>

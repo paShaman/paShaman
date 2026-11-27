@@ -39,17 +39,18 @@ export default async function (input, ctx) {
       };
       const message =
         error.code === 'PRICE_OUT_OF_BUDGET'
-          ? `Цена должна быть в бюджете кампании: ${formatBudget(
+          ? `Цена вне бюджета кампании: ${formatBudget(
               error.details.min,
               error.details.max,
               auth.campaign.currency,
-            )}.`
+            )}. Подтвердите добавление — Санта увидит отметку.`
           : messages[error.code] ?? 'Проверьте заполненные поля.';
       fail(error.code, message, { field: error.details?.field });
     }
     throw error;
   }
 
+  const budget = { min: auth.campaign.budgetMin, max: auth.campaign.budgetMax };
   const itemId = Number(input?.itemId) || null;
   if (itemId) {
     const existing = await getWishlistItem(itemId);
@@ -57,12 +58,12 @@ export default async function (input, ctx) {
       fail('NOT_FOUND', 'Желание не найдено.');
     }
     const item = await updateWishlistItem(itemId, value);
-    return { item: serializeItem(item) };
+    return { item: serializeItem(item, { budget }) };
   }
 
   const count = await countWishlist(auth.campaign.id, auth.tgId);
   if (!canAddItem(count)) fail('LIMIT_REACHED', 'В вишлисте уже максимум 50 пунктов.');
   const items = await listWishlist(auth.campaign.id, auth.tgId);
   const item = await createWishlistItem(auth.campaign.id, auth.tgId, value, nextSortOrder(items));
-  return { item: serializeItem(item) };
+  return { item: serializeItem(item, { budget }) };
 }

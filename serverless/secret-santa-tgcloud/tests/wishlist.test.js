@@ -6,6 +6,7 @@ import {
   normalizeOrder,
   normalizeWishlistInput,
   partitionItems,
+  priceOutOfBudget,
 } from '../tgcloud/lib/domain/wishlist.js';
 import { WishlistError } from '../tgcloud/lib/domain/wishlist.js';
 
@@ -43,6 +44,35 @@ test('rejects a price outside the campaign budget', () => {
     () => normalizeWishlistInput({ title: 'x', priceMin: 500, priceMax: 500 }, { min: 1500, max: 3000 }),
     WishlistError,
   );
+});
+
+test('accepts an out-of-budget price only with explicit confirmation', () => {
+  const item = normalizeWishlistInput(
+    { title: 'x', priceMin: 500, priceMax: 500, confirmOutOfBudget: true },
+    { min: 1500, max: 3000 },
+  );
+  assert.equal(item.priceMin, 500);
+  assert.throws(
+    () =>
+      normalizeWishlistInput(
+        { title: 'x', priceMin: 500, priceMax: 500, confirmOutOfBudget: 'yes' },
+        { min: 1500, max: 3000 },
+      ),
+    (error) => error instanceof WishlistError && error.code === 'PRICE_OUT_OF_BUDGET',
+  );
+});
+
+test('detects prices outside the budget', () => {
+  assert.deepEqual(priceOutOfBudget(500, 500, { min: 1500, max: 3000 }), {
+    min: 1500,
+    max: 3000,
+  });
+  assert.deepEqual(priceOutOfBudget(2000, 5000, { min: 1500, max: 3000 }), {
+    min: 1500,
+    max: 3000,
+  });
+  assert.equal(priceOutOfBudget(2000, 2000, { min: 1500, max: 3000 }), null);
+  assert.equal(priceOutOfBudget(null, null, { min: 1500, max: 3000 }), null);
 });
 
 test('checks the campaign budget when only one bound is set', () => {

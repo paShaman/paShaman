@@ -96,6 +96,14 @@ function fail(code, message) {
   throw error;
 }
 
+function isOutOfBudget(item) {
+  const { min, max } = state.campaign.budget;
+  const low = item.priceMin ?? item.priceMax;
+  const high = item.priceMax ?? item.priceMin;
+  if (low == null && high == null) return false;
+  return low < min || high > max;
+}
+
 function campaignPayload() {
   const confirmed = state.members.filter((member) => member.status === 'confirmed').length;
   const total = state.members.length;
@@ -146,7 +154,7 @@ function assignmentPayload() {
       revealSanta: true,
     },
     receiver: { name: state.assignment.receiver.name },
-    wishlist: state.wishlist.map((item) => ({ ...item, claimed: false })),
+    wishlist: state.wishlist.map((item) => ({ ...item, claimed: false, outOfBudget: isOutOfBudget(item) })),
     delivery: state.assignment.delivery ? { ...state.assignment.delivery } : null,
     giftStatus: state.assignment.giftStatus,
     chatBlocked: state.assignment.chatBlocked,
@@ -216,34 +224,49 @@ export async function mockCall(name, input = {}) {
     state.me.deliveryMethod = input.method;
     return { delivery: { ...input } };
   }
-  if (name === 'getMyWishlist') return { items: state.wishlist.map((item) => ({ ...item })), canEdit: true, limit: 50 };
+  if (name === 'getMyWishlist') {
+    return {
+      items: state.wishlist.map((item) => ({ ...item, outOfBudget: isOutOfBudget(item) })),
+      canEdit: true,
+      limit: 50,
+    };
+  }
   if (name === 'saveWishlistItem') {
+    const budget = state.campaign.budget;
+    const priceMin = input.priceMin ?? null;
+    const priceMax = input.priceMax ?? null;
+    const outside =
+      (priceMin != null || priceMax != null) &&
+      ((priceMin ?? priceMax) < budget.min || (priceMax ?? priceMin) > budget.max);
+    if (outside && input.confirmOutOfBudget !== true) {
+      fail('PRICE_OUT_OF_BUDGET', 'Цена вне бюджета кампании. Подтвердите добавление.');
+    }
     if (input.itemId) {
       const item = state.wishlist.find((row) => row.id === Number(input.itemId));
       if (!item) fail('NOT_FOUND', 'Желание не найдено.');
       Object.assign(item, {
         title: input.title,
         url: input.url ?? '',
-        priceMin: input.priceMin ?? null,
-        priceMax: input.priceMax ?? null,
+        priceMin,
+        priceMax,
         currency: 'RUB',
         comment: input.comment ?? '',
       });
-      return { item: { ...item } };
+      return { item: { ...item, outOfBudget: isOutOfBudget(item) } };
     }
     const item = {
       id: nextWishlistId++,
       title: input.title,
       url: input.url ?? '',
-      priceMin: input.priceMin ?? null,
-      priceMax: input.priceMax ?? null,
+      priceMin,
+      priceMax,
       currency: 'RUB',
       comment: input.comment ?? '',
       hasPhoto: false,
       photoVersion: 0,
     };
     state.wishlist.push(item);
-    return { item: { ...item } };
+    return { item: { ...item, outOfBudget: isOutOfBudget(item) } };
   }
   if (name === 'deleteWishlistItem') {
     state.wishlist = state.wishlist.filter((item) => item.id !== Number(input.itemId));

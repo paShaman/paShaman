@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { call } from '../api/client.js';
 import { toast } from '../composables/useSession.js';
@@ -17,6 +17,9 @@ const error = ref('');
 const revealed = ref(false);
 const photos = reactive({});
 const busyItem = ref(null);
+const hasOutOfBudget = computed(
+  () => Boolean(data.value?.wishlist?.some((item) => item.outOfBudget)),
+);
 
 function formatPrice(item) {
   if (item.priceMin == null && item.priceMax == null) return '';
@@ -114,15 +117,27 @@ onMounted(load);
         <p class="small muted">
           Отмечайте купленные подарки — получатель этого не увидит.
         </p>
+        <p v-if="hasOutOfBudget" class="small warn">
+          Отметка «вне бюджета» — желание дороже или дешевле бюджета кампании. Детали можно
+          обсудить с получателем в чате.
+        </p>
 
         <div v-if="data.wishlist.length" class="list">
-          <div v-for="item in data.wishlist" :key="item.id" class="gift">
+          <div
+            v-for="item in data.wishlist"
+            :key="item.id"
+            class="gift"
+            :class="{ 'gift--out': item.outOfBudget }"
+          >
             <div class="gift__photo">
               <img v-if="photos[item.id]" :src="photos[item.id]" :alt="item.title" />
               <AppIcon v-else name="image" :size="22" :stroke-width="1.6" />
             </div>
             <div class="gift__body">
-              <p class="gift__title">{{ item.title }}</p>
+              <div class="gift__head">
+                <p class="gift__title">{{ item.title }}</p>
+                <span v-if="item.outOfBudget" class="pill pill--warn">Вне бюджета</span>
+              </div>
               <p v-if="formatPrice(item)" class="small muted">{{ formatPrice(item) }}</p>
               <p v-if="item.comment" class="small muted">{{ item.comment }}</p>
               <a
@@ -244,6 +259,10 @@ onMounted(load);
   border-radius: 16px;
   background: var(--paper-sunken);
 }
+.gift--out {
+  background: color-mix(in srgb, var(--gold-300) 22%, var(--paper-sunken));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold-500) 65%, transparent);
+}
 .gift__photo {
   width: 52px;
   height: 52px;
@@ -265,6 +284,12 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.gift__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .gift__title {
   margin: 0;
@@ -289,6 +314,10 @@ onMounted(load);
   background: var(--pine-700);
   border-color: var(--pine-700);
   color: #fff8f0;
+}
+.warn {
+  color: var(--berry-600);
+  font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
   .reveal {

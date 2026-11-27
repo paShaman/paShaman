@@ -15,6 +15,18 @@ export class WishlistError extends Error {
   }
 }
 
+export function priceOutOfBudget(priceMin, priceMax, budget = null) {
+  if (!budget || budget.min == null || budget.max == null) return null;
+  if (priceMin == null && priceMax == null) return null;
+  const min = Number(budget.min);
+  const max = Number(budget.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  const low = priceMin ?? priceMax;
+  const high = priceMax ?? priceMin;
+  if (low < min || high > max) return { min, max };
+  return null;
+}
+
 export function normalizeWishlistInput(input = {}, budget = null) {
   const title = normalizeSpaces(input.title);
   if (title.length < 1) throw new WishlistError('TITLE_EMPTY');
@@ -36,16 +48,9 @@ export function normalizeWishlistInput(input = {}, budget = null) {
   if (priceMin != null && priceMax != null && priceMin > priceMax) {
     throw new WishlistError('PRICE_ORDER');
   }
-  if (budget && budget.min != null && budget.max != null && (priceMin != null || priceMax != null)) {
-    const min = Number(budget.min);
-    const max = Number(budget.max);
-    if (Number.isFinite(min) && Number.isFinite(max)) {
-      const low = priceMin ?? priceMax;
-      const high = priceMax ?? priceMin;
-      if (low < min || high > max) {
-        throw new WishlistError('PRICE_OUT_OF_BUDGET', { field: 'price', min, max });
-      }
-    }
+  const outOfBudget = priceOutOfBudget(priceMin, priceMax, budget);
+  if (outOfBudget && input.confirmOutOfBudget !== true) {
+    throw new WishlistError('PRICE_OUT_OF_BUDGET', { field: 'price', ...outOfBudget });
   }
 
   const comment = String(input.comment ?? '').trim();

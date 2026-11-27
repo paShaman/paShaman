@@ -13,6 +13,7 @@ export default async function (input, ctx) {
   const claims = await listClaims(auth.assignment.id);
   const claimed = new Set(claims.map((claim) => Number(claim.itemId)));
   const delivery = await getDelivery(auth.campaign.id, auth.assignment.receiverId);
+  const budget = { min: auth.campaign.budgetMin, max: auth.campaign.budgetMax };
   return {
     campaign: {
       id: auth.campaign.id,
@@ -23,7 +24,9 @@ export default async function (input, ctx) {
     receiver: {
       name: displayName(auth.receiver),
     },
-    wishlist: items.map((item) => serializeItem(item, { claimed: claimed.has(Number(item.id)) })),
+    wishlist: items.map((item) =>
+      serializeItem(item, { claimed: claimed.has(Number(item.id)), budget }),
+    ),
     delivery: delivery
       ? {
           method: delivery.method,
