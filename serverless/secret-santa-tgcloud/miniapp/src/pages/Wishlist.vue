@@ -18,6 +18,7 @@ const error = ref('');
 const busy = ref(false);
 const editorOpen = ref(false);
 const editingId = ref(null);
+const confirmOpen = ref(false);
 const MAX_URL_LENGTH = 2048;
 const form = reactive({ title: '', url: '', price: '', comment: '' });
 const fileInput = ref(null);
@@ -48,6 +49,15 @@ const priceOutsideBudget = computed(() => {
   if (!Number.isInteger(value) || value < 0) return false;
   return value < budget.value.min || value > budget.value.max;
 });
+const outOfBudgetMessage = computed(() => {
+  const raw = String(form.price).trim();
+  const price = raw === '' ? null : Number(raw);
+  if (price === null || !budget.value) return '';
+  return (
+    `Цена ${formatPrice({ priceMin: price, priceMax: price, currency: budget.value.currency })} ` +
+    `вне бюджета кампании ${budgetLabel.value}. Санта увидит отметку «вне бюджета».`
+  );
+});
 
 async function load() {
   loading.value = true;
@@ -67,12 +77,14 @@ async function load() {
 
 function openNew() {
   editingId.value = null;
+  confirmOpen.value = false;
   Object.assign(form, { title: '', url: '', price: '', comment: '' });
   editorOpen.value = true;
 }
 
 function openEdit(item) {
   editingId.value = item.id;
+  confirmOpen.value = false;
   Object.assign(form, {
     title: item.title,
     url: item.url ?? '',
@@ -82,7 +94,7 @@ function openEdit(item) {
   editorOpen.value = true;
 }
 
-async function save() {
+async function save(force = false) {
   if (!form.title.trim()) {
     toast('Название не может быть пустым.');
     return;
@@ -99,21 +111,18 @@ async function save() {
     return;
   }
   const outside = price !== null && budget.value && (price < budget.value.min || price > budget.value.max);
-  if (outside) {
+  if (outside && !force) {
     const current = editingId.value
       ? items.value.find((item) => item.id === editingId.value)
       : null;
     const unchanged =
       Boolean(current?.outOfBudget) && price === (current.priceMin ?? current.priceMax);
     if (!unchanged) {
-      const confirmed = window.confirm(
-        `Цена ${formatPrice({ priceMin: price, priceMax: price, currency: budget.value.currency })} ` +
-          `вне бюджета кампании ${budgetLabel.value}. Сохранить всё равно? ` +
-          'Санта увидит отметку «вне бюджета».',
-      );
-      if (!confirmed) return;
+      confirmOpen.value = true;
+      return;
     }
   }
+  confirmOpen.value = false;
   busy.value = true;
   try {
     await call('saveWishlistItem', {
@@ -134,6 +143,11 @@ async function save() {
   } finally {
     busy.value = false;
   }
+}
+
+function closeEditor() {
+  editorOpen.value = false;
+  confirmOpen.value = false;
 }
 
 async function removeItem(item) {
@@ -421,8 +435,8 @@ onMounted(load);
       @change="onFile"
     />
 
-    <AppSheet :open="editorOpen" :title="editingId ? 'Изменить желание' : 'Новое желание'" @close="editorOpen = false">
-      <form class="stack" @submit.prevent="save">
+    <AppSheet :open="editorOpen" :title="editingId ? 'Изменить желание' : 'Новое желание'" @close="closeEditor">
+      <form class="stack" @submit.prevent="save()">
         <div class="field">
           <label for="title">Название *</label>
           <input id="title" v-model="form.title" class="input" maxlength="120" required />
@@ -457,7 +471,26 @@ onMounted(load);
           <label for="comment">Комментарий</label>
           <textarea id="comment" v-model="form.comment" class="input" maxlength="500" />
         </div>
-        <button class="btn btn--primary" type="submit" :disabled="busy">
+        <div v-if="confirmOpen" class="confirm">
+          <p class="small">{{ outOfBudgetMessage }} Всё равно сохранить?</p>
+          <button
+            class="btn btn--primary btn--block"
+            type="button"
+            :disabled="busy"
+            @click="save(true)"
+          >
+            {{ busy ? 'Сохраняем…' : 'Всё равно сохранить' }}
+          </button>
+          <button
+            class="btn btn--secondary btn--block"
+            type="button"
+            :disabled="busy"
+            @click="confirmOpen = false"
+          >
+            Отмена
+          </button>
+        </div>
+        <button v-else class="btn btn--primary" type="submit" :disabled="busy">
           {{ busy ? 'Сохраняем…' : 'Сохранить' }}
         </button>
       </form>
@@ -565,5 +598,14 @@ onMounted(load);
 .warn {
   color: var(--berry-600);
   font-weight: 600;
+}
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--gold-500) 70%, var(--line));
+  background: color-mix(in srgb, var(--gold-300) 22%, var(--paper));
 }
 </style>

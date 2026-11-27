@@ -10,7 +10,6 @@ import AppSheet from '../components/ui/AppSheet.vue';
 import AppIcon from '../components/ui/AppIcon.vue';
 import ChatButton from '../components/ui/ChatButton.vue';
 import { useUnread } from '../composables/useUnread.js';
-import { pluralRu } from '../utils/plural.js';
 import { shareLink } from '../telegram/webapp.js';
 
 const route = useRoute();
@@ -314,12 +313,9 @@ const canOpenChat = computed(() => ['drawn', 'gifting'].includes(campaign.value?
           <h2 class="h2">Вы участвуете</h2>
           <span class="pill pill--ok">подтверждено</span>
         </div>
-        <p class="small muted">
-          Вишлист: {{ me.wishlistCount }}
-          {{ pluralRu(me.wishlistCount, 'желание', 'желания', 'желаний') }}.
-        </p>
         <RouterLink :to="`/c/${campaign.id}/wishlist`" class="btn btn--secondary btn--block">
           Мой вишлист
+          <span v-if="me.wishlistCount" class="pill">{{ me.wishlistCount }}</span>
         </RouterLink>
         <button
           v-if="deliveryAvailable && !['completed', 'cancelled'].includes(campaign.status)"
